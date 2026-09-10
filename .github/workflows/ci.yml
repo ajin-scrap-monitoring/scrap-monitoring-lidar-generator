@@ -1,4 +1,4 @@
-name: Temporary CI
+name: CI
 
 on:
   pull_request:
@@ -19,15 +19,24 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.14"
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --all-groups
+
       - name: Validate Markdown
-        run: npx --yes markdownlint-cli2@0.23.2 "**/*.md"
+        run: uv run --locked rumdl check .
 
       - name: Validate repository boundaries
         shell: bash
@@ -41,5 +50,20 @@ jobs:
           test "$(readlink .claude/CLAUDE.md)" = "../.agents/AGENTS.md"
           test "$(git ls-files docs/internal)" = "docs/internal/README.md"
 
-      - name: Validate Python syntax
-        run: python -m compileall -q src
+      - name: Check Python formatting
+        run: uv run --locked ruff format --check .
+
+      - name: Lint Python
+        run: uv run --locked ruff check .
+
+      - name: Check Python types
+        run: uv run --locked mypy
+
+      - name: Test
+        run: uv run --locked pytest
+
+      - name: Smoke test CLI
+        run: uv run --locked scrap-monitoring-lidar-generator --help
+
+      - name: Build package
+        run: uv build --no-sources

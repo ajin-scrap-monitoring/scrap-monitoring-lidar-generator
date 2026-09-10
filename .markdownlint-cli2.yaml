@@ -1,8 +1,0 @@
-config:
-  MD013: false
-
-ignores:
-  - .claude/CLAUDE.md
-  - AGENTS.md
-  - GEMINI.md
-  - docs/internal/**
