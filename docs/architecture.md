@@ -73,6 +73,10 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 
 `runtime.ReferenceGenerationRuntime`은 모든 센서의 진행 중인 회전과 하나의 `ScenarioSimulator`를 시뮬레이션 시각 순서로 조정한다. 높이장 갱신 시각 직전까지의 측정점을 현재 장면에서 sensor별 batch로 계산하고, 같은 시각의 높이장 갱신을 먼저 적용한 뒤 해당 시각의 측정점을 계산한다. 가장 이른 회전 완료 시각마다 완료된 스캔만 반환하며 동시에 완료된 스캔은 `sensor_id` 순서로 정렬한다.
 
+`measurement.MeasurementGenerator`는 유효한 기준 거리에 설정 한계 안의 절단 정규분포 오차를 적용하고 측정 범위를 다시 검사한다. 범위 밖 결과와 기준 무효 거리는 거리 0으로 만들며, 최종 거리 유효성에 맞는 센서별 누적 품질 분포에서 8비트 값을 선택한다. 최종 각도, 거리와 품질은 읽기 전용 배열로 보관한다.
+
+`MeasurementResult`는 같은 회전 일정의 `TimedReferenceScan`과 `TimedMeasuredScan`을 별도 필드로 유지한다. `runtime.MeasurementGenerationRuntime`은 시각 순서로 완료된 기준 스캔에 센서별 측정 생성기를 적용한다.
+
 ## 검증 구조
 
 자동 검증은 4개 계층으로 구성한다.

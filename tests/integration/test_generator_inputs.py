@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+import numpy as np
 import pytest
 
 from scrap_monitoring_lidar_generator.configuration import (
@@ -12,6 +13,9 @@ from scrap_monitoring_lidar_generator.configuration import (
 )
 from scrap_monitoring_lidar_generator.geometry import Vec2
 from scrap_monitoring_lidar_generator.runtime import (
+    MeasurementGenerationRuntime,
+    build_measurement_generation_runtime,
+    build_measurement_generators,
     build_reference_generation_runtime,
     build_rotation_schedulers,
     build_scenario_simulator,
@@ -92,6 +96,67 @@ def test_generates_timed_reference_scan_from_generator_inputs() -> None:
     assert scan.schedule.point_count == 2400
     assert len(scan.scan.points) == scan.schedule.point_count
     assert runtime.scenario.elapsed_s == pytest.approx(1.0 / 3.0)
+
+
+def test_generates_reproducible_reference_and_final_measurement_scans() -> None:
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    runtimes = [build_measurement_generation_runtime(inputs) for _ in range(2)]
+
+    first_sequence = [runtimes[0].next_completed_scans()[0] for _ in range(4)]
+    repeated_sequence = [runtimes[1].next_completed_scans()[0] for _ in range(4)]
+    first = first_sequence[0]
+
+    assert first.sensor_id == inputs.environment.sensors[0].sensor_id
+    assert first.scan_id == 1
+    assert first.reference.schedule is first.measured.schedule
+    assert len(first.reference.scan.points) == first.measured.scan.point_count
+    for generated, repeated in zip(first_sequence, repeated_sequence, strict=True):
+        assert generated.reference.scan == repeated.reference.scan
+        assert np.array_equal(
+            generated.measured.scan.distances_m,
+            repeated.measured.scan.distances_m,
+        )
+        assert np.array_equal(
+            generated.measured.scan.qualities,
+            repeated.measured.scan.qualities,
+        )
+    valid_distances = first.measured.scan.distances_m > 0.0
+    measurement = inputs.generator.measurement
+    assert bool(
+        np.all(first.measured.scan.distances_m[valid_distances] >= measurement.min_distance_m)
+    )
+    assert bool(
+        np.all(first.measured.scan.distances_m[valid_distances] <= measurement.max_distance_m)
+    )
+    assert set(
+        int(value) for value in np.unique(first.measured.scan.qualities[valid_distances])
+    ) <= {
+        48,
+        80,
+    }
+    assert set(
+        int(value) for value in np.unique(first.measured.scan.qualities[~valid_distances])
+    ) <= {
+        0,
+        24,
+    }
+    assert runtimes[0].scenario.elapsed_s == pytest.approx(
+        4.0 / inputs.generator.measurement.rotation_rate_hz
+    )
+
+
+def test_rejects_invalid_measurement_runtime_sensor_sets() -> None:
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    reference_runtime = build_reference_generation_runtime(inputs)
+    (generator,) = build_measurement_generators(inputs)
+
+    with pytest.raises(ValueError, match="sensor sets"):
+        MeasurementGenerationRuntime(reference_runtime=reference_runtime, generators=())
+    with pytest.raises(ValueError, match="unique"):
+        MeasurementGenerationRuntime(
+            reference_runtime=reference_runtime,
+            generators=(generator, generator),
+        )
 
 
 def test_rejects_quality_sensor_mismatch(tmp_path: Path) -> None:

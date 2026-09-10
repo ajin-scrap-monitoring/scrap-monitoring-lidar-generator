@@ -76,6 +76,11 @@ class ReferenceGenerationRuntime:
         return self._scenario
 
     @property
+    def sensor_ids(self) -> tuple[str, ...]:
+        """Return the coordinated sensor identifiers in stable order."""
+        return tuple(pending.scanner.sensor_id for pending in self._pending)
+
+    @property
     def next_completion_elapsed_s(self) -> float:
         """Return the earliest pending sensor rotation completion time."""
         return min(pending.schedule.completed_at_s for pending in self._pending)
