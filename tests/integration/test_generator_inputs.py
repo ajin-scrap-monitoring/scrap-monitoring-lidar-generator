@@ -11,7 +11,10 @@ from scrap_monitoring_lidar_generator.configuration import (
     load_generator_inputs,
 )
 from scrap_monitoring_lidar_generator.geometry import Vec2
-from scrap_monitoring_lidar_generator.runtime import build_scenario_simulator
+from scrap_monitoring_lidar_generator.runtime import (
+    build_rotation_schedulers,
+    build_scenario_simulator,
+)
 from scrap_monitoring_lidar_generator.scenario import ScenarioPhase
 
 _ROOT = Path(__file__).parents[2]
@@ -62,6 +65,19 @@ def test_builds_running_scenario_from_generator_inputs() -> None:
     assert simulator.surface.boundary.contains(
         Vec2(*inputs.generator.scenario.inlet_positions_xy_m[0])
     )
+
+
+def test_builds_rotation_schedulers_from_generator_inputs() -> None:
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    schedulers = build_rotation_schedulers(inputs)
+
+    assert [scheduler.sensor_id for scheduler in schedulers] == [
+        sensor.sensor_id for sensor in inputs.environment.sensors
+    ]
+    first_scan = schedulers[0].next_scan()
+    assert first_scan.scan_id == 1
+    assert first_scan.point_count == 2400
+    assert first_scan.captured_elapsed_s == 0.0
 
 
 def test_rejects_quality_sensor_mismatch(tmp_path: Path) -> None:
