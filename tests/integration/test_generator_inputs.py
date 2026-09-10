@@ -12,6 +12,7 @@ from scrap_monitoring_lidar_generator.configuration import (
 )
 from scrap_monitoring_lidar_generator.geometry import Vec2
 from scrap_monitoring_lidar_generator.runtime import (
+    build_reference_generation_runtime,
     build_rotation_schedulers,
     build_scenario_simulator,
 )
@@ -78,6 +79,19 @@ def test_builds_rotation_schedulers_from_generator_inputs() -> None:
     assert first_scan.scan_id == 1
     assert first_scan.point_count == 2400
     assert first_scan.captured_elapsed_s == 0.0
+
+
+def test_generates_timed_reference_scan_from_generator_inputs() -> None:
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    runtime = build_reference_generation_runtime(inputs)
+
+    (scan,) = runtime.next_completed_scans()
+
+    assert scan.sensor_id == inputs.environment.sensors[0].sensor_id
+    assert scan.scan_id == 1
+    assert scan.schedule.point_count == 2400
+    assert len(scan.scan.points) == scan.schedule.point_count
+    assert runtime.scenario.elapsed_s == pytest.approx(1.0 / 3.0)
 
 
 def test_rejects_quality_sensor_mismatch(tmp_path: Path) -> None:

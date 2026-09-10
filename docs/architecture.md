@@ -71,6 +71,8 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 
 `ScheduledScan`은 논리적인 회전 시작 및 완료 시각과 측정 순서의 각도 및 시뮬레이션 시각 배열을 구분한다. 외부 스캔의 `captured_at`은 이 배열의 첫 측정점 시각을 실행 기준 UTC(Coordinated Universal Time)에 더해 계산한다.
 
+`runtime.ReferenceGenerationRuntime`은 모든 센서의 진행 중인 회전과 하나의 `ScenarioSimulator`를 시뮬레이션 시각 순서로 조정한다. 높이장 갱신 시각 직전까지의 측정점을 현재 장면에서 sensor별 batch로 계산하고, 같은 시각의 높이장 갱신을 먼저 적용한 뒤 해당 시각의 측정점을 계산한다. 가장 이른 회전 완료 시각마다 완료된 스캔만 반환하며 동시에 완료된 스캔은 `sensor_id` 순서로 정렬한다.
+
 ## 검증 구조
 
 자동 검증은 4개 계층으로 구성한다.
