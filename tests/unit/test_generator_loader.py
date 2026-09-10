@@ -1,0 +1,104 @@
+"""Tests for strict generator configuration loading."""
+
+import json
+from copy import deepcopy
+from pathlib import Path
+from typing import Any, cast
+
+import pytest
+
+from scrap_monitoring_lidar_generator.configuration import (
+    ConfigurationError,
+    load_generator_config,
+    parse_generator_config,
+)
+
+_ROOT = Path(__file__).parents[2]
+_EXAMPLE_PATH = _ROOT / "examples" / "generator.v1.json"
+
+
+@pytest.fixture
+def valid_generator() -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads(_EXAMPLE_PATH.read_text(encoding="utf-8")))
+
+
+def _parse(value: dict[str, Any]) -> None:
+    parse_generator_config(json.dumps(value))
+
+
+def test_loads_generator_and_resolves_relative_paths() -> None:
+    config = load_generator_config(_EXAMPLE_PATH)
+
+    assert config.seed == 123456789
+    assert config.environment_path == _ROOT / "examples" / "environment.v1.json"
+    assert config.quality_profile_path == _ROOT / "examples" / "quality-profile.v1.json"
+    assert config.scenario.inlet_positions_xy_m == ((2.0, 2.0), (6.0, 4.0))
+    assert config.measurement.sample_rate_hz == 7200.0
+    assert config.measurement.distortions.dropout.enabled is False
+    assert config.diagnostics.output_path == _ROOT / "examples" / "diagnostics"
+
+
+def test_rejects_unknown_nested_field(valid_generator: dict[str, Any]) -> None:
+    valid_generator["scenario"]["surface"]["unknown"] = True
+
+    with pytest.raises(ConfigurationError, match="unexpected fields: unknown"):
+        _parse(valid_generator)
+
+
+def test_rejects_missing_nested_field(valid_generator: dict[str, Any]) -> None:
+    del valid_generator["measurement"]["distance_noise"]["limit_m"]
+
+    with pytest.raises(ConfigurationError, match="missing fields: limit_m"):
+        _parse(valid_generator)
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("seed",), True),
+        (("seed",), 18_446_744_073_709_551_616),
+        (("scenario", "mean_fill_duration_s"), 0),
+        (("scenario", "collection_threshold_range"), [0, 0.7]),
+        (("scenario", "collection_threshold_range"), [0.8, 0.7]),
+        (("scenario", "inlet_switch_activation_ratio"), 1.1),
+        (("measurement", "sample_rate_hz"), 2),
+        (("measurement", "min_distance_m"), 0.01),
+        (("measurement", "max_distance_m"), 31),
+        (("measurement", "distance_noise", "enabled"), 1),
+    ],
+)
+def test_rejects_invalid_generator_values(
+    valid_generator: dict[str, Any],
+    path: tuple[str, ...],
+    value: Any,
+) -> None:
+    target = valid_generator
+    for field in path[:-1]:
+        target = target[field]
+    target[path[-1]] = value
+
+    with pytest.raises(ConfigurationError):
+        _parse(valid_generator)
+
+
+def test_rejects_distance_range_without_width(valid_generator: dict[str, Any]) -> None:
+    valid_generator["measurement"]["min_distance_m"] = 10
+    valid_generator["measurement"]["max_distance_m"] = 10
+
+    with pytest.raises(ConfigurationError, match="must be greater"):
+        _parse(valid_generator)
+
+
+def test_rejects_duplicate_inlet_positions(valid_generator: dict[str, Any]) -> None:
+    position = deepcopy(valid_generator["scenario"]["inlet_positions_xy_m"][0])
+    valid_generator["scenario"]["inlet_positions_xy_m"].append(position)
+
+    with pytest.raises(ConfigurationError, match="unique coordinates"):
+        _parse(valid_generator)
+
+
+def test_rejects_empty_reference_path(valid_generator: dict[str, Any]) -> None:
+    valid_generator["quality_profile_path"] = ""
+
+    with pytest.raises(ConfigurationError, match="non-empty string"):
+        _parse(valid_generator)

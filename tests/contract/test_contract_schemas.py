@@ -16,7 +16,15 @@ def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("name", ["environment.schema.json", "scan.schema.json"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "environment.schema.json",
+        "generator.schema.json",
+        "quality-profile.schema.json",
+        "scan.schema.json",
+    ],
+)
 def test_contract_schema_is_valid_draft_2020_12(name: str) -> None:
     Draft202012Validator.check_schema(_load_json(_CONTRACTS / name))
 
@@ -26,6 +34,23 @@ def test_synthetic_environment_matches_contract() -> None:
     environment = _load_json(_ROOT / "examples" / "environment.v1.json")
 
     Draft202012Validator(schema).validate(environment)
+
+
+@pytest.mark.parametrize(
+    ("schema_name", "example_name"),
+    [
+        ("generator.schema.json", "generator.v1.json"),
+        ("quality-profile.schema.json", "quality-profile.v1.json"),
+    ],
+)
+def test_synthetic_generator_inputs_match_contract(
+    schema_name: str,
+    example_name: str,
+) -> None:
+    schema = _load_json(_CONTRACTS / schema_name)
+    example = _load_json(_ROOT / "examples" / example_name)
+
+    Draft202012Validator(schema).validate(example)
 
 
 def test_scan_sequence_matches_contract() -> None:
