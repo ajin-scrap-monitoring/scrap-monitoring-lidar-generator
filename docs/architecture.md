@@ -47,6 +47,12 @@ measurement -> scenario
 
 `transport`만 외부 스캔 계약과 MessagePack 표현을 안다. 정확한 message framing과 ACK 및 오류 응답은 수신 프로그램과 합의한 계약으로 고정한 뒤 구현한다. 내부 계산 모델은 전송 표현에 의존하지 않는다.
 
+## 적재 표면 상태
+
+`scenario.HeightField`는 경계 다각형의 bounding box를 일정한 간격의 node 격자로 덮고, 각 cell 안의 높이를 bilinear 보간한다. 경계 다각형과 격자 cell의 교차 면적을 node별 적분 가중치로 계산하여 경계 밖 영역을 부피에서 제외한다.
+
+표면 갱신은 중심과 확산 반경을 입력받는 국소 Gaussian kernel을 사용한다. 높이가 상단 또는 바닥에 먼저 도달한 node를 제한한 뒤 남은 node로 변화량을 재분배한다. 요청량이 전체 가용 부피를 넘는 경우에는 적용량과 미적용량을 분리하여 반환한다.
+
 ## 검증 구조
 
 자동 검증은 4개 계층으로 구성한다.

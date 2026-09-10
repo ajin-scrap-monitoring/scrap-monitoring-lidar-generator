@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Synthetic LiDAR scan data generator for scrap monitoring development."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
-dependencies = []
+dependencies = [
+    "numpy>=2.5.3,<2.6",
+]
 classifiers = ["Private :: Do Not Upload"]
 
 [project.scripts]
