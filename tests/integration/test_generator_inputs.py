@@ -10,6 +10,9 @@ from scrap_monitoring_lidar_generator.configuration import (
     ConfigurationError,
     load_generator_inputs,
 )
+from scrap_monitoring_lidar_generator.geometry import Vec2
+from scrap_monitoring_lidar_generator.runtime import build_scenario_simulator
+from scrap_monitoring_lidar_generator.scenario import ScenarioPhase
 
 _ROOT = Path(__file__).parents[2]
 _EXAMPLES = _ROOT / "examples"
@@ -44,6 +47,21 @@ def test_loads_generator_and_referenced_inputs() -> None:
     assert inputs.environment.environment_id == "synthetic-room-v1"
     assert inputs.generator.seed == 123456789
     assert inputs.quality_profile.sensors[0].sensor_id == "sensor-a"
+
+
+def test_builds_running_scenario_from_generator_inputs() -> None:
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    simulator = build_scenario_simulator(inputs)
+
+    initial = simulator.snapshot
+    updated = simulator.advance_to(inputs.generator.scenario.surface.update_interval_s)
+
+    assert initial.phase is ScenarioPhase.FILLING
+    assert initial.surface_volume_m3 == 0.0
+    assert updated.surface_volume_m3 > 0.0
+    assert simulator.surface.boundary.contains(
+        Vec2(*inputs.generator.scenario.inlet_positions_xy_m[0])
+    )
 
 
 def test_rejects_quality_sensor_mismatch(tmp_path: Path) -> None:

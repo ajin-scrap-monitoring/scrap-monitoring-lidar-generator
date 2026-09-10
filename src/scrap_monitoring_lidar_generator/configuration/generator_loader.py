@@ -1,5 +1,6 @@
 """Strict loader for generator-only execution configuration version 1."""
 
+import math
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -208,21 +209,35 @@ def _parse_scenario(value: Any, path: str) -> ScenarioConfig:
     if len(set(inlet_positions)) != len(inlet_positions):
         raise ConfigurationError(f"{path}.inlet_positions_xy_m must contain unique coordinates")
 
+    fill_duration_factor_range = _require_range(
+        scenario["fill_duration_factor_range"],
+        f"{path}.fill_duration_factor_range",
+        _require_positive,
+    )
+    if not math.isclose(
+        sum(fill_duration_factor_range),
+        2.0,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        raise ConfigurationError(f"{path}.fill_duration_factor_range must be centered on 1")
+
+    fill_rate_factor_range = _require_average_factor_range(
+        scenario["fill_rate_factor_range"],
+        f"{path}.fill_rate_factor_range",
+    )
+    collection_rate_factor_range = _require_average_factor_range(
+        scenario["collection_rate_factor_range"],
+        f"{path}.collection_rate_factor_range",
+    )
+
     return ScenarioConfig(
         mean_fill_duration_s=_require_positive(
             scenario["mean_fill_duration_s"],
             f"{path}.mean_fill_duration_s",
         ),
-        fill_duration_factor_range=_require_range(
-            scenario["fill_duration_factor_range"],
-            f"{path}.fill_duration_factor_range",
-            _require_positive,
-        ),
-        fill_rate_factor_range=_require_range(
-            scenario["fill_rate_factor_range"],
-            f"{path}.fill_rate_factor_range",
-            _require_positive,
-        ),
+        fill_duration_factor_range=fill_duration_factor_range,
+        fill_rate_factor_range=fill_rate_factor_range,
         fill_rate_change_duration_s_range=_require_range(
             scenario["fill_rate_change_duration_s_range"],
             f"{path}.fill_rate_change_duration_s_range",
@@ -238,11 +253,7 @@ def _parse_scenario(value: Any, path: str) -> ScenarioConfig:
             f"{path}.collection_duration_factor_range",
             _require_positive,
         ),
-        collection_rate_factor_range=_require_range(
-            scenario["collection_rate_factor_range"],
-            f"{path}.collection_rate_factor_range",
-            _require_positive,
-        ),
+        collection_rate_factor_range=collection_rate_factor_range,
         collection_rate_change_duration_s_range=_require_range(
             scenario["collection_rate_change_duration_s_range"],
             f"{path}.collection_rate_change_duration_s_range",
@@ -488,6 +499,13 @@ def _require_range(value: Any, path: str, parser: _NumberParser) -> FloatRange:
 
 def _require_positive_range(config: dict[str, Any], field: str, path: str) -> FloatRange:
     return _require_range(config[field], f"{path}.{field}", _require_positive)
+
+
+def _require_average_factor_range(value: Any, path: str) -> FloatRange:
+    result = _require_range(value, path, _require_positive)
+    if not result[0] <= 1.0 <= result[1]:
+        raise ConfigurationError(f"{path} must include the cycle average factor 1")
+    return result
 
 
 def _require_positive(value: Any, path: str) -> float:

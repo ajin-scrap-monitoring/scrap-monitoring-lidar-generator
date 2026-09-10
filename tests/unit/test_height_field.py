@@ -71,6 +71,21 @@ def test_height_query_uses_bilinear_interpolation(square_boundary: Polygon2) -> 
     assert surface.height_at(Vec2(0.25, 0.25)) == pytest.approx(expected_height_m)
 
 
+def test_mean_height_compares_area_around_positions(square_boundary: Polygon2) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=4.0,
+        cell_size_m=0.1,
+    )
+    surface.add_volume(0.5, center=Vec2(0.4, 0.5), spread_radius_m=0.15)
+
+    near_height_m = surface.mean_height_within(Vec2(0.4, 0.5), 0.2)
+    far_height_m = surface.mean_height_within(Vec2(1.6, 0.5), 0.2)
+
+    assert near_height_m > far_height_m
+
+
 def test_add_and_remove_preserve_volume_in_concave_boundary() -> None:
     boundary = Polygon2(
         (
@@ -144,6 +159,25 @@ def test_removal_reports_missing_volume_and_restores_floor(square_boundary: Poly
 
     assert change.applied_m3 == pytest.approx(1.0)
     assert change.unapplied_m3 == pytest.approx(1.25)
+    assert surface.volume_m3 == pytest.approx(0.0, abs=1e-12)
+    assert np.all(surface.heights_m == surface.floor_z_m)
+
+
+def test_uniform_removal_preserves_requested_volume(square_boundary: Polygon2) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=3.0,
+        cell_size_m=0.2,
+    )
+    surface.add_volume(2.0, center=Vec2(0.5, 0.5), spread_radius_m=0.3)
+
+    partial = surface.remove_volume_uniformly(0.75)
+    remainder = surface.remove_volume_uniformly(2.0)
+
+    assert partial.applied_m3 == pytest.approx(0.75)
+    assert remainder.applied_m3 == pytest.approx(1.25)
+    assert remainder.unapplied_m3 == pytest.approx(0.75)
     assert surface.volume_m3 == pytest.approx(0.0, abs=1e-12)
     assert np.all(surface.heights_m == surface.floor_z_m)
 
@@ -225,3 +259,8 @@ def test_rejects_invalid_change_location(square_boundary: Polygon2) -> None:
         surface.add_volume(1.0, center=Vec2(3.0, 0.5), spread_radius_m=0.5)
     with pytest.raises(ValueError, match="radius"):
         surface.remove_volume(1.0, center=Vec2(0.5, 0.5), spread_radius_m=0.0)
+
+    with pytest.raises(ValueError, match="comparison center"):
+        surface.mean_height_within(Vec2(3.0, 0.5), 0.5)
+    with pytest.raises(ValueError, match="comparison radius"):
+        surface.mean_height_within(Vec2(0.5, 0.5), 0.0)

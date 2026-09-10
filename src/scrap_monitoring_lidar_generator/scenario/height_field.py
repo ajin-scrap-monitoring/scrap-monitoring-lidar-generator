@@ -183,6 +183,22 @@ class HeightField:
         upper = upper_left + x_fraction * (upper_right - upper_left)
         return float(lower + y_fraction * (upper - lower))
 
+    def mean_height_within(self, center: Vec2, radius_m: float) -> float:
+        """Return the area-weighted node mean within a horizontal comparison radius."""
+        if not self._boundary.contains(center):
+            raise ValueError("height comparison center must lie inside the surface boundary")
+        if not math.isfinite(radius_m) or radius_m <= 0.0:
+            raise ValueError("height comparison radius must be a finite positive number")
+
+        x_distance_m = self._x_coordinates_m[np.newaxis, :] - center.x
+        y_distance_m = self._y_coordinates_m[:, np.newaxis] - center.y
+        inside_radius = np.square(x_distance_m) + np.square(y_distance_m) <= radius_m * radius_m
+        comparison_weights_m2 = np.where(inside_radius, self._volume_weights_m2, 0.0)
+        comparison_area_m2 = float(np.sum(comparison_weights_m2))
+        if comparison_area_m2 == 0.0:
+            return self.height_at(center)
+        return float(np.sum(comparison_weights_m2 * self._heights_m) / comparison_area_m2)
+
     def intersect_ray(
         self,
         ray: Ray,
@@ -254,6 +270,22 @@ class HeightField:
         """Lower the local surface while preserving all available requested volume."""
         requested_m3 = _require_volume(volume_m3)
         profile = self._build_local_profile(center, spread_radius_m)
+        removable_height_m = self._heights_m - self._floor_z_m
+        delta_m = _solve_height_delta(
+            profile,
+            removable_height_m,
+            self._volume_weights_m2,
+            requested_m3,
+        )
+        self._heights_m -= delta_m
+        np.maximum(self._heights_m, self._floor_z_m, out=self._heights_m)
+        applied_m3 = float(np.sum(self._volume_weights_m2 * delta_m))
+        return VolumeChange(requested_m3, min(requested_m3, applied_m3))
+
+    def remove_volume_uniformly(self, volume_m3: float) -> VolumeChange:
+        """Lower all occupied regions without introducing a collection location."""
+        requested_m3 = _require_volume(volume_m3)
+        profile = np.where(self._volume_weights_m2 > 0.0, 1.0, 0.0)
         removable_height_m = self._heights_m - self._floor_z_m
         delta_m = _solve_height_delta(
             profile,
