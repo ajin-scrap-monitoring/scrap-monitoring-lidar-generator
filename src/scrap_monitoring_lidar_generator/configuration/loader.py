@@ -1,10 +1,11 @@
 """Strict JSON loader for environment configuration version 1."""
 
-import json
 import math
 from pathlib import Path
-from typing import Any, Never
+from typing import Any
 
+import scrap_monitoring_lidar_generator.configuration._json as strict_json
+from scrap_monitoring_lidar_generator.configuration.errors import ConfigurationError
 from scrap_monitoring_lidar_generator.configuration.models import (
     Coordinate2,
     Coordinate3,
@@ -29,43 +30,25 @@ _SENSOR_FIELDS = frozenset({"sensor_id", "p0_m", "u0", "u90"})
 _VECTOR_TOLERANCE = 1e-6
 
 
-class ConfigurationError(ValueError):
-    """Raised when configuration cannot be parsed or validated."""
-
-
 def load_environment(path: str | Path) -> EnvironmentConfig:
     """Load and validate an environment configuration from a UTF-8 JSON file."""
-    source = Path(path)
-    try:
-        document = source.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as error:
-        raise ConfigurationError(f"cannot read environment configuration: {source}") from error
+    document = strict_json.read_document(path, "environment configuration")
     return parse_environment(document)
 
 
 def parse_environment(document: str) -> EnvironmentConfig:
     """Parse and validate an environment configuration JSON document."""
-    try:
-        value = json.loads(
-            document,
-            object_pairs_hook=_unique_object,
-            parse_constant=_reject_non_finite_constant,
-        )
-    except ConfigurationError:
-        raise
-    except json.JSONDecodeError as error:
-        raise ConfigurationError(
-            f"invalid JSON at line {error.lineno}, column {error.colno}: {error.msg}"
-        ) from error
+    value = strict_json.parse_document(document)
+    root = strict_json.require_object(value, "$")
+    strict_json.require_exact_fields(root, _ENVIRONMENT_FIELDS, "$")
 
-    root = _require_object(value, "$")
-    _require_exact_fields(root, _ENVIRONMENT_FIELDS, "$")
+    environment_id = strict_json.require_non_empty_string(
+        root["environment_id"], "$.environment_id"
+    )
+    strict_json.require_literal(root["length_unit"], "m", "$.length_unit")
+    strict_json.require_literal(root["angle_unit"], "deg", "$.angle_unit")
 
-    environment_id = _require_non_empty_string(root["environment_id"], "$.environment_id")
-    _require_literal(root["length_unit"], "m", "$.length_unit")
-    _require_literal(root["angle_unit"], "deg", "$.angle_unit")
-
-    boundary_value = _require_array(root["boundary_xy_m"], "$.boundary_xy_m")
+    boundary_value = strict_json.require_array(root["boundary_xy_m"], "$.boundary_xy_m")
     if len(boundary_value) < 3:
         raise ConfigurationError("$.boundary_xy_m must contain at least 3 coordinates")
     boundary = tuple(
@@ -74,12 +57,12 @@ def parse_environment(document: str) -> EnvironmentConfig:
     )
     _validate_boundary(boundary)
 
-    floor_z_m = _require_number(root["floor_z_m"], "$.floor_z_m")
-    top_z_m = _require_number(root["top_z_m"], "$.top_z_m")
+    floor_z_m = strict_json.require_number(root["floor_z_m"], "$.floor_z_m")
+    top_z_m = strict_json.require_number(root["top_z_m"], "$.top_z_m")
     if top_z_m <= floor_z_m:
         raise ConfigurationError("$.top_z_m must be greater than $.floor_z_m")
 
-    sensors_value = _require_array(root["sensors"], "$.sensors")
+    sensors_value = strict_json.require_array(root["sensors"], "$.sensors")
     if not sensors_value:
         raise ConfigurationError("$.sensors must contain at least 1 sensor")
     sensors = tuple(
@@ -98,24 +81,11 @@ def parse_environment(document: str) -> EnvironmentConfig:
     )
 
 
-def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ConfigurationError(f"duplicate JSON field: {key}")
-        result[key] = value
-    return result
-
-
-def _reject_non_finite_constant(value: str) -> Never:
-    raise ConfigurationError(f"non-finite JSON number is not allowed: {value}")
-
-
 def _parse_sensor(value: Any, path: str) -> SensorConfig:
-    sensor = _require_object(value, path)
-    _require_exact_fields(sensor, _SENSOR_FIELDS, path)
+    sensor = strict_json.require_object(value, path)
+    strict_json.require_exact_fields(sensor, _SENSOR_FIELDS, path)
 
-    sensor_id = _require_non_empty_string(sensor["sensor_id"], f"{path}.sensor_id")
+    sensor_id = strict_json.require_non_empty_string(sensor["sensor_id"], f"{path}.sensor_id")
     p0_m = _require_coordinate3(sensor["p0_m"], f"{path}.p0_m")
     u0 = _require_coordinate3(sensor["u0"], f"{path}.u0")
     u90 = _require_coordinate3(sensor["u90"], f"{path}.u90")
@@ -129,56 +99,13 @@ def _parse_sensor(value: Any, path: str) -> SensorConfig:
     return SensorConfig(sensor_id=sensor_id, p0_m=p0_m, u0=u0, u90=u90)
 
 
-def _require_exact_fields(value: dict[str, Any], expected: frozenset[str], path: str) -> None:
-    actual = frozenset(value)
-    missing = sorted(expected - actual)
-    unexpected = sorted(actual - expected)
-    if missing:
-        raise ConfigurationError(f"{path} is missing fields: {', '.join(missing)}")
-    if unexpected:
-        raise ConfigurationError(f"{path} contains unexpected fields: {', '.join(unexpected)}")
-
-
-def _require_object(value: Any, path: str) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"{path} must be an object")
-    return value
-
-
-def _require_array(value: Any, path: str) -> list[Any]:
-    if not isinstance(value, list):
-        raise ConfigurationError(f"{path} must be an array")
-    return value
-
-
-def _require_non_empty_string(value: Any, path: str) -> str:
-    if not isinstance(value, str) or not value:
-        raise ConfigurationError(f"{path} must be a non-empty string")
-    return value
-
-
-def _require_literal(value: Any, expected: str, path: str) -> None:
-    if value != expected:
-        raise ConfigurationError(f"{path} must be {expected!r}")
-
-
-def _require_number(value: Any, path: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ConfigurationError(f"{path} must be a number")
-    try:
-        result = float(value)
-    except OverflowError as error:
-        raise ConfigurationError(f"{path} must be finite") from error
-    if not math.isfinite(result):
-        raise ConfigurationError(f"{path} must be finite")
-    return result
-
-
 def _require_coordinate_values(value: Any, size: int, path: str) -> tuple[float, ...]:
-    items = _require_array(value, path)
+    items = strict_json.require_array(value, path)
     if len(items) != size:
         raise ConfigurationError(f"{path} must contain exactly {size} numbers")
-    return tuple(_require_number(item, f"{path}[{index}]") for index, item in enumerate(items))
+    return tuple(
+        strict_json.require_number(item, f"{path}[{index}]") for index, item in enumerate(items)
+    )
 
 
 def _require_coordinate2(value: Any, path: str) -> Coordinate2:
