@@ -63,6 +63,14 @@ measurement -> scenario
 
 scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 경로는 `RayBatch`의 원점과 방향 배열을 사용하여 다각형 포함, 바닥, 외벽, 고정 표면 및 높이장 교차를 묶음으로 계산한다. batch 결과는 입력 각도 순서를 유지한 `ReferencePoint`로 변환한다.
 
+## 센서 회전과 측정 시각
+
+`measurement.SensorRotationScheduler`는 센서마다 독립된 회전 상태와 `scan_id`를 관리한다. 각 센서는 실행 seed와 `sensor_id`에서 안정적으로 파생한 시작 각도를 사용하며, 다른 센서의 scheduler 진행 여부가 해당 센서의 결과를 바꾸지 않는다.
+
+측정점은 `sample_index / sample_rate_hz`의 시뮬레이션 시각에 생성한다. 회전 구간은 `rotation_index / rotation_rate_hz`부터 다음 회전 경계 직전까지이며, 경계 시각의 측정점은 다음 스캔에 포함한다. 각 구간의 끝 sample index를 유리수 연산으로 계산하므로 빈도의 비율이 정수가 아니어도 스캔별 측정점 수는 실제 구간에 따라 달라지고 장기 측정 빈도는 유지된다.
+
+`ScheduledScan`은 논리적인 회전 시작 및 완료 시각과 측정 순서의 각도 및 시뮬레이션 시각 배열을 구분한다. 외부 스캔의 `captured_at`은 이 배열의 첫 측정점 시각을 실행 기준 UTC(Coordinated Universal Time)에 더해 계산한다.
+
 ## 검증 구조
 
 자동 검증은 4개 계층으로 구성한다.

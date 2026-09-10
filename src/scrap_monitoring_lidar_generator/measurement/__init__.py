@@ -6,6 +6,11 @@ from scrap_monitoring_lidar_generator.measurement.reference import (
     DEFAULT_MIN_DISTANCE_M,
     ReferenceScanner,
 )
+from scrap_monitoring_lidar_generator.measurement.rotation import (
+    ScheduledScan,
+    SensorRotationScheduler,
+    create_seeded_rotation_scheduler,
+)
 
 __all__ = [
     "DEFAULT_MAX_DISTANCE_M",
@@ -13,4 +18,7 @@ __all__ = [
     "ReferencePoint",
     "ReferenceScan",
     "ReferenceScanner",
+    "ScheduledScan",
+    "SensorRotationScheduler",
+    "create_seeded_rotation_scheduler",
 ]
