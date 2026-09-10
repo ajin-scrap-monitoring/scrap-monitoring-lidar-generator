@@ -64,6 +64,7 @@ measurement -> scenario
 .github/
   workflows/
     ci.yml
+.python-version
 docs/
   architecture.md
   dependencies.md
@@ -71,6 +72,7 @@ docs/
   project-spec.md
   internal/
 examples/
+pyproject.toml
 src/
   scrap_monitoring_lidar_generator/
     configuration/
@@ -79,12 +81,14 @@ src/
     measurement/
     transport/
     runtime/
+    __main__.py
     cli.py
 tests/
   unit/
   integration/
   contract/
   performance/
+uv.lock
 ```
 
 `docs/internal/`은 공개 구조의 입력이나 fixture 저장소가 아니라 읽기 전용 기준 자료 경계다.
