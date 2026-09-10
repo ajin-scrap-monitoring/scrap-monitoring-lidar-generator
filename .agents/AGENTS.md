@@ -2,13 +2,27 @@
 
 ## 적용 범위
 
-이 파일은 이 Repository에서 작업하는 사람과 코딩 에이전트가 공유하는 지침의 정본이다. Codex는 `/AGENTS.md`, Claude Code는 `/.claude/CLAUDE.md`를 진입점으로 사용하며, 두 파일은 이 파일을 가리키는 심링크다.
+이 파일은 이 Repository에서 작업하는 사람과 코딩 에이전트가 공유하는 지침의 정본이다. Codex는 `/AGENTS.md`, Claude Code는 `/.claude/CLAUDE.md`, Gemini는 `/GEMINI.md`를 진입점으로 사용하며, 세 파일은 이 파일을 가리키는 심링크다.
 
 ## 프로젝트 명세
 
 `docs/project-spec.md`는 제품 범위, 외부 계약과 완료 조건의 정본이다. 사용자가 명시적으로 요청하지 않으면 이 문서를 수정하지 않는다.
 
 코딩 에이전트는 프로젝트 명세의 경계 안에서 구현 구조, 제품과 개발 의존성, 테스트 도구, 품질 규칙과 추가 문서를 선택하고 변경할 수 있다. 채택한 결정은 코드와 일치하는 정본 문서에 기록하고, 같은 사실을 여러 문서에 복제하지 않는다.
+
+## Organization 운영 기준
+
+이 Repository에는 `ajin-scrap-monitoring/.github`의 [개발 운영 규칙](https://github.com/ajin-scrap-monitoring/.github/blob/main/GOVERNANCE.md), [기여 절차](https://github.com/ajin-scrap-monitoring/.github/blob/main/CONTRIBUTING.md)와 [보안 정책](https://github.com/ajin-scrap-monitoring/.github/blob/main/SECURITY.md)을 적용한다. GitHub Issue, 브랜치, commit, Pull Request (PR), CI(Continuous Integration), ruleset 또는 Release를 다루기 전에 최신 원문을 확인한다.
+
+Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로젝트에만 필요한 추가 규칙이 있을 때만 같은 종류의 로컬 문서를 둔다.
+
+## 구현 구조와 개발 순서
+
+`docs/architecture.md`는 패키지 경계, 의존 방향과 검증 계층의 정본이다. `docs/development-plan.md`는 구현 순서, 단계별 산출물과 완료 조건의 정본이다.
+
+프로그램 코드는 `src/scrap_monitoring_lidar_generator/`, 자동 검증은 `tests/`, 공개 가능한 합성 입력 예시는 `examples/`에 둔다. 새로운 최상위 경계가 필요하면 코드와 함께 아키텍처 문서를 갱신한다.
+
+미확정된 설정 및 전송 계약을 구현해야 하는 단계에서는 수신 프로그램과 계약을 먼저 확정한다. 내부 자료의 값을 공개 기본값, 예제 또는 테스트 fixture로 사용하지 않는다.
 
 ## 내부 자료
 
