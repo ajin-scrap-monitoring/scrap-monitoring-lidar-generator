@@ -11,6 +11,8 @@ from scrap_monitoring_lidar_generator.configuration.models import (
     EnvironmentConfig,
     SensorConfig,
 )
+from scrap_monitoring_lidar_generator.geometry.polygon import Polygon2
+from scrap_monitoring_lidar_generator.geometry.primitives import Vec2
 
 _ENVIRONMENT_FIELDS = frozenset(
     {
@@ -25,7 +27,6 @@ _ENVIRONMENT_FIELDS = frozenset(
 )
 _SENSOR_FIELDS = frozenset({"sensor_id", "p0_m", "u0", "u90"})
 _VECTOR_TOLERANCE = 1e-6
-_GEOMETRY_TOLERANCE = 1e-12
 
 
 class ConfigurationError(ValueError):
@@ -197,73 +198,7 @@ def _require_unit_vector(value: Coordinate3, path: str) -> None:
 
 
 def _validate_boundary(boundary: tuple[Coordinate2, ...]) -> None:
-    if len(boundary) != len(set(boundary)):
-        raise ConfigurationError("$.boundary_xy_m must contain unique coordinates")
-
-    doubled_area = sum(
-        left[0] * right[1] - right[0] * left[1] for left, right in _boundary_edges(boundary)
-    )
-    if math.isclose(doubled_area, 0.0, rel_tol=0.0, abs_tol=_GEOMETRY_TOLERANCE):
-        raise ConfigurationError("$.boundary_xy_m must enclose a non-zero area")
-
-    edges = tuple(_boundary_edges(boundary))
-    for first_index, first in enumerate(edges):
-        for second_index in range(first_index + 1, len(edges)):
-            if _edges_are_adjacent(first_index, second_index, len(edges)):
-                continue
-            if _segments_intersect(*first, *edges[second_index]):
-                raise ConfigurationError("$.boundary_xy_m must not self-intersect")
-
-
-def _boundary_edges(
-    boundary: tuple[Coordinate2, ...],
-) -> tuple[tuple[Coordinate2, Coordinate2], ...]:
-    return tuple(
-        (point, boundary[(index + 1) % len(boundary)]) for index, point in enumerate(boundary)
-    )
-
-
-def _edges_are_adjacent(first: int, second: int, edge_count: int) -> bool:
-    return second == first + 1 or (first == 0 and second == edge_count - 1)
-
-
-def _segments_intersect(
-    a: Coordinate2,
-    b: Coordinate2,
-    c: Coordinate2,
-    d: Coordinate2,
-) -> bool:
-    orientations = (
-        _orientation(a, b, c),
-        _orientation(a, b, d),
-        _orientation(c, d, a),
-        _orientation(c, d, b),
-    )
-    first, second, third, fourth = orientations
-
-    if first * second < 0 and third * fourth < 0:
-        return True
-    return (
-        (first == 0 and _point_on_segment(c, a, b))
-        or (second == 0 and _point_on_segment(d, a, b))
-        or (third == 0 and _point_on_segment(a, c, d))
-        or (fourth == 0 and _point_on_segment(b, c, d))
-    )
-
-
-def _orientation(a: Coordinate2, b: Coordinate2, c: Coordinate2) -> int:
-    cross_product = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
-    if math.isclose(cross_product, 0.0, rel_tol=0.0, abs_tol=_GEOMETRY_TOLERANCE):
-        return 0
-    return 1 if cross_product > 0 else -1
-
-
-def _point_on_segment(point: Coordinate2, start: Coordinate2, end: Coordinate2) -> bool:
-    return (
-        min(start[0], end[0]) - _GEOMETRY_TOLERANCE
-        <= point[0]
-        <= max(start[0], end[0]) + _GEOMETRY_TOLERANCE
-        and min(start[1], end[1]) - _GEOMETRY_TOLERANCE
-        <= point[1]
-        <= max(start[1], end[1]) + _GEOMETRY_TOLERANCE
-    )
+    try:
+        Polygon2(tuple(Vec2(x, y) for x, y in boundary))
+    except ValueError as error:
+        raise ConfigurationError(f"$.boundary_xy_m is invalid: {error}") from error
