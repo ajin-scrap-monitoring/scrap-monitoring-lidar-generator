@@ -4,6 +4,7 @@ import math
 from dataclasses import dataclass
 
 from scrap_monitoring_lidar_generator.geometry.scene import HitKind
+from scrap_monitoring_lidar_generator.measurement.rotation import ScheduledScan
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,3 +38,46 @@ class ReferenceScan:
         if not points:
             raise ValueError("reference scan must contain at least one point")
         object.__setattr__(self, "points", points)
+
+
+@dataclass(frozen=True, slots=True)
+class TimedReferenceScan:
+    """Reference measurements paired with their completed rotation schedule."""
+
+    schedule: ScheduledScan
+    scan: ReferenceScan
+
+    def __post_init__(self) -> None:
+        if self.schedule.sensor_id != self.scan.sensor_id:
+            raise ValueError("timed reference scan sensor identifiers must match")
+        if self.schedule.point_count != len(self.scan.points):
+            raise ValueError("timed reference scan point counts must match")
+        if any(
+            point.angle_deg != float(angle_deg)
+            for point, angle_deg in zip(
+                self.scan.points,
+                self.schedule.angles_deg,
+                strict=True,
+            )
+        ):
+            raise ValueError("timed reference scan point angles must match its schedule")
+
+    @property
+    def sensor_id(self) -> str:
+        """Return the source sensor identifier."""
+        return self.schedule.sensor_id
+
+    @property
+    def scan_id(self) -> int:
+        """Return the sensor-local completed scan sequence."""
+        return self.schedule.scan_id
+
+    @property
+    def captured_elapsed_s(self) -> float:
+        """Return the simulation time of the first measurement point."""
+        return self.schedule.captured_elapsed_s
+
+    @property
+    def completed_at_s(self) -> float:
+        """Return the logical rotation completion time."""
+        return self.schedule.completed_at_s

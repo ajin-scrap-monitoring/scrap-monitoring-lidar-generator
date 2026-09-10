@@ -193,6 +193,17 @@ class ScenarioSimulator:
         return self._surface
 
     @property
+    def elapsed_s(self) -> float:
+        """Return the latest simulation time processed or requested."""
+        return self._elapsed_s
+
+    @property
+    def next_surface_event_elapsed_s(self) -> float:
+        """Return the next scheduled update or phase transition time."""
+        next_update_s = self._next_update_index * self._settings.surface_update_interval_s
+        return min(next_update_s, self.phase_plan.ends_at_s)
+
+    @property
     def phase_plan(self) -> PhasePlan:
         """Return the fixed plan for the active phase."""
         if self._phase is ScenarioPhase.FILLING:
