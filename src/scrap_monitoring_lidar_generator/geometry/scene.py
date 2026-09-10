@@ -1,9 +1,18 @@
 """Environment scene composition and first-hit queries."""
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+import numpy as np
+
+from scrap_monitoring_lidar_generator.geometry.batch_intersections import (
+    contains_xy,
+    intersect_floor_batch,
+    intersect_triangle_batch,
+)
+from scrap_monitoring_lidar_generator.geometry.batches import FloatArray, RayBatch
 from scrap_monitoring_lidar_generator.geometry.intersections import (
     DEFAULT_MIN_DISTANCE_M,
     intersect_triangle,
@@ -24,6 +33,17 @@ class HitKind(StrEnum):
     SURFACE = "surface"
 
 
+_NO_HIT = 0
+_FLOOR_HIT = 1
+_WALL_HIT = 2
+_SURFACE_HIT = 3
+_HIT_KIND_BY_CODE = {
+    _FLOOR_HIT: HitKind.FLOOR,
+    _WALL_HIT: HitKind.WALL,
+    _SURFACE_HIT: HitKind.SURFACE,
+}
+
+
 @dataclass(frozen=True, slots=True)
 class RayHit:
     """Nearest environment intersection along a ray."""
@@ -31,6 +51,36 @@ class RayHit:
     distance_m: float
     position_m: Vec3
     kind: HitKind
+
+
+@dataclass(frozen=True, slots=True)
+class RayHitBatch:
+    """Ordered first-hit distances and targets for a ray batch."""
+
+    distances_m: FloatArray
+    hit_kinds: tuple[HitKind | None, ...]
+
+    def __post_init__(self) -> None:
+        distances_m = np.array(self.distances_m, dtype=np.float64, copy=True)
+        hit_kinds = tuple(self.hit_kinds)
+        if distances_m.ndim != 1 or distances_m.shape[0] != len(hit_kinds):
+            raise ValueError("ray hit batch distances and targets must have the same length")
+        if not bool(
+            np.all((np.isfinite(distances_m) & (distances_m >= 0.0)) | np.isposinf(distances_m))
+        ):
+            raise ValueError("ray hit batch distances must be non-negative or positive infinity")
+        if any(
+            math.isinf(float(distance_m)) != (kind is None)
+            for distance_m, kind in zip(
+                distances_m,
+                hit_kinds,
+                strict=True,
+            )
+        ):
+            raise ValueError("only a ray without a hit may have an infinite batch distance")
+        distances_m.flags.writeable = False
+        object.__setattr__(self, "distances_m", distances_m)
+        object.__setattr__(self, "hit_kinds", hit_kinds)
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +170,110 @@ class EnvironmentScene:
             position_m=ray.point_at(nearest_distance_m),
             kind=nearest_kind,
         )
+
+    def first_hit_batch(
+        self,
+        rays: Iterable[Ray] | RayBatch,
+        *,
+        min_distance_m: float = DEFAULT_MIN_DISTANCE_M,
+        max_distance_m: float = math.inf,
+    ) -> RayHitBatch:
+        """Return first-hit distances and targets while preserving ray order."""
+        validate_distance_bounds(min_distance_m, max_distance_m)
+        batch = rays if isinstance(rays, RayBatch) else RayBatch.from_rays(rays)
+        nearest_distances_m = intersect_floor_batch(
+            batch,
+            self.boundary,
+            self.floor_z_m,
+            min_distance_m=min_distance_m,
+            max_distance_m=max_distance_m,
+        )
+        hit_codes = np.where(np.isfinite(nearest_distances_m), _FLOOR_HIT, _NO_HIT).astype(np.uint8)
+
+        for wall in self._wall_triangles:
+            candidates_m = intersect_triangle_batch(
+                batch,
+                wall,
+                min_distance_m=min_distance_m,
+                max_distance_m=max_distance_m,
+            )
+            closer = candidates_m < nearest_distances_m
+            nearest_distances_m[closer] = candidates_m[closer]
+            hit_codes[closer] = _WALL_HIT
+
+        for surface in self.surface_triangles:
+            candidates_m = intersect_triangle_batch(
+                batch,
+                surface,
+                min_distance_m=min_distance_m,
+                max_distance_m=max_distance_m,
+            )
+            finite = np.isfinite(candidates_m)
+            safe_distances_m = np.where(finite, candidates_m, 0.0)
+            x_values = batch.origins_m[:, 0] + batch.directions[:, 0] * safe_distances_m
+            y_values = batch.origins_m[:, 1] + batch.directions[:, 1] * safe_distances_m
+            candidates_m[~contains_xy(self.boundary, x_values, y_values)] = math.inf
+            closer = candidates_m < nearest_distances_m
+            nearest_distances_m[closer] = candidates_m[closer]
+            hit_codes[closer] = _SURFACE_HIT
+
+        if self.dynamic_surface is not None:
+            candidates_m = self.dynamic_surface.intersect_ray_batch(
+                batch,
+                min_distance_m=min_distance_m,
+                max_distance_m=max_distance_m,
+            )
+            if candidates_m.shape != nearest_distances_m.shape:
+                raise ValueError("dynamic surface batch result must match ray count")
+            valid_candidates = (
+                np.isfinite(candidates_m)
+                & (candidates_m >= min_distance_m)
+                & (candidates_m <= max_distance_m)
+            ) | np.isposinf(candidates_m)
+            if not bool(np.all(valid_candidates)):
+                raise ValueError(
+                    "dynamic surface batch distances must be valid or positive infinity"
+                )
+            closer = candidates_m < nearest_distances_m
+            nearest_distances_m[closer] = candidates_m[closer]
+            hit_codes[closer] = _SURFACE_HIT
+
+        hit_kinds = tuple(
+            None if int(code) == _NO_HIT else _HIT_KIND_BY_CODE[int(code)] for code in hit_codes
+        )
+        return RayHitBatch(nearest_distances_m, hit_kinds)
+
+    def first_hits(
+        self,
+        rays: Iterable[Ray] | RayBatch,
+        *,
+        min_distance_m: float = DEFAULT_MIN_DISTANCE_M,
+        max_distance_m: float = math.inf,
+    ) -> tuple[RayHit | None, ...]:
+        """Return materialized first hits for a batch in ray order."""
+        batch = rays if isinstance(rays, RayBatch) else RayBatch.from_rays(rays)
+        hit_batch = self.first_hit_batch(
+            batch,
+            min_distance_m=min_distance_m,
+            max_distance_m=max_distance_m,
+        )
+        hits: list[RayHit | None] = []
+        for index, (distance_value, kind) in enumerate(
+            zip(hit_batch.distances_m, hit_batch.hit_kinds, strict=True)
+        ):
+            if kind is None:
+                hits.append(None)
+                continue
+            distance_m = float(distance_value)
+            position = batch.origins_m[index] + batch.directions[index] * distance_m
+            hits.append(
+                RayHit(
+                    distance_m=distance_m,
+                    position_m=Vec3(float(position[0]), float(position[1]), float(position[2])),
+                    kind=kind,
+                )
+            )
+        return tuple(hits)
 
     def _intersect_floor(
         self,

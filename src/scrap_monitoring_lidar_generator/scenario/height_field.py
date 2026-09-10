@@ -6,8 +6,11 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from scrap_monitoring_lidar_generator.geometry import Polygon2, Ray, Vec2
+from scrap_monitoring_lidar_generator.geometry import Polygon2, Ray, RayBatch, Vec2
 from scrap_monitoring_lidar_generator.geometry.intersections import DEFAULT_MIN_DISTANCE_M
+from scrap_monitoring_lidar_generator.scenario._height_field_batch_intersection import (
+    intersect_height_field_batch,
+)
 from scrap_monitoring_lidar_generator.scenario._height_field_intersection import (
     intersect_height_field,
 )
@@ -18,6 +21,8 @@ type _Triangle2 = tuple[Vec2, Vec2, Vec2]
 _GEOMETRY_TOLERANCE = 1e-12
 _VOLUME_TOLERANCE = 1e-12
 _KERNEL_WEIGHT_FLOOR = 1e-12
+_PARTIAL_CELL = 1
+_FULL_CELL = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +43,7 @@ class HeightField:
 
     __slots__ = (
         "_boundary",
+        "_cell_coverage",
         "_cell_size_m",
         "_floor_z_m",
         "_heights_m",
@@ -86,12 +92,24 @@ class HeightField:
             floor_z_m,
             dtype=np.float64,
         )
-        self._volume_weights_m2 = _build_volume_weights(
+        self._volume_weights_m2, cell_areas_m2 = _build_volume_weights(
             boundary,
             origin=Vec2(minimum_x, minimum_y),
             cell_size_m=cell_size_m,
             shape=self._heights_m.shape,
         )
+        cell_area_m2 = cell_size_m * cell_size_m
+        area_tolerance_m2 = max(_GEOMETRY_TOLERANCE, cell_area_m2 * 1e-10)
+        self._cell_coverage = np.zeros(cell_areas_m2.shape, dtype=np.uint8)
+        self._cell_coverage[cell_areas_m2 > area_tolerance_m2] = _PARTIAL_CELL
+        self._cell_coverage[
+            np.isclose(
+                cell_areas_m2,
+                cell_area_m2,
+                rtol=0.0,
+                atol=area_tolerance_m2,
+            )
+        ] = _FULL_CELL
 
     @property
     def boundary(self) -> Polygon2:
@@ -179,6 +197,26 @@ class HeightField:
             x_coordinates_m=self._x_coordinates_m,
             y_coordinates_m=self._y_coordinates_m,
             heights_m=self._heights_m,
+            cell_size_m=self._cell_size_m,
+            min_distance_m=min_distance_m,
+            max_distance_m=max_distance_m,
+        )
+
+    def intersect_ray_batch(
+        self,
+        rays: RayBatch,
+        *,
+        min_distance_m: float = DEFAULT_MIN_DISTANCE_M,
+        max_distance_m: float = math.inf,
+    ) -> FloatArray:
+        """Return nearest distances with infinity for rays without a hit."""
+        return intersect_height_field_batch(
+            rays,
+            boundary=self._boundary,
+            x_coordinates_m=self._x_coordinates_m,
+            y_coordinates_m=self._y_coordinates_m,
+            heights_m=self._heights_m,
+            cell_coverage=self._cell_coverage,
             cell_size_m=self._cell_size_m,
             min_distance_m=min_distance_m,
             max_distance_m=max_distance_m,
@@ -295,10 +333,11 @@ def _build_volume_weights(
     origin: Vec2,
     cell_size_m: float,
     shape: tuple[int, int],
-) -> FloatArray:
+) -> tuple[FloatArray, NDArray[np.float64]]:
     weights_m2 = np.zeros(shape, dtype=np.float64)
     y_cell_count = shape[0] - 1
     x_cell_count = shape[1] - 1
+    cell_areas_m2 = np.zeros((y_cell_count, x_cell_count), dtype=np.float64)
 
     for triangle in _triangulate(boundary):
         minimum_x = min(vertex.x for vertex in triangle)
@@ -333,6 +372,7 @@ def _build_volume_weights(
                     for point in clipped
                 ]
                 corner_weights = _bilinear_integral_weights(normalized)
+                cell_areas_m2[y_index, x_index] += sum(corner_weights) * cell_size_m * cell_size_m
                 for y_offset, x_offset, weight in (
                     (0, 0, corner_weights[0]),
                     (0, 1, corner_weights[1]),
@@ -351,8 +391,10 @@ def _build_volume_weights(
     polygon_area_m2 = abs(boundary.signed_area)
     if represented_area_m2 <= 0.0:
         raise RuntimeError("height field integration produced no surface area")
-    weights_m2 *= polygon_area_m2 / represented_area_m2
-    return weights_m2
+    area_scale = polygon_area_m2 / represented_area_m2
+    weights_m2 *= area_scale
+    cell_areas_m2 *= area_scale
+    return weights_m2, cell_areas_m2
 
 
 def _triangulate(boundary: Polygon2) -> tuple[_Triangle2, ...]:

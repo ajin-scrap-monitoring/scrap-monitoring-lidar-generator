@@ -55,3 +55,15 @@ def test_reference_scan_observes_dynamic_height_field() -> None:
 
     assert filled_point.hit_kind is HitKind.SURFACE
     assert 0.0 < filled_point.distance_m < empty_distance_m
+
+    angles = tuple(index * 5.0 for index in range(72))
+    batch_scan = scanner.generate(scene, angles)
+    scalar_points = tuple(scanner.measure(scene, angle) for angle in angles)
+
+    assert [point.hit_kind for point in batch_scan.points] == [
+        point.hit_kind for point in scalar_points
+    ]
+    assert [point.distance_m for point in batch_scan.points] == pytest.approx(
+        [point.distance_m for point in scalar_points],
+        abs=1e-9,
+    )

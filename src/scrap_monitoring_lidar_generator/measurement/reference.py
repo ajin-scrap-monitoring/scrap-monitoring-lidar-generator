@@ -37,7 +37,27 @@ class ReferenceScanner:
         angles_deg: Iterable[float],
     ) -> ReferenceScan:
         """Generate reference points in the supplied measurement order."""
-        points = tuple(self.measure(scene, angle_deg) for angle_deg in angles_deg)
+        angle_values = tuple(angles_deg)
+        rays = self.frame.ray_batch_at(angle_values)
+        angles = tuple(float(angle_deg) for angle_deg in angle_values)
+        hits = scene.first_hit_batch(
+            rays,
+            min_distance_m=self.min_distance_m,
+            max_distance_m=self.max_distance_m,
+        )
+        points = tuple(
+            ReferencePoint(
+                angle_deg=angle,
+                distance_m=0.0 if kind is None else float(distance_m),
+                hit_kind=kind,
+            )
+            for angle, distance_m, kind in zip(
+                angles,
+                hits.distances_m,
+                hits.hit_kinds,
+                strict=True,
+            )
+        )
         return ReferenceScan(sensor_id=self.sensor_id, points=points)
 
     def measure(self, scene: EnvironmentScene, angle_deg: float) -> ReferencePoint:

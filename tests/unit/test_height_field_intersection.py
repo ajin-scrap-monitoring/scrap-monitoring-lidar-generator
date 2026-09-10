@@ -1,5 +1,8 @@
 """Tests for ray intersection with a bilinear height field."""
 
+import random
+
+import numpy as np
 import pytest
 
 from scrap_monitoring_lidar_generator.geometry import (
@@ -7,6 +10,7 @@ from scrap_monitoring_lidar_generator.geometry import (
     HitKind,
     Polygon2,
     Ray,
+    RayBatch,
     Vec2,
     Vec3,
 )
@@ -173,6 +177,91 @@ def test_scene_rejects_dynamic_surface_with_different_domain(square_boundary: Po
             top_z_m=3.0,
             dynamic_surface=different_height,
         )
+
+
+def test_batch_height_field_intersection_matches_scalar(square_boundary: Polygon2) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=3.0,
+        cell_size_m=0.13,
+    )
+    surface.add_volume(4.0, center=Vec2(0.6, 0.8), spread_radius_m=0.35)
+    surface.add_volume(2.0, center=Vec2(1.6, 1.4), spread_radius_m=0.25)
+    rng = random.Random(9127)
+    rays = tuple(
+        Ray(
+            Vec3(rng.uniform(-0.5, 2.5), rng.uniform(-0.5, 2.5), rng.uniform(-1.0, 4.0)),
+            Vec3(
+                rng.uniform(-1.0, 1.0),
+                rng.uniform(-1.0, 1.0),
+                rng.uniform(-1.0, 1.0),
+            ).normalized(),
+        )
+        for _ in range(500)
+    )
+    expected = tuple(
+        surface.intersect_ray(ray, min_distance_m=0.05, max_distance_m=10.0) for ray in rays
+    )
+
+    actual = surface.intersect_ray_batch(
+        RayBatch.from_rays(rays),
+        min_distance_m=0.05,
+        max_distance_m=10.0,
+    )
+
+    for actual_distance_m, expected_distance_m in zip(actual, expected, strict=True):
+        if expected_distance_m is None:
+            assert np.isinf(actual_distance_m)
+        else:
+            assert actual_distance_m == pytest.approx(expected_distance_m, abs=1e-9)
+
+
+def test_batch_intersection_matches_scalar_in_partial_concave_cells() -> None:
+    boundary = Polygon2(
+        (
+            Vec2(0.1, 0.2),
+            Vec2(2.4, 0.1),
+            Vec2(2.2, 1.1),
+            Vec2(1.2, 1.0),
+            Vec2(1.1, 2.4),
+            Vec2(0.2, 2.2),
+        )
+    )
+    surface = HeightField(
+        boundary,
+        floor_z_m=-0.5,
+        top_z_m=3.5,
+        cell_size_m=0.27,
+    )
+    surface.add_volume(3.0, center=Vec2(0.7, 0.8), spread_radius_m=0.4)
+    rng = random.Random(23311)
+    rays = tuple(
+        Ray(
+            Vec3(rng.uniform(-0.5, 3.0), rng.uniform(-0.5, 3.0), rng.uniform(-1.0, 5.0)),
+            Vec3(
+                rng.uniform(-1.0, 1.0),
+                rng.uniform(-1.0, 1.0),
+                rng.uniform(-1.0, 1.0),
+            ).normalized(),
+        )
+        for _ in range(700)
+    )
+    expected = tuple(
+        surface.intersect_ray(ray, min_distance_m=0.05, max_distance_m=12.0) for ray in rays
+    )
+
+    actual = surface.intersect_ray_batch(
+        RayBatch.from_rays(rays),
+        min_distance_m=0.05,
+        max_distance_m=12.0,
+    )
+
+    for actual_distance_m, expected_distance_m in zip(actual, expected, strict=True):
+        if expected_distance_m is None:
+            assert np.isinf(actual_distance_m)
+        else:
+            assert actual_distance_m == pytest.approx(expected_distance_m, abs=1e-9)
 
 
 def _numerical_reference(surface: HeightField, ray: Ray, *, maximum_m: float) -> float:

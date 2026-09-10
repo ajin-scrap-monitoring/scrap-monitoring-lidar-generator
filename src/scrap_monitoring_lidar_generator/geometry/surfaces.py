@@ -3,6 +3,7 @@
 import math
 from typing import Protocol
 
+from scrap_monitoring_lidar_generator.geometry.batches import FloatArray, RayBatch
 from scrap_monitoring_lidar_generator.geometry.intersections import DEFAULT_MIN_DISTANCE_M
 from scrap_monitoring_lidar_generator.geometry.polygon import Polygon2
 from scrap_monitoring_lidar_generator.geometry.primitives import Ray
@@ -34,4 +35,14 @@ class RaySurface(Protocol):
         max_distance_m: float = math.inf,
     ) -> float | None:
         """Return the nearest allowed distance to the surface."""
+        ...
+
+    def intersect_ray_batch(
+        self,
+        rays: RayBatch,
+        *,
+        min_distance_m: float = DEFAULT_MIN_DISTANCE_M,
+        max_distance_m: float = math.inf,
+    ) -> FloatArray:
+        """Return nearest distances with infinity for rays without a hit."""
         ...
