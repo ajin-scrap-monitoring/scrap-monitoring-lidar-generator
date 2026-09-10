@@ -1,5 +1,9 @@
 """Configuration loading and validation."""
 
+from scrap_monitoring_lidar_generator.configuration.geometry import (
+    build_environment_scene,
+    build_sensor_frame,
+)
 from scrap_monitoring_lidar_generator.configuration.loader import (
     ConfigurationError,
     load_environment,
@@ -18,6 +22,8 @@ __all__ = [
     "Coordinate3",
     "EnvironmentConfig",
     "SensorConfig",
+    "build_environment_scene",
+    "build_sensor_frame",
     "load_environment",
     "parse_environment",
 ]

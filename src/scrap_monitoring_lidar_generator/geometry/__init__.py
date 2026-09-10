@@ -4,6 +4,7 @@ from scrap_monitoring_lidar_generator.geometry.intersections import intersect_tr
 from scrap_monitoring_lidar_generator.geometry.polygon import Polygon2
 from scrap_monitoring_lidar_generator.geometry.primitives import Ray, Triangle, Vec2, Vec3
 from scrap_monitoring_lidar_generator.geometry.scene import EnvironmentScene, HitKind, RayHit
+from scrap_monitoring_lidar_generator.geometry.sensor import SensorFrame
 
 __all__ = [
     "EnvironmentScene",
@@ -11,6 +12,7 @@ __all__ = [
     "Polygon2",
     "Ray",
     "RayHit",
+    "SensorFrame",
     "Triangle",
     "Vec2",
     "Vec3",
