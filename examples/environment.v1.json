@@ -1,0 +1,21 @@
+{
+  "environment_id": "synthetic-room-v1",
+  "length_unit": "m",
+  "angle_unit": "deg",
+  "boundary_xy_m": [
+    [0, 0],
+    [8, 0],
+    [8, 6],
+    [0, 6]
+  ],
+  "floor_z_m": 0,
+  "top_z_m": 4,
+  "sensors": [
+    {
+      "sensor_id": "sensor-a",
+      "p0_m": [4, 3, 3],
+      "u0": [0, 0, -1],
+      "u90": [1, 0, 0]
+    }
+  ]
+}
