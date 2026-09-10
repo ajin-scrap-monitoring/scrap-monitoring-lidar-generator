@@ -21,7 +21,7 @@
 의존 방향은 다음과 같다.
 
 ```text
-cli -> configuration
+cli -> configuration -> geometry
 cli -> runtime
 runtime -> scenario -> geometry
 runtime -> measurement -> geometry
@@ -29,7 +29,7 @@ runtime -> transport -> measurement
 measurement -> scenario
 ```
 
-`geometry`는 다른 프로젝트 패키지를 참조하지 않는다. `scenario`는 측정과 전송을 참조하지 않고, `measurement`는 전송을 참조하지 않는다. `transport`는 장면 상태를 변경하지 않는다. `runtime`과 `cli.py`만 장기 실행 객체를 조립하고 생명주기를 제어한다.
+`geometry`는 다른 프로젝트 패키지를 참조하지 않는다. `configuration`은 공간 입력의 의미 검증에 `geometry`를 사용한다. `scenario`는 측정과 전송을 참조하지 않고, `measurement`는 전송을 참조하지 않는다. `transport`는 장면 상태를 변경하지 않는다. `runtime`과 `cli.py`만 장기 실행 객체를 조립하고 생명주기를 제어한다.
 
 ## 시간과 재현성
 
