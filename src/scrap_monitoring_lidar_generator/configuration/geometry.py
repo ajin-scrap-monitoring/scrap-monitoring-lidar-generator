@@ -9,6 +9,7 @@ from scrap_monitoring_lidar_generator.configuration.models import (
 from scrap_monitoring_lidar_generator.geometry import (
     EnvironmentScene,
     Polygon2,
+    RaySurface,
     SensorFrame,
     Triangle,
     Vec2,
@@ -19,6 +20,8 @@ from scrap_monitoring_lidar_generator.geometry import (
 def build_environment_scene(
     environment: EnvironmentConfig,
     surface_triangles: Iterable[Triangle] = (),
+    *,
+    dynamic_surface: RaySurface | None = None,
 ) -> EnvironmentScene:
     """Build a scene from validated environment geometry."""
     boundary = Polygon2(tuple(Vec2(x, y) for x, y in environment.boundary_xy_m))
@@ -27,6 +30,7 @@ def build_environment_scene(
         floor_z_m=environment.floor_z_m,
         top_z_m=environment.top_z_m,
         surface_triangles=tuple(surface_triangles),
+        dynamic_surface=dynamic_surface,
     )
 
 

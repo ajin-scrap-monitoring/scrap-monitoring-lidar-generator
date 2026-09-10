@@ -5,6 +5,7 @@ from scrap_monitoring_lidar_generator.geometry.polygon import Polygon2
 from scrap_monitoring_lidar_generator.geometry.primitives import Ray, Triangle, Vec2, Vec3
 from scrap_monitoring_lidar_generator.geometry.scene import EnvironmentScene, HitKind, RayHit
 from scrap_monitoring_lidar_generator.geometry.sensor import SensorFrame
+from scrap_monitoring_lidar_generator.geometry.surfaces import RaySurface
 
 __all__ = [
     "EnvironmentScene",
@@ -12,6 +13,7 @@ __all__ = [
     "Polygon2",
     "Ray",
     "RayHit",
+    "RaySurface",
     "SensorFrame",
     "Triangle",
     "Vec2",
