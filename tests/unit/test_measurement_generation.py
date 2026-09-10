@@ -27,9 +27,17 @@ def _reference(
     *,
     sensor_id: str = "sensor-a",
     scan_id: int = 1,
+    hit_kinds: Iterable[HitKind | None] | None = None,
 ) -> TimedReferenceScan:
     distances = tuple(float(distance_m) for distance_m in distances_m)
     count = len(distances)
+    kinds = (
+        tuple(hit_kinds)
+        if hit_kinds is not None
+        else tuple(HitKind.WALL if distance_m > 0.0 else None for distance_m in distances)
+    )
+    if len(kinds) != count:
+        raise ValueError("test hit kinds must match distance count")
     angles_deg = np.arange(count, dtype=np.float64) * (360.0 / count)
     schedule = ScheduledScan(
         sensor_id=sensor_id,
@@ -44,12 +52,13 @@ def _reference(
         scan=ReferenceScan(
             sensor_id=sensor_id,
             points=tuple(
-                ReferencePoint(
-                    angle_deg=float(angle_deg),
-                    distance_m=distance_m,
-                    hit_kind=HitKind.WALL if distance_m > 0.0 else None,
+                ReferencePoint(angle_deg=float(angle_deg), distance_m=distance_m, hit_kind=kind)
+                for angle_deg, distance_m, kind in zip(
+                    angles_deg,
+                    distances,
+                    kinds,
+                    strict=True,
                 )
-                for angle_deg, distance_m in zip(angles_deg, distances, strict=True)
             ),
         ),
     )
@@ -64,6 +73,9 @@ def _generator(
     limit_m: float = 0.2,
     valid_frequencies: tuple[int, ...] | None = None,
     invalid_frequencies: tuple[int, ...] | None = None,
+    reflection_error_enabled: bool = False,
+    reflection_error_probability: float = 0.0,
+    reflection_error_reduction_range_m: tuple[float, float] = (0.1, 0.2),
 ) -> MeasurementGenerator:
     return MeasurementGenerator(
         sensor_id=sensor_id,
@@ -74,6 +86,9 @@ def _generator(
         noise_limit_m=limit_m,
         valid_quality_frequencies=valid_frequencies or _frequencies((64, 1)),
         invalid_quality_frequencies=invalid_frequencies or _frequencies((7, 1)),
+        reflection_error_enabled=reflection_error_enabled,
+        reflection_error_probability=reflection_error_probability,
+        reflection_error_reduction_range_m=reflection_error_reduction_range_m,
         seed=seed,
     )
 
@@ -167,6 +182,53 @@ def test_noise_configuration_does_not_change_quality_random_stream() -> None:
     assert not np.array_equal(plain.distances_m, noisy.distances_m)
 
 
+def test_reflection_error_only_shortens_eligible_surface_hits() -> None:
+    reference = _reference(
+        (5.0, 5.0, 5.0, 1.5, 0.0),
+        hit_kinds=(HitKind.SURFACE, HitKind.WALL, HitKind.FLOOR, HitKind.SURFACE, None),
+    )
+    generator = _generator(
+        reflection_error_enabled=True,
+        reflection_error_probability=1.0,
+        reflection_error_reduction_range_m=(1.0, 2.0),
+    )
+
+    measured = generator.generate(reference).measured.scan
+
+    assert 3.0 <= measured.distances_m[0] <= 4.0
+    assert measured.distances_m[1:].tolist() == [5.0, 5.0, 1.5, 0.0]
+    assert measured.qualities.tolist() == [64, 64, 64, 64, 7]
+
+
+def test_reflection_error_precedes_noise_without_changing_other_random_streams() -> None:
+    reference = _reference(
+        (5.0,) * 1_000,
+        hit_kinds=(HitKind.SURFACE,) * 1_000,
+    )
+    plain_generator = _generator(
+        noise_enabled=True,
+        valid_frequencies=_frequencies((10, 1), (20, 1)),
+    )
+    reflection_generator = _generator(
+        noise_enabled=True,
+        valid_frequencies=_frequencies((10, 1), (20, 1)),
+        reflection_error_enabled=True,
+        reflection_error_probability=1.0,
+        reflection_error_reduction_range_m=(1.0, 1.0),
+    )
+
+    plain = plain_generator.generate(reference).measured.scan
+    reflected = reflection_generator.generate(reference).measured.scan
+
+    np.testing.assert_allclose(
+        reflected.distances_m,
+        plain.distances_m - 1.0,
+        rtol=0.0,
+        atol=1e-15,
+    )
+    assert np.array_equal(reflected.qualities, plain.qualities)
+
+
 def test_sensor_identifier_derives_an_independent_noise_stream() -> None:
     first = _generator(sensor_id="sensor-a", noise_enabled=True).generate(
         _reference((5.0,) * 100, sensor_id="sensor-a")
@@ -185,6 +247,10 @@ def test_sensor_identifier_derives_an_independent_noise_stream() -> None:
         ({"noise_enabled": 1}, "boolean"),
         ({"noise_standard_deviation_m": -1.0}, "standard deviation"),
         ({"noise_limit_m": float("inf")}, "noise limit"),
+        ({"reflection_error_enabled": 1}, "reflection error enabled"),
+        ({"reflection_error_probability": 1.1}, "probability"),
+        ({"reflection_error_reduction_range_m": (0.0, 1.0)}, "positive"),
+        ({"reflection_error_reduction_range_m": (2.0, 1.0)}, "ordered"),
         ({"seed": True}, "seed"),
         ({"valid_quality_frequencies": (1,)}, "exactly 256"),
         ({"invalid_quality_frequencies": (0,) * 256}, "positive"),
@@ -203,6 +269,9 @@ def test_rejects_invalid_generator_settings(
         "noise_limit_m": 0.2,
         "valid_quality_frequencies": _frequencies((64, 1)),
         "invalid_quality_frequencies": _frequencies((7, 1)),
+        "reflection_error_enabled": False,
+        "reflection_error_probability": 0.0,
+        "reflection_error_reduction_range_m": (0.1, 0.2),
         "seed": 123,
     }
     arguments.update(overrides)

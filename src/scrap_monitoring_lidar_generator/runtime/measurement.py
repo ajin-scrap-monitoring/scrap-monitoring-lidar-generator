@@ -46,6 +46,11 @@ def build_measurement_generators(
             invalid_quality_frequencies=quality_by_sensor_id[
                 sensor.sensor_id
             ].invalid_distance_frequencies,
+            reflection_error_enabled=measurement.distortions.reflection_error.enabled,
+            reflection_error_probability=measurement.distortions.reflection_error.probability,
+            reflection_error_reduction_range_m=(
+                measurement.distortions.reflection_error.distance_reduction_m_range
+            ),
             seed=inputs.generator.seed,
         )
         for sensor in inputs.environment.sensors

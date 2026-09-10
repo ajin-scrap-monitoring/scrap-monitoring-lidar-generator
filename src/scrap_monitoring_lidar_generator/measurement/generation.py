@@ -8,6 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from scrap_monitoring_lidar_generator.geometry.intersections import validate_distance_bounds
+from scrap_monitoring_lidar_generator.geometry.scene import HitKind
 from scrap_monitoring_lidar_generator.measurement.models import (
     MeasuredScan,
     MeasurementResult,
@@ -34,6 +35,10 @@ class MeasurementGenerator:
         "_noise_rng",
         "_noise_standard_deviation_m",
         "_quality_rng",
+        "_reflection_error_enabled",
+        "_reflection_error_probability",
+        "_reflection_error_reduction_range_m",
+        "_reflection_error_rng",
         "_sensor_id",
         "_valid_quality_cdf",
     )
@@ -49,6 +54,9 @@ class MeasurementGenerator:
         noise_limit_m: float,
         valid_quality_frequencies: Sequence[int],
         invalid_quality_frequencies: Sequence[int],
+        reflection_error_enabled: bool,
+        reflection_error_probability: float,
+        reflection_error_reduction_range_m: tuple[float, float],
         seed: int,
     ) -> None:
         if not sensor_id:
@@ -63,6 +71,16 @@ class MeasurementGenerator:
             "noise standard deviation",
         )
         limit_m = _require_non_negative_finite(noise_limit_m, "noise limit")
+        if not isinstance(reflection_error_enabled, bool):
+            raise ValueError("reflection error enabled must be a boolean")
+        reflection_probability = _require_probability(
+            reflection_error_probability,
+            "reflection error probability",
+        )
+        reflection_reduction_range_m = _require_positive_range(
+            reflection_error_reduction_range_m,
+            "reflection error distance reduction range",
+        )
         if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= _MAX_SEED:
             raise ValueError("measurement seed must be an unsigned 64-bit integer")
 
@@ -72,6 +90,9 @@ class MeasurementGenerator:
         self._noise_enabled = noise_enabled
         self._noise_standard_deviation_m = standard_deviation_m
         self._noise_limit_m = limit_m
+        self._reflection_error_enabled = reflection_error_enabled
+        self._reflection_error_probability = reflection_probability
+        self._reflection_error_reduction_range_m = reflection_reduction_range_m
         self._valid_quality_cdf = _quality_cdf(
             valid_quality_frequencies,
             "valid quality frequencies",
@@ -85,6 +106,9 @@ class MeasurementGenerator:
         )
         self._quality_rng = np.random.Generator(
             np.random.PCG64(_derive_seed(seed, sensor_id, "quality"))
+        )
+        self._reflection_error_rng = np.random.Generator(
+            np.random.PCG64(_derive_seed(seed, sensor_id, "reflection-error"))
         )
 
     @property
@@ -103,6 +127,7 @@ class MeasurementGenerator:
             count=len(reference.scan.points),
         )
         distances_m = reference_distances.copy()
+        self._apply_reflection_error(reference, distances_m)
         if self._noise_enabled:
             noise_m = _sample_truncated_normal(
                 self._noise_rng,
@@ -110,11 +135,11 @@ class MeasurementGenerator:
                 standard_deviation=self._noise_standard_deviation_m,
                 limit=self._noise_limit_m,
             )
-            reference_valid = reference_distances > 0.0
-            distances_m[reference_valid] += noise_m[reference_valid]
+            distorted_valid = distances_m > 0.0
+            distances_m[distorted_valid] += noise_m[distorted_valid]
 
         final_valid = (
-            (reference_distances > 0.0)
+            (distances_m > 0.0)
             & (distances_m >= self._min_distance_m)
             & (distances_m <= self._max_distance_m)
         )
@@ -130,6 +155,38 @@ class MeasurementGenerator:
             ),
         )
         return MeasurementResult(reference=reference, measured=measured)
+
+    def _apply_reflection_error(
+        self,
+        reference: TimedReferenceScan,
+        distances_m: FloatArray,
+    ) -> None:
+        if not self._reflection_error_enabled or self._reflection_error_probability == 0.0:
+            return
+
+        lower_reduction_m, upper_reduction_m = self._reflection_error_reduction_range_m
+        surface_hits = np.fromiter(
+            (point.hit_kind is HitKind.SURFACE for point in reference.scan.points),
+            dtype=np.bool_,
+            count=len(reference.scan.points),
+        )
+        maximum_reductions_m = np.minimum(
+            upper_reduction_m,
+            distances_m - self._min_distance_m,
+        )
+        selected = (
+            surface_hits
+            & (maximum_reductions_m >= lower_reduction_m)
+            & (
+                self._reflection_error_rng.random(distances_m.size)
+                < self._reflection_error_probability
+            )
+        )
+        reduction_draws = self._reflection_error_rng.random(distances_m.size)
+        reductions_m = lower_reduction_m + reduction_draws * (
+            maximum_reductions_m - lower_reduction_m
+        )
+        distances_m[selected] -= reductions_m[selected]
 
     def _sample_qualities(self, valid_distances: NDArray[np.bool_]) -> QualityArray:
         draws = self._quality_rng.random(valid_distances.size)
@@ -215,3 +272,20 @@ def _require_non_negative_finite(value: float, name: str) -> float:
     if not math.isfinite(result) or result < 0.0:
         raise ValueError(f"{name} must be finite and non-negative")
     return result
+
+
+def _require_probability(value: float, name: str) -> float:
+    result = _require_non_negative_finite(value, name)
+    if result > 1.0:
+        raise ValueError(f"{name} must be between 0 and 1")
+    return result
+
+
+def _require_positive_range(value: tuple[float, float], name: str) -> tuple[float, float]:
+    if not isinstance(value, tuple) or len(value) != 2:
+        raise ValueError(f"{name} must contain exactly two values")
+    lower = _require_non_negative_finite(value[0], name)
+    upper = _require_non_negative_finite(value[1], name)
+    if lower == 0.0 or upper < lower:
+        raise ValueError(f"{name} must be positive and ordered")
+    return lower, upper
