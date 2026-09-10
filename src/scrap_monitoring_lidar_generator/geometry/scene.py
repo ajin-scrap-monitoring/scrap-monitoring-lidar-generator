@@ -11,6 +11,7 @@ from scrap_monitoring_lidar_generator.geometry.intersections import (
 )
 from scrap_monitoring_lidar_generator.geometry.polygon import Polygon2
 from scrap_monitoring_lidar_generator.geometry.primitives import Ray, Triangle, Vec2, Vec3
+from scrap_monitoring_lidar_generator.geometry.surfaces import RaySurface
 
 _SCENE_TOLERANCE = 1e-9
 
@@ -34,12 +35,13 @@ class RayHit:
 
 @dataclass(frozen=True, slots=True)
 class EnvironmentScene:
-    """Open-top environment with optional fixed surface triangles."""
+    """Open-top environment with optional fixed and dynamic surfaces."""
 
     boundary: Polygon2
     floor_z_m: float
     top_z_m: float
     surface_triangles: tuple[Triangle, ...] = ()
+    dynamic_surface: RaySurface | None = field(default=None, repr=False, compare=False)
     _wall_triangles: tuple[Triangle, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -51,6 +53,7 @@ class EnvironmentScene:
         surfaces = tuple(self.surface_triangles)
         object.__setattr__(self, "surface_triangles", surfaces)
         self._validate_surfaces(surfaces)
+        self._validate_dynamic_surface()
         object.__setattr__(self, "_wall_triangles", self._build_wall_triangles())
 
     def first_hit(
@@ -100,6 +103,16 @@ class EnvironmentScene:
             nearest_distance_m = distance
             nearest_kind = HitKind.SURFACE
 
+        if self.dynamic_surface is not None:
+            distance = self.dynamic_surface.intersect_ray(
+                ray,
+                min_distance_m=min_distance_m,
+                max_distance_m=nearest_distance_m,
+            )
+            if distance is not None and (nearest_kind is None or distance < nearest_distance_m):
+                nearest_distance_m = distance
+                nearest_kind = HitKind.SURFACE
+
         if nearest_kind is None:
             return None
         return RayHit(
@@ -134,6 +147,25 @@ class EnvironmentScene:
                     self.floor_z_m - _SCENE_TOLERANCE <= vertex.z <= self.top_z_m + _SCENE_TOLERANCE
                 ):
                     raise ValueError("surface vertices must lie between floor and top")
+
+    def _validate_dynamic_surface(self) -> None:
+        surface = self.dynamic_surface
+        if surface is None:
+            return
+        if surface.boundary != self.boundary:
+            raise ValueError("dynamic surface boundary must match the scene boundary")
+        if not math.isclose(
+            surface.floor_z_m,
+            self.floor_z_m,
+            rel_tol=0.0,
+            abs_tol=_SCENE_TOLERANCE,
+        ) or not math.isclose(
+            surface.top_z_m,
+            self.top_z_m,
+            rel_tol=0.0,
+            abs_tol=_SCENE_TOLERANCE,
+        ):
+            raise ValueError("dynamic surface height bounds must match the scene bounds")
 
     def _build_wall_triangles(self) -> tuple[Triangle, ...]:
         walls: list[Triangle] = []

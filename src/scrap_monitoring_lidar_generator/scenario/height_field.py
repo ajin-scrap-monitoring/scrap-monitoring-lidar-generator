@@ -6,7 +6,11 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
+from scrap_monitoring_lidar_generator.geometry import Polygon2, Ray, Vec2
+from scrap_monitoring_lidar_generator.geometry.intersections import DEFAULT_MIN_DISTANCE_M
+from scrap_monitoring_lidar_generator.scenario._height_field_intersection import (
+    intersect_height_field,
+)
 
 type FloatArray = NDArray[np.float64]
 type _Triangle2 = tuple[Vec2, Vec2, Vec2]
@@ -160,6 +164,25 @@ class HeightField:
         lower = lower_left + x_fraction * (lower_right - lower_left)
         upper = upper_left + x_fraction * (upper_right - upper_left)
         return float(lower + y_fraction * (upper - lower))
+
+    def intersect_ray(
+        self,
+        ray: Ray,
+        *,
+        min_distance_m: float = DEFAULT_MIN_DISTANCE_M,
+        max_distance_m: float = math.inf,
+    ) -> float | None:
+        """Return the nearest allowed ray distance to the current surface."""
+        return intersect_height_field(
+            ray,
+            boundary=self._boundary,
+            x_coordinates_m=self._x_coordinates_m,
+            y_coordinates_m=self._y_coordinates_m,
+            heights_m=self._heights_m,
+            cell_size_m=self._cell_size_m,
+            min_distance_m=min_distance_m,
+            max_distance_m=max_distance_m,
+        )
 
     def add_volume(
         self,
