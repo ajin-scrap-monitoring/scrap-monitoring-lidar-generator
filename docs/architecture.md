@@ -43,7 +43,9 @@ measurement -> scenario
 
 `configuration`은 UTF-8 JSON(JavaScript Object Notation)을 중복 key와 비유한 숫자까지 검사한 뒤 내부 모델로 변환한다. 공개 예시와 자동 검증은 현장 값에서 파생되지 않은 합성 입력만 사용한다.
 
-`transport`만 외부 스캔 계약과 MessagePack 표현을 안다. 정확한 field 자료형, 시각 표현, message framing과 ACK 및 오류 응답은 수신 프로그램과 합의한 계약으로 고정한 뒤 구현한다. 내부 계산 모델은 전송 표현에 의존하지 않는다.
+외부 입력 계약은 `contracts/v1/`에서 JSON Schema Draft 2020-12로 관리한다. `configuration`은 환경 설정 계약의 구조 규칙과 JSON Schema로 표현할 수 없는 다각형 및 방향벡터 규칙을 함께 검증한다.
+
+`transport`만 외부 스캔 계약과 MessagePack 표현을 안다. 정확한 message framing과 ACK 및 오류 응답은 수신 프로그램과 합의한 계약으로 고정한 뒤 구현한다. 내부 계산 모델은 전송 표현에 의존하지 않는다.
 
 ## 검증 구조
 
@@ -65,6 +67,8 @@ measurement -> scenario
   workflows/
     ci.yml
 .python-version
+contracts/
+  v1/
 docs/
   architecture.md
   dependencies.md

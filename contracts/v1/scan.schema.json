@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-generator/contracts/v1/scan.schema.json",
+  "title": "LiDAR scan message v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "type",
+    "environment_id",
+    "run_id",
+    "sensor_id",
+    "scan_id",
+    "captured_at",
+    "points"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": 1
+    },
+    "type": {
+      "const": "scan"
+    },
+    "environment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sensor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scan_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "captured_at": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "points": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "prefixItems": [
+          {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMaximum": 360
+          },
+          {
+            "anyOf": [
+              {
+                "const": 0
+              },
+              {
+                "type": "number",
+                "minimum": 0.05,
+                "maximum": 30
+              }
+            ]
+          },
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        ],
+        "items": false
+      }
+    }
+  }
+}
