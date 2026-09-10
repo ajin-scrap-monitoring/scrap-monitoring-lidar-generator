@@ -97,6 +97,33 @@ def test_rejects_duplicate_inlet_positions(valid_generator: dict[str, Any]) -> N
         _parse(valid_generator)
 
 
+def test_rejects_fill_duration_factors_not_centered_on_average(
+    valid_generator: dict[str, Any],
+) -> None:
+    valid_generator["scenario"]["fill_duration_factor_range"] = [0.8, 1.1]
+
+    with pytest.raises(ConfigurationError, match="centered on 1"):
+        _parse(valid_generator)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("fill_rate_factor_range", [1.1, 1.5]),
+        ("collection_rate_factor_range", [0.4, 0.9]),
+    ],
+)
+def test_rejects_rate_factors_without_cycle_average(
+    valid_generator: dict[str, Any],
+    field: str,
+    value: list[float],
+) -> None:
+    valid_generator["scenario"][field] = value
+
+    with pytest.raises(ConfigurationError, match="include the cycle average factor 1"):
+        _parse(valid_generator)
+
+
 def test_rejects_empty_reference_path(valid_generator: dict[str, Any]) -> None:
     valid_generator["quality_profile_path"] = ""
 
