@@ -4,14 +4,16 @@ from collections.abc import Iterable
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
-from scrap_monitoring_lidar_generator.geometry import HitKind
+from scrap_monitoring_lidar_generator.geometry import HitKind, SensorFrame, Vec3
 from scrap_monitoring_lidar_generator.measurement import (
     MeasurementGenerator,
     ReferencePoint,
     ReferenceScan,
     ScheduledScan,
     SensorDropoutScheduler,
+    SpatialDistanceResolver,
     TimedReferenceScan,
 )
 
@@ -78,6 +80,8 @@ def _generator(
     reflection_error_probability: float = 0.0,
     reflection_error_reduction_range_m: tuple[float, float] = (0.1, 0.2),
     dropout_scheduler: SensorDropoutScheduler | None = None,
+    spatial_distortions: SpatialDistanceResolver | None = None,
+    sensor_frame: SensorFrame | None = None,
 ) -> MeasurementGenerator:
     return MeasurementGenerator(
         sensor_id=sensor_id,
@@ -93,6 +97,8 @@ def _generator(
         reflection_error_reduction_range_m=reflection_error_reduction_range_m,
         dropout_scheduler=dropout_scheduler,
         seed=seed,
+        spatial_distortions=spatial_distortions,
+        sensor_frame=sensor_frame,
     )
 
 
@@ -232,6 +238,41 @@ def test_reflection_error_precedes_noise_without_changing_other_random_streams()
     assert np.array_equal(reflected.qualities, plain.qualities)
 
 
+def test_spatial_foreground_and_reflection_error_select_nearest_without_stacking() -> None:
+    class FixedSpatialResolver:
+        def resolve_distances(
+            self,
+            reference: TimedReferenceScan,
+            *,
+            frame: SensorFrame,
+            min_distance_m: float,
+        ) -> NDArray[np.float64]:
+            del frame, min_distance_m
+            return np.fromiter(
+                (point.distance_m - 0.5 for point in reference.scan.points),
+                dtype=np.float64,
+                count=len(reference.scan.points),
+            )
+
+    reference = _reference((5.0,) * 100, hit_kinds=(HitKind.SURFACE,) * 100)
+    frame = SensorFrame(
+        origin_m=Vec3(0.0, 0.0, 5.0),
+        u0=Vec3(0.0, 0.0, -1.0),
+        u90=Vec3(1.0, 0.0, 0.0),
+    )
+    generator = _generator(
+        reflection_error_enabled=True,
+        reflection_error_probability=1.0,
+        reflection_error_reduction_range_m=(0.25, 0.25),
+        spatial_distortions=FixedSpatialResolver(),
+        sensor_frame=frame,
+    )
+
+    measured = generator.generate(reference).measured.scan
+
+    np.testing.assert_array_equal(measured.distances_m, np.full(100, 4.5))
+
+
 def test_dropout_overrides_distance_and_uses_invalid_quality_distribution() -> None:
     reference = _reference((5.0,) * 8)
     dropout = SensorDropoutScheduler(
@@ -314,3 +355,23 @@ def test_rejects_invalid_generator_settings(
 def test_rejects_reference_from_another_sensor() -> None:
     with pytest.raises(ValueError, match="sensor identifiers"):
         _generator(sensor_id="sensor-a").generate(_reference((5.0,), sensor_id="sensor-b"))
+
+
+def test_rejects_spatial_resolver_without_sensor_frame() -> None:
+    class UnusedSpatialResolver:
+        def resolve_distances(
+            self,
+            reference: TimedReferenceScan,
+            *,
+            frame: SensorFrame,
+            min_distance_m: float,
+        ) -> NDArray[np.float64]:
+            del frame, min_distance_m
+            return np.fromiter(
+                (point.distance_m for point in reference.scan.points),
+                dtype=np.float64,
+                count=len(reference.scan.points),
+            )
+
+    with pytest.raises(ValueError, match="configured together"):
+        _generator(spatial_distortions=UnusedSpatialResolver())

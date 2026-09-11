@@ -20,10 +20,19 @@ from scrap_monitoring_lidar_generator.measurement.rotation import (
     SensorRotationScheduler,
     create_seeded_rotation_scheduler,
 )
+from scrap_monitoring_lidar_generator.measurement.spatial import (
+    FallingMaterialEvent,
+    FallingMaterialSettings,
+    SpatialDistanceResolver,
+    SpatialDistortionTimeline,
+    resolve_falling_material_distances,
+)
 
 __all__ = [
     "DEFAULT_MAX_DISTANCE_M",
     "DEFAULT_MIN_DISTANCE_M",
+    "FallingMaterialEvent",
+    "FallingMaterialSettings",
     "MeasuredScan",
     "MeasurementGenerator",
     "MeasurementResult",
@@ -33,7 +42,10 @@ __all__ = [
     "ScheduledScan",
     "SensorDropoutScheduler",
     "SensorRotationScheduler",
+    "SpatialDistanceResolver",
+    "SpatialDistortionTimeline",
     "TimedMeasuredScan",
     "TimedReferenceScan",
     "create_seeded_rotation_scheduler",
+    "resolve_falling_material_distances",
 ]

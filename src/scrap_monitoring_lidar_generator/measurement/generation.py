@@ -6,6 +6,7 @@ from collections.abc import Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from scrap_monitoring_lidar_generator.geometry import SensorFrame
 from scrap_monitoring_lidar_generator.geometry.intersections import validate_distance_bounds
 from scrap_monitoring_lidar_generator.geometry.scene import HitKind
 from scrap_monitoring_lidar_generator.measurement._randomness import (
@@ -19,6 +20,7 @@ from scrap_monitoring_lidar_generator.measurement.models import (
     TimedMeasuredScan,
     TimedReferenceScan,
 )
+from scrap_monitoring_lidar_generator.measurement.spatial import SpatialDistanceResolver
 
 type FloatArray = NDArray[np.float64]
 type QualityArray = NDArray[np.uint8]
@@ -43,7 +45,9 @@ class MeasurementGenerator:
         "_reflection_error_probability",
         "_reflection_error_reduction_range_m",
         "_reflection_error_rng",
+        "_sensor_frame",
         "_sensor_id",
+        "_spatial_distortions",
         "_valid_quality_cdf",
     )
 
@@ -63,6 +67,8 @@ class MeasurementGenerator:
         reflection_error_reduction_range_m: tuple[float, float],
         dropout_scheduler: SensorDropoutScheduler | None,
         seed: int,
+        spatial_distortions: SpatialDistanceResolver | None = None,
+        sensor_frame: SensorFrame | None = None,
     ) -> None:
         if not sensor_id:
             raise ValueError("measurement generator sensor_id must be non-empty")
@@ -88,6 +94,8 @@ class MeasurementGenerator:
         )
         if dropout_scheduler is not None and dropout_scheduler.sensor_id != sensor_id:
             raise ValueError("measurement generator and dropout sensor identifiers must match")
+        if (spatial_distortions is None) != (sensor_frame is None):
+            raise ValueError("spatial distortions and sensor frame must be configured together")
         require_seed(seed, "measurement seed")
 
         self._sensor_id = sensor_id
@@ -97,6 +105,8 @@ class MeasurementGenerator:
         self._noise_standard_deviation_m = standard_deviation_m
         self._noise_limit_m = limit_m
         self._dropout_scheduler = dropout_scheduler
+        self._spatial_distortions = spatial_distortions
+        self._sensor_frame = sensor_frame
         self._reflection_error_enabled = reflection_error_enabled
         self._reflection_error_probability = reflection_probability
         self._reflection_error_reduction_range_m = reflection_reduction_range_m
@@ -133,8 +143,17 @@ class MeasurementGenerator:
             dtype=np.float64,
             count=len(reference.scan.points),
         )
-        distances_m = reference_distances.copy()
-        self._apply_reflection_error(reference, distances_m)
+        if self._spatial_distortions is None:
+            distances_m = reference_distances.copy()
+        else:
+            if self._sensor_frame is None:
+                raise RuntimeError("spatial measurement generator has no sensor frame")
+            distances_m = self._spatial_distortions.resolve_distances(
+                reference,
+                frame=self._sensor_frame,
+                min_distance_m=self._min_distance_m,
+            )
+        self._apply_reflection_error(reference, reference_distances, distances_m)
         if self._dropout_scheduler is not None:
             dropout = self._dropout_scheduler.active_mask(reference.schedule.point_elapsed_times_s)
             distances_m[dropout] = 0.0
@@ -169,6 +188,7 @@ class MeasurementGenerator:
     def _apply_reflection_error(
         self,
         reference: TimedReferenceScan,
+        reference_distances_m: FloatArray,
         distances_m: FloatArray,
     ) -> None:
         if not self._reflection_error_enabled or self._reflection_error_probability == 0.0:
@@ -182,7 +202,7 @@ class MeasurementGenerator:
         )
         maximum_reductions_m = np.minimum(
             upper_reduction_m,
-            distances_m - self._min_distance_m,
+            reference_distances_m - self._min_distance_m,
         )
         selected = (
             surface_hits
@@ -196,7 +216,11 @@ class MeasurementGenerator:
         reductions_m = lower_reduction_m + reduction_draws * (
             maximum_reductions_m - lower_reduction_m
         )
-        distances_m[selected] -= reductions_m[selected]
+        candidate_distances_m = reference_distances_m - reductions_m
+        distances_m[selected] = np.minimum(
+            distances_m[selected],
+            candidate_distances_m[selected],
+        )
 
     def _sample_qualities(self, valid_distances: NDArray[np.bool_]) -> QualityArray:
         draws = self._quality_rng.random(valid_distances.size)

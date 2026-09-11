@@ -1,5 +1,7 @@
 """Tests for simulation-time reference scan coordination."""
 
+from dataclasses import dataclass, field
+
 import pytest
 
 from scrap_monitoring_lidar_generator.geometry import (
@@ -144,6 +146,29 @@ def test_same_inputs_reproduce_timed_reference_scans() -> None:
     assert first.schedule.scan_id == second.schedule.scan_id
     assert first.schedule.completed_at_s == second.schedule.completed_at_s
     assert first.scan == second.scan
+
+
+def test_notifies_observer_before_each_scenario_interval() -> None:
+    @dataclass
+    class RecordingObserver:
+        intervals: list[tuple[float, float]] = field(default_factory=list)
+
+        def advance_to(self, elapsed_s: float, *, scenario: ScenarioSimulator) -> None:
+            self.intervals.append((scenario.elapsed_s, elapsed_s))
+
+    observer = RecordingObserver()
+    scenario = _scenario()
+    runtime = ReferenceGenerationRuntime(
+        scenario=scenario,
+        scene=_scene(scenario),
+        scanners=(_scanner("sensor-a"),),
+        schedulers=(_scheduler("sensor-a"),),
+        observers=(observer,),
+    )
+
+    runtime.next_completed_scans()
+
+    assert observer.intervals == [(0.0, 0.5), (0.5, 1.0)]
 
 
 def test_rejects_mismatched_or_preadvanced_inputs() -> None:

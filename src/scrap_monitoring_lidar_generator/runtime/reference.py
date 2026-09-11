@@ -1,6 +1,8 @@
 """Simulation-time coordination for undistorted reference scans."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import numpy as np
 
@@ -32,10 +34,18 @@ class _PendingReferenceScan:
     points: list[ReferencePoint] = field(default_factory=list)
 
 
+class ScenarioTimeObserver(Protocol):
+    """Read scenario intervals before the shared simulator advances."""
+
+    def advance_to(self, elapsed_s: float, *, scenario: ScenarioSimulator) -> None:
+        """Observe one interval that does not cross a scenario phase boundary."""
+        ...
+
+
 class ReferenceGenerationRuntime:
     """Observe one shared scenario in time order for all sensor rotations."""
 
-    __slots__ = ("_pending", "_scenario", "_scene")
+    __slots__ = ("_observers", "_pending", "_scenario", "_scene")
 
     def __init__(
         self,
@@ -44,6 +54,7 @@ class ReferenceGenerationRuntime:
         scene: EnvironmentScene,
         scanners: tuple[ReferenceScanner, ...],
         schedulers: tuple[SensorRotationScheduler, ...],
+        observers: Sequence[ScenarioTimeObserver] = (),
     ) -> None:
         if scenario.elapsed_s != 0.0:
             raise ValueError("reference runtime scenario must start at simulation time 0")
@@ -61,6 +72,7 @@ class ReferenceGenerationRuntime:
 
         self._scenario = scenario
         self._scene = scene
+        self._observers = tuple(observers)
         self._pending = [
             _PendingReferenceScan(
                 scheduler=schedulers_by_id[sensor_id],
@@ -85,12 +97,19 @@ class ReferenceGenerationRuntime:
         """Return the earliest pending sensor rotation completion time."""
         return min(pending.schedule.completed_at_s for pending in self._pending)
 
+    @property
+    def earliest_pending_elapsed_s(self) -> float:
+        """Return the earliest first-point time still awaiting scan completion."""
+        return min(pending.schedule.captured_elapsed_s for pending in self._pending)
+
     def next_completed_scans(self) -> tuple[TimedReferenceScan, ...]:
         """Generate all sensor scans completing at the next event time."""
         completion_s = self.next_completion_elapsed_s
         while self._scenario.elapsed_s < completion_s:
             next_scene_event_s = self._scenario.next_surface_event_elapsed_s
             interval_end_s = min(next_scene_event_s, completion_s)
+            for observer in self._observers:
+                observer.advance_to(interval_end_s, scenario=self._scenario)
             self._measure_points_before(interval_end_s)
             self._scenario.advance_to(interval_end_s)
 
@@ -127,7 +146,11 @@ class ReferenceGenerationRuntime:
             pending.next_point_index = end_index
 
 
-def build_reference_generation_runtime(inputs: GeneratorInputs) -> ReferenceGenerationRuntime:
+def build_reference_generation_runtime(
+    inputs: GeneratorInputs,
+    *,
+    observers: Sequence[ScenarioTimeObserver] = (),
+) -> ReferenceGenerationRuntime:
     """Assemble time-aware reference generation from validated inputs."""
     scenario = build_scenario_simulator(inputs)
     scene = build_environment_scene(inputs.environment, dynamic_surface=scenario.surface)
@@ -146,6 +169,7 @@ def build_reference_generation_runtime(inputs: GeneratorInputs) -> ReferenceGene
         scene=scene,
         scanners=scanners,
         schedulers=build_rotation_schedulers(inputs),
+        observers=observers,
     )
 
 

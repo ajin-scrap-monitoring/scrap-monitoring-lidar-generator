@@ -11,7 +11,7 @@ from scrap_monitoring_lidar_generator.configuration import (
     ConfigurationError,
     load_generator_inputs,
 )
-from scrap_monitoring_lidar_generator.geometry import Vec2
+from scrap_monitoring_lidar_generator.geometry import HitKind, Vec2
 from scrap_monitoring_lidar_generator.runtime import (
     MeasurementGenerationRuntime,
     build_measurement_generation_runtime,
@@ -158,6 +158,47 @@ def test_generates_reproducible_reference_and_final_measurement_scans() -> None:
     }
     assert runtimes[0].scenario.elapsed_s == pytest.approx(
         4.0 / inputs.generator.measurement.rotation_rate_hz
+    )
+
+
+def test_generator_inputs_apply_shared_falling_material_events(tmp_path: Path) -> None:
+    generator = _load_example("generator.v1.json")
+    environment = _load_example("environment.v1.json")
+    quality = _load_example("quality-profile.v1.json")
+    generator["scenario"]["mean_fill_duration_s"] = 86_400
+    generator["scenario"]["fill_duration_factor_range"] = [1, 1]
+    generator["scenario"]["fill_rate_factor_range"] = [1, 1]
+    generator["scenario"]["surface"]["update_interval_s"] = 0.05
+    generator["scenario"]["surface"]["roughness_height_range_m"] = [0, 0]
+    generator["measurement"]["distance_noise"]["enabled"] = False
+    generator["measurement"]["distortions"]["reflection_error"]["enabled"] = False
+    generator["measurement"]["distortions"]["dropout"]["enabled"] = False
+    generator["measurement"]["distortions"]["falling_material"] = {
+        "enabled": True,
+        "event_rate_per_s": 100,
+        "radius_m_range": [20, 20],
+        "duration_s_range": [1, 1],
+        "distance_reduction_m_range": [0.2, 0.2],
+    }
+    path = _write_inputs(tmp_path, generator, environment, quality)
+    runtime = build_measurement_generation_runtime(load_generator_inputs(path))
+
+    results = [runtime.next_completed_scans()[0] for _ in range(6)]
+    reductions_m: list[float] = []
+    for result in results:
+        for reference_point, measured_distance_m in zip(
+            result.reference.scan.points,
+            result.measured.scan.distances_m,
+            strict=True,
+        ):
+            if reference_point.hit_kind is HitKind.SURFACE:
+                reductions_m.append(reference_point.distance_m - float(measured_distance_m))
+
+    assert reductions_m
+    assert any(reduction_m == pytest.approx(0.2) for reduction_m in reductions_m)
+    assert all(
+        reduction_m == pytest.approx(0.0) or reduction_m == pytest.approx(0.2)
+        for reduction_m in reductions_m
     )
 
 
