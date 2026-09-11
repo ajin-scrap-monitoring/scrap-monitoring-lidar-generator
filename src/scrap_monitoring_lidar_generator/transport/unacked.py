@@ -89,6 +89,12 @@ class UnackedFrameBuffer:
     def __len__(self) -> int:
         return len(self._entries)
 
+    def contains(self, identity: ScanIdentity) -> bool:
+        """Return whether one exact scan identity remains retained."""
+        if not isinstance(identity, ScanIdentity):
+            raise ValueError("buffer lookup identity must be a ScanIdentity")
+        return identity in self._entries
+
     def enqueue(
         self,
         *,

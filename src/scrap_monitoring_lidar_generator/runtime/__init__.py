@@ -21,6 +21,7 @@ from scrap_monitoring_lidar_generator.runtime.reference import (
     build_reference_generation_runtime,
 )
 from scrap_monitoring_lidar_generator.runtime.scenario import build_scenario_simulator
+from scrap_monitoring_lidar_generator.runtime.transport import build_scan_sender
 
 __all__ = [
     "JsonLinesDiagnosticsWriter",
@@ -33,6 +34,7 @@ __all__ = [
     "build_measurement_generators",
     "build_reference_generation_runtime",
     "build_rotation_schedulers",
+    "build_scan_sender",
     "build_scenario_simulator",
     "build_spatial_distortion_timeline",
     "generator_input_fingerprint",
