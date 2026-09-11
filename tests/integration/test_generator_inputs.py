@@ -173,6 +173,8 @@ def test_generator_inputs_apply_shared_falling_material_events(tmp_path: Path) -
     generator["measurement"]["distance_noise"]["enabled"] = False
     generator["measurement"]["distortions"]["reflection_error"]["enabled"] = False
     generator["measurement"]["distortions"]["dropout"]["enabled"] = False
+    generator["measurement"]["distortions"]["voids"]["enabled"] = False
+    generator["measurement"]["distortions"]["collection_occlusion"]["enabled"] = False
     generator["measurement"]["distortions"]["falling_material"] = {
         "enabled": True,
         "event_rate_per_s": 100,

@@ -246,8 +246,9 @@ def test_spatial_foreground_and_reflection_error_select_nearest_without_stacking
             *,
             frame: SensorFrame,
             min_distance_m: float,
+            max_distance_m: float,
         ) -> NDArray[np.float64]:
-            del frame, min_distance_m
+            del frame, min_distance_m, max_distance_m
             return np.fromiter(
                 (point.distance_m - 0.5 for point in reference.scan.points),
                 dtype=np.float64,
@@ -365,8 +366,9 @@ def test_rejects_spatial_resolver_without_sensor_frame() -> None:
             *,
             frame: SensorFrame,
             min_distance_m: float,
+            max_distance_m: float,
         ) -> NDArray[np.float64]:
-            del frame, min_distance_m
+            del frame, min_distance_m, max_distance_m
             return np.fromiter(
                 (point.distance_m for point in reference.scan.points),
                 dtype=np.float64,

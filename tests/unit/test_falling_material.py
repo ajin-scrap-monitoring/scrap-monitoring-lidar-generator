@@ -3,7 +3,14 @@
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import HitKind, Polygon2, SensorFrame, Vec2, Vec3
+from scrap_monitoring_lidar_generator.geometry import (
+    EnvironmentScene,
+    HitKind,
+    Polygon2,
+    SensorFrame,
+    Vec2,
+    Vec3,
+)
 from scrap_monitoring_lidar_generator.measurement import (
     FallingMaterialEvent,
     FallingMaterialSettings,
@@ -57,6 +64,7 @@ def _scenario(
 def _timeline(*, seed: int = 456, event_rate_per_s: float = 20.0) -> SpatialDistortionTimeline:
     return SpatialDistortionTimeline(
         boundary=_boundary(),
+        static_scene=EnvironmentScene(_boundary(), floor_z_m=0.0, top_z_m=2.0),
         falling_material=FallingMaterialSettings(
             event_rate_per_s=event_rate_per_s,
             radius_m_range=(0.1, 0.3),
