@@ -97,6 +97,8 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 
 `runtime.run_scan_generation`은 실행 시작 단조 시각에 회전 완료 경과 시각을 더한 절대 deadline으로 생성 속도를 조절한다. `runtime.run_generator_application`은 실행별 UUID(Universally Unique Identifier)와 UTC 기준 시각을 만들고 측정, 진단 및 비동기 송신의 수명주기를 함께 관리한다. CLI는 `--config`로 실행 설정을 받고 SIGINT와 SIGTERM에서 생성과 송신을 정상 종료한다.
 
+`runtime.PerformanceRecorder`는 명시적으로 주입한 benchmark 실행에서만 장면 갱신과 스캔 생성 시간을 누적한다. recorder를 주입하지 않은 생성 실행은 성능 시계를 읽지 않는다. 직렬화와 전송 대기는 외부 adapter 경계를 사용하는 benchmark가 같은 recorder에 기록한다.
+
 ## 검증 구조
 
 자동 검증은 4개 계층으로 구성한다.
