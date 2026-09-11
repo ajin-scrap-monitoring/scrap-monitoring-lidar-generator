@@ -15,7 +15,7 @@ benchmark는 생성 pacing을 제거하고 설정된 시뮬레이션 시간만�
 
 ## 실행
 
-Python 3.14와 잠금된 개발 환경에서 실행한다.
+Python 3.14.4와 잠금된 개발 환경에서 실행한다.
 
 ```bash
 uv run --locked python -m tests.performance.generation \

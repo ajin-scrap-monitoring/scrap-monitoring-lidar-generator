@@ -21,6 +21,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14.4"
+
       - name: Validate release target
         shell: bash
         run: |
@@ -28,13 +33,15 @@ jobs:
             echo "invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
           fi
+          package_version="$(
+            python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
+          )"
+          if [[ "v$package_version" != "$GITHUB_REF_NAME" ]]; then
+            echo "release tag $GITHUB_REF_NAME does not match package version $package_version" >&2
+            exit 1
+          fi
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        with:
-          python-version: "3.14"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1

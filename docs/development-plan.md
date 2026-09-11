@@ -4,6 +4,26 @@
 
 개발은 5단계로 진행한다. 각 단계는 앞 단계의 계약과 검증 결과를 입력으로 사용하며, 완료 조건을 충족한 뒤 다음 단계로 넘어간다. 각 변경은 Organization [개발 운영 규칙](https://github.com/ajin-scrap-monitoring/.github/blob/main/GOVERNANCE.md)의 Issue, Project, 브랜치와 Pull Request 절차로 관리한다.
 
+## 현재 상태
+
+5개 단계의 현재 상태는 다음과 같다.
+
+| 단계 | 상태 | 남은 조건 |
+| --- | --- | --- |
+| 0단계 | 완료 | 없음 |
+| 1단계 | 완료 | 없음 |
+| 2단계 | 완료 | 없음 |
+| 3단계 | 생성 프로그램과 test double 검증 완료 | 실제 수신 프로그램과의 계약 검증 |
+| 4단계 | OCI image, ARM64 build와 성능 측정 도구 완료 | 대상 장비 동시 부하 검증과 최초 Release |
+
+## 다음 작업
+
+남은 작업은 3개다.
+
+1. 실제 수신 프로그램에 version 1 계약과 합성 fixture를 적용하고 생성 프로그램과 통합 검증한다.
+2. Raspberry Pi 5 8GB에서 실제 실행 설정으로 생성 프로그램 단독 및 다른 edge process와의 동시 부하를 각각 측정하고 허용 CPU, 메모리, 지연 및 지속 실행 기준을 확정한다.
+3. 앞의 검증을 충족한 commit에서 package version과 일치하는 최초 release tag를 생성한다.
+
 ## 착수 전 확정 항목
 
 다음 5개 항목은 관련 구현을 시작하기 전에 확정한다.
