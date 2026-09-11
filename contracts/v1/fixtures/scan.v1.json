@@ -1,0 +1,13 @@
+{
+  "protocol_version": 1,
+  "type": "scan",
+  "environment_id": "synthetic-room-v1",
+  "run_id": "synthetic-run-a",
+  "sensor_id": "sensor-a",
+  "scan_id": 1,
+  "captured_at": 1800000000000000,
+  "points": [
+    [0.0, 2.5, 64],
+    [359.9, 0.0, 255]
+  ]
+}

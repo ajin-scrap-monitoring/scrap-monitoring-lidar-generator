@@ -2,7 +2,7 @@
 
 ## 적용 범위
 
-현재 직접 사용하는 외부 의존성은 13개다. NumPy는 애플리케이션 runtime 수치 연산에 사용하며 나머지 항목은 Python 실행, 빌드, 개발 검증과 CI(Continuous Integration)에 사용한다.
+현재 직접 사용하는 외부 의존성은 14개다. NumPy와 `msgpack`은 애플리케이션 runtime의 수치 연산과 직렬화에 사용하며 나머지 항목은 Python 실행, 빌드, 개발 검증과 CI(Continuous Integration)에 사용한다.
 
 | 의존성 | 버전 | 사용 목적 | 출처 | 라이선스 |
 | --- | --- | --- | --- | --- |
@@ -10,6 +10,7 @@
 | `uv` | `0.12.12` | 환경 구성, 의존성 잠금과 명령 실행 | [Astral](https://github.com/astral-sh/uv) | MIT OR Apache-2.0 |
 | `uv_build` | `0.12.12` | Python source distribution과 wheel 빌드 | [Astral](https://docs.astral.sh/uv/concepts/build-backend/) | MIT OR Apache-2.0 |
 | NumPy | `>=2.5.3,<2.6` | 높이장 배열, 부피와 표면 변화 수치 연산 | [NumPy](https://numpy.org/) | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
+| `msgpack` | `>=1.2.2,<1.3` | 스캔 본문의 MessagePack 인코딩 및 디코딩 | [msgpack-python](https://github.com/msgpack/msgpack-python) | Apache-2.0 |
 | jsonschema | `>=4.26.0,<5` | JSON Schema 계약과 합성 fixture 검증 | [Python JSON Schema](https://python-jsonschema.readthedocs.io/) | MIT |
 | Ruff | `>=0.16.6,<0.17` | Python 형식 및 정적 검사 | [Astral](https://docs.astral.sh/ruff/) | MIT |
 | mypy | `>=2.3.1,<3` | Python 정적 type 검사 | [mypy](https://www.mypy-lang.org/) | MIT |
