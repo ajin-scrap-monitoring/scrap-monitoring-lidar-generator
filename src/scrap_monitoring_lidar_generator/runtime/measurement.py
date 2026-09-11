@@ -3,9 +3,11 @@
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
 from scrap_monitoring_lidar_generator.measurement import (
     MeasurementGenerator,
+    SensorDropoutScheduler,
     SensorRotationScheduler,
     create_seeded_rotation_scheduler,
 )
+from scrap_monitoring_lidar_generator.scenario import scale_duration_range, scenario_time_scale
 
 
 def build_rotation_schedulers(
@@ -29,6 +31,8 @@ def build_measurement_generators(
 ) -> tuple[MeasurementGenerator, ...]:
     """Build sensor-specific distance and quality generators in environment order."""
     measurement = inputs.generator.measurement
+    time_scale = scenario_time_scale(inputs.generator.scenario.mean_fill_duration_s)
+    dropout = measurement.distortions.dropout
     quality_by_sensor_id = {
         quality.sensor_id: quality for quality in inputs.quality_profile.sensors
     }
@@ -50,6 +54,22 @@ def build_measurement_generators(
             reflection_error_probability=measurement.distortions.reflection_error.probability,
             reflection_error_reduction_range_m=(
                 measurement.distortions.reflection_error.distance_reduction_m_range
+            ),
+            dropout_scheduler=(
+                SensorDropoutScheduler(
+                    sensor_id=sensor.sensor_id,
+                    event_interval_s_range=scale_duration_range(
+                        dropout.event_interval_s_range,
+                        time_scale,
+                    ),
+                    duration_s_range=scale_duration_range(
+                        dropout.duration_s_range,
+                        time_scale,
+                    ),
+                    seed=inputs.generator.seed,
+                )
+                if dropout.enabled
+                else None
             ),
             seed=inputs.generator.seed,
         )

@@ -11,6 +11,7 @@ from scrap_monitoring_lidar_generator.measurement import (
     ReferencePoint,
     ReferenceScan,
     ScheduledScan,
+    SensorDropoutScheduler,
     TimedReferenceScan,
 )
 
@@ -76,6 +77,7 @@ def _generator(
     reflection_error_enabled: bool = False,
     reflection_error_probability: float = 0.0,
     reflection_error_reduction_range_m: tuple[float, float] = (0.1, 0.2),
+    dropout_scheduler: SensorDropoutScheduler | None = None,
 ) -> MeasurementGenerator:
     return MeasurementGenerator(
         sensor_id=sensor_id,
@@ -89,6 +91,7 @@ def _generator(
         reflection_error_enabled=reflection_error_enabled,
         reflection_error_probability=reflection_error_probability,
         reflection_error_reduction_range_m=reflection_error_reduction_range_m,
+        dropout_scheduler=dropout_scheduler,
         seed=seed,
     )
 
@@ -229,6 +232,33 @@ def test_reflection_error_precedes_noise_without_changing_other_random_streams()
     assert np.array_equal(reflected.qualities, plain.qualities)
 
 
+def test_dropout_overrides_distance_and_uses_invalid_quality_distribution() -> None:
+    reference = _reference((5.0,) * 8)
+    dropout = SensorDropoutScheduler(
+        sensor_id="sensor-a",
+        event_interval_s_range=(0.25, 0.25),
+        duration_s_range=(0.25, 0.25),
+        seed=123,
+    )
+
+    measured = _generator(dropout_scheduler=dropout).generate(reference).measured.scan
+
+    assert measured.distances_m.tolist() == [5.0, 5.0, 0.0, 0.0, 5.0, 5.0, 0.0, 0.0]
+    assert measured.qualities.tolist() == [64, 64, 7, 7, 64, 64, 7, 7]
+
+
+def test_rejects_dropout_scheduler_for_another_sensor() -> None:
+    dropout = SensorDropoutScheduler(
+        sensor_id="sensor-b",
+        event_interval_s_range=(1.0, 1.0),
+        duration_s_range=(1.0, 1.0),
+        seed=123,
+    )
+
+    with pytest.raises(ValueError, match="dropout sensor identifiers"):
+        _generator(sensor_id="sensor-a", dropout_scheduler=dropout)
+
+
 def test_sensor_identifier_derives_an_independent_noise_stream() -> None:
     first = _generator(sensor_id="sensor-a", noise_enabled=True).generate(
         _reference((5.0,) * 100, sensor_id="sensor-a")
@@ -272,6 +302,7 @@ def test_rejects_invalid_generator_settings(
         "reflection_error_enabled": False,
         "reflection_error_probability": 0.0,
         "reflection_error_reduction_range_m": (0.1, 0.2),
+        "dropout_scheduler": None,
         "seed": 123,
     }
     arguments.update(overrides)

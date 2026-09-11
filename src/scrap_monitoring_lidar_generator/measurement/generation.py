@@ -1,6 +1,5 @@
 """Deterministic distance noise and quality generation."""
 
-import hashlib
 import math
 from collections.abc import Sequence
 
@@ -9,6 +8,11 @@ from numpy.typing import NDArray
 
 from scrap_monitoring_lidar_generator.geometry.intersections import validate_distance_bounds
 from scrap_monitoring_lidar_generator.geometry.scene import HitKind
+from scrap_monitoring_lidar_generator.measurement._randomness import (
+    derive_sensor_seed,
+    require_seed,
+)
+from scrap_monitoring_lidar_generator.measurement.dropout import SensorDropoutScheduler
 from scrap_monitoring_lidar_generator.measurement.models import (
     MeasuredScan,
     MeasurementResult,
@@ -19,7 +23,6 @@ from scrap_monitoring_lidar_generator.measurement.models import (
 type FloatArray = NDArray[np.float64]
 type QualityArray = NDArray[np.uint8]
 
-_MAX_SEED = 18_446_744_073_709_551_615
 _QUALITY_VALUE_COUNT = 256
 
 
@@ -27,6 +30,7 @@ class MeasurementGenerator:
     """Apply bounded normal noise and sensor-specific quality distributions."""
 
     __slots__ = (
+        "_dropout_scheduler",
         "_invalid_quality_cdf",
         "_max_distance_m",
         "_min_distance_m",
@@ -57,6 +61,7 @@ class MeasurementGenerator:
         reflection_error_enabled: bool,
         reflection_error_probability: float,
         reflection_error_reduction_range_m: tuple[float, float],
+        dropout_scheduler: SensorDropoutScheduler | None,
         seed: int,
     ) -> None:
         if not sensor_id:
@@ -81,8 +86,9 @@ class MeasurementGenerator:
             reflection_error_reduction_range_m,
             "reflection error distance reduction range",
         )
-        if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= _MAX_SEED:
-            raise ValueError("measurement seed must be an unsigned 64-bit integer")
+        if dropout_scheduler is not None and dropout_scheduler.sensor_id != sensor_id:
+            raise ValueError("measurement generator and dropout sensor identifiers must match")
+        require_seed(seed, "measurement seed")
 
         self._sensor_id = sensor_id
         self._min_distance_m = float(min_distance_m)
@@ -90,6 +96,7 @@ class MeasurementGenerator:
         self._noise_enabled = noise_enabled
         self._noise_standard_deviation_m = standard_deviation_m
         self._noise_limit_m = limit_m
+        self._dropout_scheduler = dropout_scheduler
         self._reflection_error_enabled = reflection_error_enabled
         self._reflection_error_probability = reflection_probability
         self._reflection_error_reduction_range_m = reflection_reduction_range_m
@@ -102,13 +109,13 @@ class MeasurementGenerator:
             "invalid quality frequencies",
         )
         self._noise_rng = np.random.Generator(
-            np.random.PCG64(_derive_seed(seed, sensor_id, "distance-noise"))
+            np.random.PCG64(derive_sensor_seed(seed, sensor_id, "distance-noise"))
         )
         self._quality_rng = np.random.Generator(
-            np.random.PCG64(_derive_seed(seed, sensor_id, "quality"))
+            np.random.PCG64(derive_sensor_seed(seed, sensor_id, "quality"))
         )
         self._reflection_error_rng = np.random.Generator(
-            np.random.PCG64(_derive_seed(seed, sensor_id, "reflection-error"))
+            np.random.PCG64(derive_sensor_seed(seed, sensor_id, "reflection-error"))
         )
 
     @property
@@ -128,6 +135,9 @@ class MeasurementGenerator:
         )
         distances_m = reference_distances.copy()
         self._apply_reflection_error(reference, distances_m)
+        if self._dropout_scheduler is not None:
+            dropout = self._dropout_scheduler.active_mask(reference.schedule.point_elapsed_times_s)
+            distances_m[dropout] = 0.0
         if self._noise_enabled:
             noise_m = _sample_truncated_normal(
                 self._noise_rng,
@@ -248,18 +258,6 @@ def _quality_cdf(frequencies: Sequence[int], name: str) -> FloatArray:
     cdf[-1] = 1.0
     cdf.flags.writeable = False
     return cdf
-
-
-def _derive_seed(seed: int, sensor_id: str, stream_name: str) -> int:
-    sensor_bytes = sensor_id.encode("utf-8")
-    payload = (
-        b"measurement\0"
-        + seed.to_bytes(8, byteorder="big")
-        + len(sensor_bytes).to_bytes(8, byteorder="big")
-        + sensor_bytes
-        + stream_name.encode("ascii")
-    )
-    return int.from_bytes(hashlib.sha256(payload).digest()[:16], byteorder="big")
 
 
 def _require_non_negative_finite(value: float, name: str) -> float:

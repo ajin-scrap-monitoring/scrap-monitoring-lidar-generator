@@ -6,6 +6,8 @@ from scrap_monitoring_lidar_generator.scenario import (
     HeightField,
     ScenarioSettings,
     ScenarioSimulator,
+    scale_duration_range,
+    scenario_time_scale,
 )
 
 
@@ -13,6 +15,7 @@ def build_scenario_simulator(inputs: GeneratorInputs) -> ScenarioSimulator:
     """Build an empty deterministic scenario from validated inputs."""
     environment = inputs.environment
     config = inputs.generator.scenario
+    time_scale = scenario_time_scale(config.mean_fill_duration_s)
     boundary = Polygon2(tuple(Vec2(x, y) for x, y in environment.boundary_xy_m))
     surface = HeightField(
         boundary,
@@ -24,11 +27,17 @@ def build_scenario_simulator(inputs: GeneratorInputs) -> ScenarioSimulator:
         mean_fill_duration_s=config.mean_fill_duration_s,
         fill_duration_factor_range=config.fill_duration_factor_range,
         fill_rate_factor_range=config.fill_rate_factor_range,
-        fill_rate_change_duration_s_range=config.fill_rate_change_duration_s_range,
+        fill_rate_change_duration_s_range=scale_duration_range(
+            config.fill_rate_change_duration_s_range,
+            time_scale,
+        ),
         collection_threshold_range=config.collection_threshold_range,
         collection_duration_factor_range=config.collection_duration_factor_range,
         collection_rate_factor_range=config.collection_rate_factor_range,
-        collection_rate_change_duration_s_range=config.collection_rate_change_duration_s_range,
+        collection_rate_change_duration_s_range=scale_duration_range(
+            config.collection_rate_change_duration_s_range,
+            time_scale,
+        ),
         inlet_positions=tuple(Vec2(x, y) for x, y in config.inlet_positions_xy_m),
         inlet_switch_activation_ratio=config.inlet_switch_activation_ratio,
         inlet_switch_height_difference_m=config.inlet_switch_height_difference_m,
