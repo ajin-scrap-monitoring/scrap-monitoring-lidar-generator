@@ -11,6 +11,8 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+# Local diagnostics can contain reference data that Git must not track.
+diagnostics/
 
 # Public repository must not track site-specific specifications or measurements.
 docs/internal/*
