@@ -53,6 +53,7 @@ Git은 `docs/internal/README.md`를 제외한 나머지 내용을 추적하지 �
 - 명시적인 요청 없이 commit, push, tag, Release 또는 원격 설정 변경을 수행하지 않는다.
 - 명시적인 요청 없이 branch를 전환하거나 기존 변경을 삭제하지 않는다.
 - commit과 Pull Request (PR)에 코딩 에이전트가 작성했다는 메타데이터를 추가하지 않는다.
+- GitHub Issue 제목과 Pull Request 제목의 summary는 명사구로 끝낸다.
 
 ## 문서 작성
 
