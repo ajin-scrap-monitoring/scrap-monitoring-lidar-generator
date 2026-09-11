@@ -43,3 +43,5 @@ Docker Engine은 SIGTERM을 전달하며 프로그램은 진행 중인 생성과
 Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PATCH` tag만 처리한다. workflow는 전체 소스 검증과 package build를 실행하고 `linux/arm64` 이미지를 GitHub Container Registry에 `MAJOR.MINOR.PATCH`와 `sha-<full-git-sha>` tag로 게시한다. 두 tag가 같은 manifest digest를 가리키는지, 실행 platform이 ARM64 하나인지와 package가 Public인지 검증한 뒤 package 파일과 불변 image 참조를 기록한 `oci-image.txt`를 GitHub Release asset으로 게시한다. 배포 환경은 tag 대신 검증한 manifest digest를 사용한다. 이미지는 Software Bill of Materials(SBOM)와 provenance attestation을 포함한다.
 
 프로젝트 버전과 tag 버전을 일치시킨 검증 완료 commit에만 release tag를 생성한다. 게시된 tag, image tag와 Release asset은 변경하지 않는다.
+
+현재 검증된 Release는 `v0.1.0`이며 source revision은 `a8943848fa32089253ccd9e48752f1a7449efe1d`다. Raspberry Pi 5에서 사용하는 불변 image 참조는 `ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:75877ace8dbda3fffa717fecf9e2b733a85e0610e9dd2e22227ca2bae70268c7`다. `0.1.0`과 `sha-a8943848fa32089253ccd9e48752f1a7449efe1d` tag는 같은 manifest digest를 가리키며 실행 platform은 `linux/arm64` 하나다. Release asset `oci-image.txt`는 이 불변 image 참조를 기록한다.
