@@ -104,7 +104,7 @@ def test_builds_rotation_schedulers_from_generator_inputs() -> None:
     ]
     first_scan = schedulers[0].next_scan()
     assert first_scan.scan_id == 1
-    assert first_scan.point_count == 2400
+    assert first_scan.point_count == 3200
     assert first_scan.captured_elapsed_s == 0.0
 
 
@@ -116,9 +116,9 @@ def test_generates_timed_reference_scan_from_generator_inputs() -> None:
 
     assert scan.sensor_id == inputs.environment.sensors[0].sensor_id
     assert scan.scan_id == 1
-    assert scan.schedule.point_count == 2400
+    assert scan.schedule.point_count == 3200
     assert len(scan.scan.points) == scan.schedule.point_count
-    assert runtime.scenario.elapsed_s == pytest.approx(1.0 / 3.0)
+    assert runtime.scenario.elapsed_s == pytest.approx(1.0 / 10.0)
 
 
 def test_generates_reproducible_reference_and_final_measurement_scans() -> None:
@@ -332,6 +332,8 @@ def test_generator_inputs_apply_collection_occlusion_events(tmp_path: Path) -> N
     generator["scenario"]["collection_rate_factor_range"] = [1, 1]
     generator["scenario"]["collection_rate_change_duration_s_range"] = [8_640, 17_280]
     generator["scenario"]["surface"]["update_interval_s"] = 0.05
+    generator["measurement"]["sample_rate_hz"] = 7_200
+    generator["measurement"]["rotation_rate_hz"] = 3
     generator["scenario"]["surface"]["roughness_height_range_m"] = [0, 0]
     generator["measurement"]["distance_noise"]["enabled"] = False
     generator["measurement"]["distortions"]["falling_material"]["enabled"] = False
@@ -386,6 +388,8 @@ def test_generator_inputs_scale_and_apply_dropout_intervals(tmp_path: Path) -> N
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
     generator["scenario"]["mean_fill_duration_s"] = 86_400
+    generator["measurement"]["sample_rate_hz"] = 7_200
+    generator["measurement"]["rotation_rate_hz"] = 3
     generator["measurement"]["distortions"]["dropout"] = {
         "enabled": True,
         "event_interval_s_range": [1, 1],

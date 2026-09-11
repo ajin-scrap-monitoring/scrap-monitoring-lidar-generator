@@ -31,7 +31,7 @@ def test_generated_scan_round_trips_with_run_identity_and_utc_timestamp() -> Non
     decoded = decode_scan_message(encode_scan_message(second_message))
 
     assert first_message.captured_at == 1_800_000_000_000_000
-    assert second_message.captured_at == 1_800_000_000_333_333
+    assert second_message.captured_at == 1_800_000_000_100_000
     assert decoded.environment_id == inputs.environment.environment_id
     assert decoded.run_id == "synthetic-run-a"
     assert decoded.sensor_id == second_result.sensor_id

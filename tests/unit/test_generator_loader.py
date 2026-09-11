@@ -33,7 +33,45 @@ def test_loads_generator_and_resolves_relative_paths() -> None:
     assert config.environment_path == _ROOT / "examples" / "environment.v1.json"
     assert config.quality_profile_path == _ROOT / "examples" / "quality-profile.v1.json"
     assert config.scenario.inlet_positions_xy_m == ((2.0, 2.0), (6.0, 4.0))
-    assert config.measurement.sample_rate_hz == 7200.0
+    assert config.measurement.sample_rate_hz == 32_000.0
+    assert config.measurement.rotation_rate_hz == 10.0
+    assert config.measurement.min_distance_m == 0.05
+    assert config.measurement.max_distance_m == 30.0
+    assert config.scenario.mean_fill_duration_s == 86_400.0
+    assert config.scenario.fill_duration_factor_range == (0.8, 1.2)
+    assert config.scenario.fill_rate_factor_range == (0.5, 1.5)
+    assert config.scenario.fill_rate_change_duration_s_range == (300.0, 900.0)
+    assert config.scenario.collection_threshold_range == (0.85, 0.95)
+    assert config.scenario.collection_duration_factor_range == (
+        0.03333333333333333,
+        0.05,
+    )
+    assert config.scenario.collection_rate_factor_range == (0.3, 1.7)
+    assert config.scenario.collection_rate_change_duration_s_range == (60.0, 180.0)
+    assert config.scenario.inlet_switch_activation_ratio == 0.5
+    assert config.scenario.inlet_switch_height_difference_m == 0.5
+    assert config.scenario.inlet_comparison_radius_m == 0.5
+    assert config.scenario.surface.pile_spread_radius_m == 0.5
+    assert config.scenario.surface.roughness_height_range_m == (-0.2, 0.2)
+    assert config.scenario.surface.roughness_radius_range_m == (0.1, 0.3)
+    assert config.measurement.distance_noise.standard_deviation_m == 0.01
+    assert config.measurement.distance_noise.limit_m == 0.03
+    assert config.measurement.distortions.falling_material.event_rate_per_s == 0.5
+    assert config.measurement.distortions.falling_material.radius_m_range == (0.025, 0.1)
+    assert config.measurement.distortions.voids.surface_area_ratio == 0.03
+    assert config.measurement.distortions.voids.radius_m_range == (0.015, 0.06)
+    assert config.measurement.distortions.voids.duration_s_range == (60.0, 300.0)
+    assert config.measurement.distortions.collection_occlusion.event_interval_s_range == (
+        20.0,
+        40.0,
+    )
+    assert config.measurement.distortions.collection_occlusion.radius_m_range == (0.15, 0.5)
+    assert config.measurement.distortions.collection_occlusion.duration_s_range == (2.0, 8.0)
+    assert config.measurement.distortions.reflection_error.probability == 0.001
+    assert config.measurement.distortions.reflection_error.distance_reduction_m_range == (
+        0.5,
+        2.0,
+    )
     assert config.measurement.distortions.dropout.enabled is False
     assert config.transport.host == "receiver"
     assert config.transport.port == 9000
