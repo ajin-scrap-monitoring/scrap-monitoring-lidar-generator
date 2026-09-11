@@ -14,15 +14,14 @@
 | 1단계 | 완료 | 없음 |
 | 2단계 | 완료 | 없음 |
 | 3단계 | 생성 프로그램과 test double 검증 완료 | 실제 수신 프로그램과의 계약 검증 |
-| 4단계 | OCI image, ARM64 build와 성능 측정 도구 완료 | 대상 장비 동시 부하 검증과 최초 Release |
+| 4단계 | ARM64 OCI image, v0.1.0 Release와 Raspberry Pi 5 단일 컨테이너 loopback 성능 검증 완료 | 실제 수신 프로그램 통합, 다른 edge process와의 공유 부하 검증 및 허용 기준 |
 
 ## 다음 작업
 
-남은 작업은 3개다.
+남은 작업은 2개다.
 
 1. 실제 수신 프로그램에 version 1 계약과 합성 fixture를 적용하고 생성 프로그램과 통합 검증한다.
 2. Raspberry Pi 5 8GB에서 실제 실행 설정으로 생성 프로그램 단독 및 다른 edge process와의 동시 부하를 각각 측정하고 허용 CPU, 메모리, 지연 및 지속 실행 기준을 확정한다.
-3. 앞의 검증을 충족한 commit에서 package version과 일치하는 최초 release tag를 생성한다.
 
 ## 착수 전 확정 항목
 
