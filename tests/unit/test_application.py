@@ -71,7 +71,7 @@ def test_generation_uses_absolute_rotation_deadlines_and_message_identity() -> N
         )
 
         assert generated == 1
-        assert deadlines == pytest.approx([100.0 + 1.0 / 3.0, 100.0 + 2.0 / 3.0])
+        assert deadlines == pytest.approx([100.0 + 1.0 / 10.0, 100.0 + 2.0 / 10.0])
         assert len(sink.messages) == 1
         assert sink.messages[0].run_id == "run-a"
         assert sink.messages[0].scan_id == 1

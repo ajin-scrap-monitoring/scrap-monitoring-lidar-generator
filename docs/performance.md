@@ -35,21 +35,21 @@ uv run --locked python -m tests.performance.generation \
 
 ## Raspberry Pi 5 검증 결과
 
-검증 대상은 `v0.1.0` ARM64 image `ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:75877ace8dbda3fffa717fecf9e2b733a85e0610e9dd2e22227ca2bae70268c7`다. Raspberry Pi 5 8GB에서 Python 3.14.4와 aarch64 실행 환경을 사용했다. 공개 합성 설정의 센서 1개에서 고정 seed로 500회 스캔과 1,200,000개 측정점을 생성하고, 시뮬레이션 시간 166.667초를 3회 실행했다.
+검증 대상은 `v0.1.0` ARM64 image `ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:75877ace8dbda3fffa717fecf9e2b733a85e0610e9dd2e22227ca2bae70268c7`다. Raspberry Pi 5 8GB에서 Python 3.14.4와 aarch64 실행 환경을 사용했다. 공개 합성 설정의 센서 1개에서 고정 seed로 500회 스캔과 1,600,000개 측정점을 생성하고, 시뮬레이션 시간 50초를 동일 조건으로 4회 실행했다.
 
 | 항목 | 관측 범위 |
 | --- | --- |
-| 생성 process wall time | 17.028-17.067초 |
-| 생성 process CPU time | 14.688-14.732초 |
-| 단일 core 환산 사용률 | 8.813-8.839퍼센트 |
-| 최대 RSS | 47.8-48.8MB |
-| `scan_generation` 평균 | 10.309-10.342ms |
-| `scene_update` 평균 | 0.273-0.274ms |
-| `serialization` 평균 | 1.892-1.897ms |
-| `transport_wait` 평균 | 4.819-4.825ms |
-| 장비 온도 | 52.35-62.25 C |
+| 생성 process wall time | 26.791-27.153초 |
+| 생성 process CPU time | 23.754-23.969초 |
+| 단일 core 환산 사용률 | 47.507-47.939퍼센트 |
+| 최대 RSS | 49.7-50.1MiB |
+| `scan_generation` 평균 | 18.641-18.828ms |
+| `scene_update` 평균 | 0.146-0.149ms |
+| `serialization` 평균 | 2.317-2.370ms |
+| `transport_wait` 평균 | 6.237-6.535ms |
+| 장비 온도 | 최대 62.25 C |
 | 최대 load average | 0.69 |
-| 최소 MemAvailable | 7521MB |
+| 최소 MemAvailable | 7551MB |
 | throttling | `0x0` |
 
-이 결과는 이미지 내부의 loopback 수신 test double과 생성 process를 사용한 단일 컨테이너 검증이다. 실제 수신 프로그램 처리 시간, 다른 edge process와의 동시 자원 경합, 운영 네트워크와 장기 지속 실행은 포함하지 않는다. 따라서 실제 수신 프로그램 통합과 공유 부하 기준 확정 전의 기술 검증 결과로 사용한다.
+이 결과는 변경된 공개 합성 실행 프로파일을 외부에서 bind mount하고, 이미지 내부의 loopback 수신 test double과 생성 process를 사용한 단일 컨테이너 검증이다. 장비 온도, load average와 MemAvailable은 4회 중 한 실행에서 함께 관측했다. 실제 수신 프로그램 처리 시간, 다른 edge process와의 동시 자원 경합, 운영 네트워크와 장기 지속 실행은 포함하지 않는다. 따라서 실제 수신 프로그램 통합과 공유 부하 기준 확정 전의 기술 검증 결과로 사용한다.
