@@ -6,12 +6,14 @@ from typing import Any, cast
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from scrap_monitoring_lidar_generator.configuration import (
     ConfigurationError,
     load_generator_inputs,
 )
 from scrap_monitoring_lidar_generator.geometry import HitKind, Vec2
+from scrap_monitoring_lidar_generator.measurement import MeasurementResult
 from scrap_monitoring_lidar_generator.runtime import (
     MeasurementGenerationRuntime,
     build_measurement_generation_runtime,
@@ -20,7 +22,12 @@ from scrap_monitoring_lidar_generator.runtime import (
     build_rotation_schedulers,
     build_scenario_simulator,
 )
-from scrap_monitoring_lidar_generator.scenario import FillPlan, ScenarioPhase, scenario_time_scale
+from scrap_monitoring_lidar_generator.scenario import (
+    FillPlan,
+    ScenarioPhase,
+    ScenarioSnapshot,
+    scenario_time_scale,
+)
 
 _ROOT = Path(__file__).parents[2]
 _EXAMPLES = _ROOT / "examples"
@@ -159,6 +166,115 @@ def test_generates_reproducible_reference_and_final_measurement_scans() -> None:
     assert runtimes[0].scenario.elapsed_s == pytest.approx(
         4.0 / inputs.generator.measurement.rotation_rate_hz
     )
+
+
+def test_all_distortions_reproduce_across_fill_collection_and_next_cycle(
+    tmp_path: Path,
+) -> None:
+    generator = _load_example("generator.v1.json")
+    environment = _load_example("environment.v1.json")
+    quality = _load_example("quality-profile.v1.json")
+    scenario = generator["scenario"]
+    scenario["mean_fill_duration_s"] = 1
+    scenario["fill_duration_factor_range"] = [1, 1]
+    scenario["fill_rate_factor_range"] = [0.5, 1.5]
+    scenario["fill_rate_change_duration_s_range"] = [8_640, 17_280]
+    scenario["collection_threshold_range"] = [0.5, 0.5]
+    scenario["collection_duration_factor_range"] = [1, 1]
+    scenario["collection_rate_factor_range"] = [0.6, 1.4]
+    scenario["collection_rate_change_duration_s_range"] = [8_640, 17_280]
+    scenario["surface"]["update_interval_s"] = 0.05
+    scenario["surface"]["roughness_height_range_m"] = [-0.05, 0.05]
+    scenario["surface"]["roughness_radius_range_m"] = [0.25, 0.5]
+    measurement = generator["measurement"]
+    measurement["sample_rate_hz"] = 360
+    measurement["rotation_rate_hz"] = 5
+    measurement["distance_noise"]["enabled"] = True
+    measurement["distortions"] = {
+        "falling_material": {
+            "enabled": True,
+            "event_rate_per_s": 5 / 86_400,
+            "radius_m_range": [0.2, 0.5],
+            "duration_s_range": [8_640, 17_280],
+            "distance_reduction_m_range": [0.1, 0.3],
+        },
+        "voids": {
+            "enabled": True,
+            "surface_area_ratio": 0.02,
+            "radius_m_range": [0.1, 0.2],
+            "duration_s_range": [25_920, 43_200],
+            "cover_height_increase_m": 0.05,
+            "distance_increase_m_range": [0.05, 0.1],
+        },
+        "collection_occlusion": {
+            "enabled": True,
+            "event_interval_s_range": [8_640, 8_640],
+            "radius_m_range": [1, 1],
+            "duration_s_range": [17_280, 17_280],
+            "distance_reduction_m_range": [0.2, 0.2],
+        },
+        "reflection_error": {
+            "enabled": True,
+            "probability": 0.1,
+            "distance_reduction_m_range": [0.1, 0.2],
+        },
+        "dropout": {
+            "enabled": True,
+            "event_interval_s_range": [34_560, 34_560],
+            "duration_s_range": [8_640, 8_640],
+        },
+    }
+    path = _write_inputs(tmp_path, generator, environment, quality)
+    inputs = load_generator_inputs(path)
+    runtimes = [build_measurement_generation_runtime(inputs) for _ in range(2)]
+
+    sequences: list[list[tuple[MeasurementResult, ScenarioSnapshot, NDArray[np.float64]]]] = []
+    for runtime in runtimes:
+        sequence: list[tuple[MeasurementResult, ScenarioSnapshot, NDArray[np.float64]]] = []
+        for _ in range(12):
+            (result,) = runtime.next_completed_scans()
+            sequence.append((result, runtime.scenario.snapshot, runtime.scenario.surface.heights_m))
+        sequences.append(sequence)
+
+    phases: set[ScenarioPhase] = set()
+    cycle_indexes: set[int] = set()
+    observed_dropout = False
+    observed_distance_change = False
+    for first_entry, repeated_entry in zip(sequences[0], sequences[1], strict=True):
+        first, first_snapshot, first_heights = first_entry
+        repeated, repeated_snapshot, repeated_heights = repeated_entry
+        assert first.reference.scan == repeated.reference.scan
+        assert np.array_equal(
+            first.reference.schedule.angles_deg,
+            repeated.reference.schedule.angles_deg,
+        )
+        assert np.array_equal(
+            first.reference.schedule.point_elapsed_times_s,
+            repeated.reference.schedule.point_elapsed_times_s,
+        )
+        assert np.array_equal(first.measured.scan.distances_m, repeated.measured.scan.distances_m)
+        assert np.array_equal(first.measured.scan.qualities, repeated.measured.scan.qualities)
+        assert first_snapshot == repeated_snapshot
+        assert np.array_equal(first_heights, repeated_heights)
+        phases.add(first_snapshot.phase)
+        cycle_indexes.add(first_snapshot.cycle_index)
+        reference_distances_m = np.fromiter(
+            (point.distance_m for point in first.reference.scan.points),
+            dtype=np.float64,
+        )
+        measured_distances_m = first.measured.scan.distances_m
+        observed_dropout |= bool(
+            np.any((reference_distances_m > 0.0) & (measured_distances_m == 0.0))
+        )
+        observed_distance_change |= not np.array_equal(
+            reference_distances_m,
+            measured_distances_m,
+        )
+
+    assert phases == {ScenarioPhase.FILLING, ScenarioPhase.COLLECTING}
+    assert cycle_indexes == {0, 1}
+    assert observed_dropout
+    assert observed_distance_change
 
 
 def test_generator_inputs_apply_shared_falling_material_events(tmp_path: Path) -> None:
