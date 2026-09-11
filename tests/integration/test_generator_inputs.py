@@ -20,7 +20,7 @@ from scrap_monitoring_lidar_generator.runtime import (
     build_rotation_schedulers,
     build_scenario_simulator,
 )
-from scrap_monitoring_lidar_generator.scenario import ScenarioPhase
+from scrap_monitoring_lidar_generator.scenario import FillPlan, ScenarioPhase, scenario_time_scale
 
 _ROOT = Path(__file__).parents[2]
 _EXAMPLES = _ROOT / "examples"
@@ -69,6 +69,22 @@ def test_builds_running_scenario_from_generator_inputs() -> None:
     assert updated.surface_volume_m3 > 0.0
     assert simulator.surface.boundary.contains(
         Vec2(*inputs.generator.scenario.inlet_positions_xy_m[0])
+    )
+
+
+def test_scenario_builder_scales_rate_change_durations() -> None:
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    simulator = build_scenario_simulator(inputs)
+    plan = simulator.phase_plan
+    assert isinstance(plan, FillPlan)
+    time_scale = scenario_time_scale(inputs.generator.scenario.mean_fill_duration_s)
+    configured_range = inputs.generator.scenario.fill_rate_change_duration_s_range
+    scaled_range = configured_range[0] * time_scale, configured_range[1] * time_scale
+
+    assert plan.rate_profile.segments
+    assert all(
+        scaled_range[0] <= segment.duration_s <= scaled_range[1]
+        for segment in plan.rate_profile.segments
     )
 
 
@@ -157,6 +173,27 @@ def test_rejects_invalid_measurement_runtime_sensor_sets() -> None:
             reference_runtime=reference_runtime,
             generators=(generator, generator),
         )
+
+
+def test_generator_inputs_scale_and_apply_dropout_intervals(tmp_path: Path) -> None:
+    generator = _load_example("generator.v1.json")
+    environment = _load_example("environment.v1.json")
+    quality = _load_example("quality-profile.v1.json")
+    generator["scenario"]["mean_fill_duration_s"] = 86_400
+    generator["measurement"]["distortions"]["dropout"] = {
+        "enabled": True,
+        "event_interval_s_range": [1, 1],
+        "duration_s_range": [1, 1],
+    }
+    path = _write_inputs(tmp_path, generator, environment, quality)
+    runtime = build_measurement_generation_runtime(load_generator_inputs(path))
+
+    results = [runtime.next_completed_scans()[0] for _ in range(4)]
+    dropout_scan = results[-1].measured.scan
+
+    assert results[-1].measured.captured_elapsed_s == 1.0
+    assert bool(np.all(dropout_scan.distances_m == 0.0))
+    assert set(int(value) for value in np.unique(dropout_scan.qualities)) <= {0, 24}
 
 
 def test_rejects_quality_sensor_mismatch(tmp_path: Path) -> None:

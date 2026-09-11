@@ -58,6 +58,18 @@ def test_same_random_state_produces_identical_profile() -> None:
     assert profiles[0] == profiles[1]
 
 
+def test_long_profile_accepts_accumulated_boundary_rounding() -> None:
+    profile = create_smooth_rate_profile(
+        duration_s=86_400.0,
+        factor_range=(0.5, 1.5),
+        change_duration_s_range=(60.0, 240.0),
+        rng=random.Random(2026),
+    )
+
+    assert len(profile.segments) > 100
+    assert profile.integrated_factor_between(0.0, profile.duration_s) == profile.duration_s
+
+
 def test_one_sided_factor_range_produces_flat_exact_profile() -> None:
     profile = create_smooth_rate_profile(
         duration_s=10.0,

@@ -61,19 +61,19 @@ class SmoothRateProfile:
         if not math.isfinite(self.duration_s) or self.duration_s <= 0.0:
             raise ValueError("rate profile duration must be a finite positive number")
 
+        tolerance_s = max(1.0, self.duration_s) * _PROFILE_TOLERANCE
         previous_end_s = 0.0
         prefix_integrals_s = [0.0]
         for segment in self.segments:
-            if segment.start_s < previous_end_s - _PROFILE_TOLERANCE:
+            if segment.start_s < previous_end_s - tolerance_s:
                 raise ValueError("rate profile segments must not overlap")
-            if segment.end_s > self.duration_s + _PROFILE_TOLERANCE:
+            if segment.end_s > self.duration_s + tolerance_s:
                 raise ValueError("rate profile segment must end within the profile duration")
             previous_end_s = segment.end_s
             prefix_integrals_s.append(
                 prefix_integrals_s[-1] + segment.deviation * segment.duration_s / 2.0
             )
 
-        tolerance_s = max(1.0, self.duration_s) * _PROFILE_TOLERANCE
         if not math.isclose(
             prefix_integrals_s[-1],
             0.0,

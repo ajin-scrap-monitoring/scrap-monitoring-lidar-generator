@@ -1,5 +1,6 @@
 """Sensor rotation and measurement generation."""
 
+from scrap_monitoring_lidar_generator.measurement.dropout import SensorDropoutScheduler
 from scrap_monitoring_lidar_generator.measurement.generation import MeasurementGenerator
 from scrap_monitoring_lidar_generator.measurement.models import (
     MeasuredScan,
@@ -30,6 +31,7 @@ __all__ = [
     "ReferenceScan",
     "ReferenceScanner",
     "ScheduledScan",
+    "SensorDropoutScheduler",
     "SensorRotationScheduler",
     "TimedMeasuredScan",
     "TimedReferenceScan",
