@@ -1,6 +1,10 @@
 """Measurement runtime assembly from validated generator inputs."""
 
-from scrap_monitoring_lidar_generator.configuration import GeneratorInputs, build_sensor_frame
+from scrap_monitoring_lidar_generator.configuration import (
+    GeneratorInputs,
+    build_environment_scene,
+    build_sensor_frame,
+)
 from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
 from scrap_monitoring_lidar_generator.measurement import (
     FallingMaterialSettings,
@@ -8,6 +12,7 @@ from scrap_monitoring_lidar_generator.measurement import (
     SensorDropoutScheduler,
     SensorRotationScheduler,
     SpatialDistortionTimeline,
+    VoidSettings,
     create_seeded_rotation_scheduler,
 )
 from scrap_monitoring_lidar_generator.scenario import (
@@ -94,20 +99,46 @@ def build_spatial_distortion_timeline(
     """Build the shared spatial event timeline when an implemented cause is enabled."""
     config = inputs.generator
     falling = config.measurement.distortions.falling_material
-    if not falling.enabled:
+    voids = config.measurement.distortions.voids
+    if not falling.enabled and not voids.enabled:
         return None
 
     time_scale = scenario_time_scale(config.scenario.mean_fill_duration_s)
     boundary = Polygon2(tuple(Vec2(x, y) for x, y in inputs.environment.boundary_xy_m))
     return SpatialDistortionTimeline(
         boundary=boundary,
-        falling_material=FallingMaterialSettings(
-            event_rate_per_s=scale_event_rate_per_s(falling.event_rate_per_s, time_scale),
-            radius_m_range=falling.radius_m_range,
-            duration_s_range=scale_duration_range(falling.duration_s_range, time_scale),
-            distance_reduction_m_range=falling.distance_reduction_m_range,
-            inlet_positions=tuple(Vec2(x, y) for x, y in config.scenario.inlet_positions_xy_m),
-            placement_radius_m=config.scenario.surface.pile_spread_radius_m,
+        static_scene=build_environment_scene(inputs.environment),
+        falling_material=(
+            FallingMaterialSettings(
+                event_rate_per_s=scale_event_rate_per_s(
+                    falling.event_rate_per_s,
+                    time_scale,
+                ),
+                radius_m_range=falling.radius_m_range,
+                duration_s_range=scale_duration_range(
+                    falling.duration_s_range,
+                    time_scale,
+                ),
+                distance_reduction_m_range=falling.distance_reduction_m_range,
+                inlet_positions=tuple(Vec2(x, y) for x, y in config.scenario.inlet_positions_xy_m),
+                placement_radius_m=config.scenario.surface.pile_spread_radius_m,
+            )
+            if falling.enabled
+            else None
+        ),
+        voids=(
+            VoidSettings(
+                surface_area_ratio=voids.surface_area_ratio,
+                radius_m_range=voids.radius_m_range,
+                duration_s_range=scale_duration_range(
+                    voids.duration_s_range,
+                    time_scale,
+                ),
+                cover_height_increase_m=voids.cover_height_increase_m,
+                distance_increase_m_range=voids.distance_increase_m_range,
+            )
+            if voids.enabled
+            else None
         ),
         seed=config.seed,
     )

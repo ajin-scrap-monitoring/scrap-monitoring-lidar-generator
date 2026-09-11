@@ -25,7 +25,10 @@ from scrap_monitoring_lidar_generator.measurement.spatial import (
     FallingMaterialSettings,
     SpatialDistanceResolver,
     SpatialDistortionTimeline,
+    VoidEvent,
+    VoidSettings,
     resolve_falling_material_distances,
+    resolve_void_distances,
 )
 
 __all__ = [
@@ -46,6 +49,9 @@ __all__ = [
     "SpatialDistortionTimeline",
     "TimedMeasuredScan",
     "TimedReferenceScan",
+    "VoidEvent",
+    "VoidSettings",
     "create_seeded_rotation_scheduler",
     "resolve_falling_material_distances",
+    "resolve_void_distances",
 ]

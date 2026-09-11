@@ -152,6 +152,7 @@ class MeasurementGenerator:
                 reference,
                 frame=self._sensor_frame,
                 min_distance_m=self._min_distance_m,
+                max_distance_m=self._max_distance_m,
             )
         self._apply_reflection_error(reference, reference_distances, distances_m)
         if self._dropout_scheduler is not None:
