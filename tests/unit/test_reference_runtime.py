@@ -16,7 +16,11 @@ from scrap_monitoring_lidar_generator.measurement import (
     ReferenceScanner,
     SensorRotationScheduler,
 )
-from scrap_monitoring_lidar_generator.runtime import ReferenceGenerationRuntime
+from scrap_monitoring_lidar_generator.runtime import (
+    PerformanceRecorder,
+    PerformanceStage,
+    ReferenceGenerationRuntime,
+)
 from scrap_monitoring_lidar_generator.scenario import (
     HeightField,
     ScenarioSettings,
@@ -169,6 +173,33 @@ def test_notifies_observer_before_each_scenario_interval() -> None:
     runtime.next_completed_scans()
 
     assert observer.intervals == [(0.0, 0.5), (0.5, 1.0)]
+
+
+def test_records_scene_and_scan_generation_durations() -> None:
+    current_ns = -10
+
+    def clock_ns() -> int:
+        nonlocal current_ns
+        current_ns += 10
+        return current_ns
+
+    recorder = PerformanceRecorder()
+    scenario = _scenario()
+    runtime = ReferenceGenerationRuntime(
+        scenario=scenario,
+        scene=_scene(scenario),
+        scanners=(_scanner("sensor-a"),),
+        schedulers=(_scheduler("sensor-a"),),
+        performance=recorder,
+        clock_ns=clock_ns,
+    )
+
+    runtime.next_completed_scans()
+
+    scene_summary = recorder.summary(PerformanceStage.SCENE_UPDATE)
+    scan_summary = recorder.summary(PerformanceStage.SCAN_GENERATION)
+    assert (scene_summary.samples, scene_summary.total_ns) == (2, 20)
+    assert (scan_summary.samples, scan_summary.total_ns) == (2, 20)
 
 
 def test_rejects_mismatched_or_preadvanced_inputs() -> None:

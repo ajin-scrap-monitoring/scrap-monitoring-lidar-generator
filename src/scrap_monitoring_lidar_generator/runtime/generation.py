@@ -1,5 +1,8 @@
 """Runtime orchestration for reference and final measured scans."""
 
+import time
+from collections.abc import Callable
+
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
 from scrap_monitoring_lidar_generator.measurement import (
     MeasurementGenerator,
@@ -10,6 +13,10 @@ from scrap_monitoring_lidar_generator.runtime.diagnostics import MeasurementDiag
 from scrap_monitoring_lidar_generator.runtime.measurement import (
     build_measurement_generators,
     build_spatial_distortion_timeline,
+)
+from scrap_monitoring_lidar_generator.runtime.performance import (
+    PerformanceRecorder,
+    PerformanceStage,
 )
 from scrap_monitoring_lidar_generator.runtime.reference import (
     ReferenceGenerationRuntime,
@@ -22,8 +29,10 @@ class MeasurementGenerationRuntime:
     """Generate separate reference and final scans in simulation-time order."""
 
     __slots__ = (
+        "_clock_ns",
         "_diagnostics_sink",
         "_generators",
+        "_performance",
         "_reference_runtime",
         "_spatial_distortions",
     )
@@ -35,6 +44,8 @@ class MeasurementGenerationRuntime:
         generators: tuple[MeasurementGenerator, ...],
         spatial_distortions: SpatialDistortionTimeline | None = None,
         diagnostics_sink: MeasurementDiagnosticsSink | None = None,
+        performance: PerformanceRecorder | None = None,
+        clock_ns: Callable[[], int] = time.perf_counter_ns,
     ) -> None:
         generators_by_id: dict[str, MeasurementGenerator] = {}
         for generator in generators:
@@ -48,6 +59,8 @@ class MeasurementGenerationRuntime:
         self._generators = generators_by_id
         self._spatial_distortions = spatial_distortions
         self._diagnostics_sink = diagnostics_sink
+        self._performance = performance
+        self._clock_ns = clock_ns
 
     @property
     def scenario(self) -> ScenarioSimulator:
@@ -66,10 +79,20 @@ class MeasurementGenerationRuntime:
 
     def next_completed_scans(self) -> tuple[MeasurementResult, ...]:
         """Generate final measurements for the next completed reference scans."""
-        results = tuple(
-            self._generators[reference.sensor_id].generate(reference)
-            for reference in self._reference_runtime.next_completed_scans()
-        )
+        results = []
+        for reference in self._reference_runtime.next_completed_scans():
+            if self._performance is None:
+                result = self._generators[reference.sensor_id].generate(reference)
+            else:
+                started_ns = self._clock_ns()
+                try:
+                    result = self._generators[reference.sensor_id].generate(reference)
+                finally:
+                    self._performance.record(
+                        PerformanceStage.SCAN_GENERATION,
+                        self._clock_ns() - started_ns,
+                    )
+            results.append(result)
         if self._diagnostics_sink is not None:
             for result in results:
                 self._diagnostics_sink.record(result, self.scenario)
@@ -77,13 +100,14 @@ class MeasurementGenerationRuntime:
             self._spatial_distortions.discard_before(
                 self._reference_runtime.earliest_pending_elapsed_s
             )
-        return results
+        return tuple(results)
 
 
 def build_measurement_generation_runtime(
     inputs: GeneratorInputs,
     *,
     diagnostics_sink: MeasurementDiagnosticsSink | None = None,
+    performance: PerformanceRecorder | None = None,
 ) -> MeasurementGenerationRuntime:
     """Assemble complete reference, distance-noise, and quality generation."""
     spatial_distortions = build_spatial_distortion_timeline(inputs)
@@ -91,6 +115,7 @@ def build_measurement_generation_runtime(
         reference_runtime=build_reference_generation_runtime(
             inputs,
             observers=(() if spatial_distortions is None else (spatial_distortions,)),
+            performance=performance,
         ),
         generators=build_measurement_generators(
             inputs,
@@ -98,4 +123,5 @@ def build_measurement_generation_runtime(
         ),
         spatial_distortions=spatial_distortions,
         diagnostics_sink=diagnostics_sink,
+        performance=performance,
     )

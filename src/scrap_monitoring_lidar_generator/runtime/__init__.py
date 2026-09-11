@@ -22,6 +22,11 @@ from scrap_monitoring_lidar_generator.runtime.measurement import (
     build_rotation_schedulers,
     build_spatial_distortion_timeline,
 )
+from scrap_monitoring_lidar_generator.runtime.performance import (
+    DurationSummary,
+    PerformanceRecorder,
+    PerformanceStage,
+)
 from scrap_monitoring_lidar_generator.runtime.reference import (
     ReferenceGenerationRuntime,
     ScenarioTimeObserver,
@@ -32,10 +37,13 @@ from scrap_monitoring_lidar_generator.runtime.transport import build_scan_sender
 
 __all__ = [
     "DeadlineWaiter",
+    "DurationSummary",
     "GeneratorRunSummary",
     "JsonLinesDiagnosticsWriter",
     "MeasurementDiagnosticsSink",
     "MeasurementGenerationRuntime",
+    "PerformanceRecorder",
+    "PerformanceStage",
     "ReferenceGenerationRuntime",
     "ScanMessageSink",
     "ScenarioTimeObserver",
