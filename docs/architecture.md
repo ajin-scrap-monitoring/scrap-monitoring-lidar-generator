@@ -116,11 +116,15 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 .github/
   workflows/
     ci.yml
+    release.yml
+.dockerignore
 .python-version
+Dockerfile
 contracts/
   v1/
 docs/
   architecture.md
+  deployment.md
   dependencies.md
   development-plan.md
   project-spec.md
