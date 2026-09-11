@@ -31,6 +31,8 @@ def _settings(
     inlet_switch_activation_ratio: float = 0.25,
     inlet_switch_height_difference_m: float = 0.1,
     pile_spread_radius_m: float = 0.3,
+    roughness_height_range_m: tuple[float, float] = (0.0, 0.0),
+    roughness_radius_range_m: tuple[float, float] = (0.2, 0.3),
 ) -> ScenarioSettings:
     return ScenarioSettings(
         mean_fill_duration_s=mean_fill_duration_s,
@@ -47,6 +49,8 @@ def _settings(
         inlet_comparison_radius_m=0.2,
         surface_update_interval_s=surface_update_interval_s,
         pile_spread_radius_m=pile_spread_radius_m,
+        roughness_height_range_m=roughness_height_range_m,
+        roughness_radius_range_m=roughness_radius_range_m,
     )
 
 
@@ -112,6 +116,55 @@ def test_same_seed_and_times_produce_identical_states() -> None:
             simulators[0].surface.heights_m,
             simulators[1].surface.heights_m,
         )
+
+
+def test_enabled_roughness_changes_shape_but_not_planned_volume() -> None:
+    rough = ScenarioSimulator(
+        _surface(),
+        _settings(
+            roughness_height_range_m=(0.1, 0.1),
+            roughness_radius_range_m=(0.3, 0.3),
+        ),
+        seed=2027,
+    )
+    smooth = ScenarioSimulator(_surface(), _settings(), seed=2027)
+
+    rough_snapshot = rough.advance_to(2.5)
+    smooth_snapshot = smooth.advance_to(2.5)
+
+    assert rough_snapshot.surface_volume_m3 == pytest.approx(smooth_snapshot.surface_volume_m3)
+    assert not np.array_equal(rough.surface.heights_m, smooth.surface.heights_m)
+    assert np.min(rough.surface.heights_m) >= rough.surface.floor_z_m
+    assert np.max(rough.surface.heights_m) <= rough.surface.top_z_m
+
+
+def test_roughness_random_consumption_does_not_change_cycle_targets() -> None:
+    rough = ScenarioSimulator(
+        _surface(),
+        _settings(
+            roughness_height_range_m=(-0.1, 0.1),
+            roughness_radius_range_m=(0.2, 0.4),
+        ),
+        seed=2028,
+    )
+    smooth = ScenarioSimulator(_surface(), _settings(), seed=2028)
+
+    rough_fill = rough.phase_plan
+    smooth_fill = smooth.phase_plan
+    assert rough_fill.duration_s == smooth_fill.duration_s
+    assert isinstance(rough_fill, FillPlan)
+    assert isinstance(smooth_fill, FillPlan)
+    rough.advance_to(rough_fill.ends_at_s)
+    smooth.advance_to(smooth_fill.ends_at_s)
+    rough_collection = rough.phase_plan
+    smooth_collection = smooth.phase_plan
+
+    assert isinstance(rough_collection, CollectionPlan)
+    assert isinstance(smooth_collection, CollectionPlan)
+    assert rough_collection.duration_s == smooth_collection.duration_s
+    assert rough_collection.starting_volume_m3 == pytest.approx(
+        smooth_collection.starting_volume_m3
+    )
 
 
 def test_rate_profile_random_consumption_does_not_change_cycle_targets() -> None:

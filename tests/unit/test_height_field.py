@@ -182,6 +182,83 @@ def test_uniform_removal_preserves_requested_volume(square_boundary: Polygon2) -
     assert np.all(surface.heights_m == surface.floor_z_m)
 
 
+@pytest.mark.parametrize("peak_delta_m", [0.2, -0.2])
+def test_local_roughness_redistributes_height_without_changing_volume(
+    square_boundary: Polygon2,
+    peak_delta_m: float,
+) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=4.0,
+        cell_size_m=0.1,
+    )
+    surface.add_volume(4.0, center=Vec2(1.0, 0.5), spread_radius_m=2.0)
+    volume_before_m3 = surface.volume_m3
+    heights_before_m = surface.heights_m
+
+    change = surface.apply_local_roughness(
+        center=Vec2(1.0, 0.5),
+        radius_m=0.5,
+        peak_delta_m=peak_delta_m,
+    )
+
+    height_change_m = surface.heights_m - heights_before_m
+    assert change.requested_peak_delta_m == peak_delta_m
+    assert change.applied_peak_delta_m == pytest.approx(peak_delta_m)
+    assert surface.volume_m3 == pytest.approx(volume_before_m3, abs=1e-12)
+    assert np.min(height_change_m) < 0.0
+    assert np.max(height_change_m) > 0.0
+    if peak_delta_m > 0.0:
+        assert np.max(height_change_m) == pytest.approx(peak_delta_m)
+    else:
+        assert np.min(height_change_m) == pytest.approx(peak_delta_m)
+    assert np.min(surface.heights_m) >= surface.floor_z_m
+    assert np.max(surface.heights_m) <= surface.top_z_m
+
+
+def test_local_roughness_scales_to_available_material(square_boundary: Polygon2) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=1.0,
+        cell_size_m=0.1,
+    )
+    surface.add_volume(0.01, center=Vec2(1.0, 0.5), spread_radius_m=0.2)
+    volume_before_m3 = surface.volume_m3
+
+    change = surface.apply_local_roughness(
+        center=Vec2(1.0, 0.5),
+        radius_m=0.5,
+        peak_delta_m=0.5,
+    )
+
+    assert 0.0 < change.applied_peak_delta_m < change.requested_peak_delta_m
+    assert surface.volume_m3 == pytest.approx(volume_before_m3, abs=1e-12)
+    assert np.min(surface.heights_m) >= surface.floor_z_m
+    assert np.max(surface.heights_m) <= surface.top_z_m
+
+
+def test_local_roughness_returns_zero_when_grid_cannot_represent_feature(
+    square_boundary: Polygon2,
+) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=1.0,
+        cell_size_m=0.5,
+    )
+
+    change = surface.apply_local_roughness(
+        center=Vec2(1.0, 0.5),
+        radius_m=0.01,
+        peak_delta_m=0.2,
+    )
+
+    assert change.applied_peak_delta_m == 0.0
+    assert surface.volume_m3 == 0.0
+
+
 def test_same_operations_produce_same_height_field(square_boundary: Polygon2) -> None:
     surfaces = [
         HeightField(square_boundary, floor_z_m=0.0, top_z_m=3.0, cell_size_m=0.2) for _ in range(2)
@@ -264,3 +341,22 @@ def test_rejects_invalid_change_location(square_boundary: Polygon2) -> None:
         surface.mean_height_within(Vec2(3.0, 0.5), 0.5)
     with pytest.raises(ValueError, match="comparison radius"):
         surface.mean_height_within(Vec2(0.5, 0.5), 0.0)
+
+    with pytest.raises(ValueError, match="roughness center"):
+        surface.apply_local_roughness(
+            center=Vec2(3.0, 0.5),
+            radius_m=0.5,
+            peak_delta_m=0.1,
+        )
+    with pytest.raises(ValueError, match="roughness radius"):
+        surface.apply_local_roughness(
+            center=Vec2(0.5, 0.5),
+            radius_m=0.0,
+            peak_delta_m=0.1,
+        )
+    with pytest.raises(ValueError, match="roughness peak"):
+        surface.apply_local_roughness(
+            center=Vec2(0.5, 0.5),
+            radius_m=0.5,
+            peak_delta_m=float("nan"),
+        )
