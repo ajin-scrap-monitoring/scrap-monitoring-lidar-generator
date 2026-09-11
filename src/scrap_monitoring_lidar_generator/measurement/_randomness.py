@@ -27,3 +27,11 @@ def derive_sensor_seed(seed: int, sensor_id: str, stream_name: str) -> int:
         + stream_bytes
     )
     return int.from_bytes(hashlib.sha256(payload).digest()[:16], byteorder="big")
+
+
+def derive_global_seed(seed: int, stream_name: str) -> int:
+    """Derive one stable 128-bit seed for a shared measurement responsibility."""
+    require_seed(seed, "measurement seed")
+    stream_bytes = stream_name.encode("ascii")
+    payload = b"measurement\0" + seed.to_bytes(8, byteorder="big") + b"global\0" + stream_bytes
+    return int.from_bytes(hashlib.sha256(payload).digest()[:16], byteorder="big")

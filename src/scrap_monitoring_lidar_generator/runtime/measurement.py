@@ -1,13 +1,20 @@
 """Measurement runtime assembly from validated generator inputs."""
 
-from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
+from scrap_monitoring_lidar_generator.configuration import GeneratorInputs, build_sensor_frame
+from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
 from scrap_monitoring_lidar_generator.measurement import (
+    FallingMaterialSettings,
     MeasurementGenerator,
     SensorDropoutScheduler,
     SensorRotationScheduler,
+    SpatialDistortionTimeline,
     create_seeded_rotation_scheduler,
 )
-from scrap_monitoring_lidar_generator.scenario import scale_duration_range, scenario_time_scale
+from scrap_monitoring_lidar_generator.scenario import (
+    scale_duration_range,
+    scale_event_rate_per_s,
+    scenario_time_scale,
+)
 
 
 def build_rotation_schedulers(
@@ -28,6 +35,8 @@ def build_rotation_schedulers(
 
 def build_measurement_generators(
     inputs: GeneratorInputs,
+    *,
+    spatial_distortions: SpatialDistortionTimeline | None = None,
 ) -> tuple[MeasurementGenerator, ...]:
     """Build sensor-specific distance and quality generators in environment order."""
     measurement = inputs.generator.measurement
@@ -72,6 +81,33 @@ def build_measurement_generators(
                 else None
             ),
             seed=inputs.generator.seed,
+            spatial_distortions=spatial_distortions,
+            sensor_frame=(build_sensor_frame(sensor) if spatial_distortions is not None else None),
         )
         for sensor in inputs.environment.sensors
+    )
+
+
+def build_spatial_distortion_timeline(
+    inputs: GeneratorInputs,
+) -> SpatialDistortionTimeline | None:
+    """Build the shared spatial event timeline when an implemented cause is enabled."""
+    config = inputs.generator
+    falling = config.measurement.distortions.falling_material
+    if not falling.enabled:
+        return None
+
+    time_scale = scenario_time_scale(config.scenario.mean_fill_duration_s)
+    boundary = Polygon2(tuple(Vec2(x, y) for x, y in inputs.environment.boundary_xy_m))
+    return SpatialDistortionTimeline(
+        boundary=boundary,
+        falling_material=FallingMaterialSettings(
+            event_rate_per_s=scale_event_rate_per_s(falling.event_rate_per_s, time_scale),
+            radius_m_range=falling.radius_m_range,
+            duration_s_range=scale_duration_range(falling.duration_s_range, time_scale),
+            distance_reduction_m_range=falling.distance_reduction_m_range,
+            inlet_positions=tuple(Vec2(x, y) for x, y in config.scenario.inlet_positions_xy_m),
+            placement_radius_m=config.scenario.surface.pile_spread_radius_m,
+        ),
+        seed=config.seed,
     )

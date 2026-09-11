@@ -7,9 +7,11 @@ from scrap_monitoring_lidar_generator.runtime.generation import (
 from scrap_monitoring_lidar_generator.runtime.measurement import (
     build_measurement_generators,
     build_rotation_schedulers,
+    build_spatial_distortion_timeline,
 )
 from scrap_monitoring_lidar_generator.runtime.reference import (
     ReferenceGenerationRuntime,
+    ScenarioTimeObserver,
     build_reference_generation_runtime,
 )
 from scrap_monitoring_lidar_generator.runtime.scenario import build_scenario_simulator
@@ -17,9 +19,11 @@ from scrap_monitoring_lidar_generator.runtime.scenario import build_scenario_sim
 __all__ = [
     "MeasurementGenerationRuntime",
     "ReferenceGenerationRuntime",
+    "ScenarioTimeObserver",
     "build_measurement_generation_runtime",
     "build_measurement_generators",
     "build_reference_generation_runtime",
     "build_rotation_schedulers",
     "build_scenario_simulator",
+    "build_spatial_distortion_timeline",
 ]
