@@ -27,6 +27,7 @@ jobs:
           python-version: "3.14.4"
 
       - name: Validate release target
+        id: release
         shell: bash
         run: |
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -42,6 +43,13 @@ jobs:
           fi
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+          image_name="ghcr.io/${GITHUB_REPOSITORY,,}"
+          {
+            echo "image_name=$image_name"
+            echo "version=$package_version"
+            echo "version_ref=$image_name:$package_version"
+            echo "revision_ref=$image_name:sha-$GITHUB_SHA"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -82,12 +90,78 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          tags: |
+            ${{ steps.release.outputs.version_ref }}
+            ${{ steps.release.outputs.revision_ref }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
           provenance: mode=max
           sbom: true
+
+      - name: Verify published OCI image
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_NAME: ${{ steps.release.outputs.image_name }}
+          VERSION_REF: ${{ steps.release.outputs.version_ref }}
+          REVISION_REF: ${{ steps.release.outputs.revision_ref }}
+        run: |
+          version_digest="$(
+            docker buildx imagetools inspect "$VERSION_REF" \
+              --format '{{.Manifest.Digest}}'
+          )"
+          revision_digest="$(
+            docker buildx imagetools inspect "$REVISION_REF" \
+              --format '{{.Manifest.Digest}}'
+          )"
+          if [[ ! "$version_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "invalid version manifest digest: $version_digest" >&2
+            exit 1
+          fi
+          if [[ "$version_digest" != "$revision_digest" ]]; then
+            echo "version and revision tags resolve to different manifests" >&2
+            exit 1
+          fi
+
+          manifest_path="$RUNNER_TEMP/release-manifest.json"
+          docker buildx imagetools inspect --raw "$VERSION_REF" > "$manifest_path"
+          python - "$manifest_path" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as source:
+              manifest = json.load(source)
+          platforms = {
+              (
+                  entry.get("platform", {}).get("os"),
+                  entry.get("platform", {}).get("architecture"),
+              )
+              for entry in manifest.get("manifests", ())
+          }
+          required = {("linux", "amd64"), ("linux", "arm64")}
+          missing = required - platforms
+          if missing:
+              raise SystemExit(f"release manifest is missing platforms: {sorted(missing)}")
+          PY
+
+          package_name="${IMAGE_NAME##*/}"
+          visibility=""
+          for attempt in 1 2 3 4 5; do
+            visibility="$(
+              gh api "/orgs/$GITHUB_REPOSITORY_OWNER/packages/container/$package_name" \
+                --jq .visibility 2>/dev/null || true
+            )"
+            if [[ "$visibility" == "public" ]]; then
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$visibility" != "public" ]]; then
+            echo "GHCR package visibility is not public: ${visibility:-unavailable}" >&2
+            exit 1
+          fi
+          printf '%s@%s\n' "$IMAGE_NAME" "$version_digest" > dist/oci-image.txt
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
