@@ -1,14 +1,16 @@
 """Strict MessagePack encoding and decoding for v1 scan bodies."""
 
 import math
-from collections.abc import Iterable
-from importlib import import_module
-from typing import Protocol, cast
 
 import numpy as np
 from numpy.typing import NDArray
 
 from scrap_monitoring_lidar_generator.measurement import MeasuredScan
+from scrap_monitoring_lidar_generator.transport._messagepack import (
+    MessagePackDocumentError,
+    pack_messagepack_document,
+    unpack_messagepack_map,
+)
 from scrap_monitoring_lidar_generator.transport.models import (
     MAX_SIGNED_64_BIT,
     MAX_VALID_DISTANCE_M,
@@ -30,19 +32,6 @@ _FIELDS = frozenset(
         "points",
     }
 )
-
-
-class _MessagePackModule(Protocol):
-    def packb(self, value: object, **options: object) -> bytes:
-        """Encode one object."""
-        ...
-
-    def unpackb(self, payload: bytes, **options: object) -> object:
-        """Decode one complete object."""
-        ...
-
-
-_msgpack = cast(_MessagePackModule, import_module("msgpack"))
 
 
 class ScanCodecError(ValueError):
@@ -71,39 +60,15 @@ def encode_scan_message(message: ScanMessage) -> bytes:
         "captured_at": message.captured_at,
         "points": points,
     }
-    return _msgpack.packb(
-        document,
-        use_bin_type=True,
-        use_single_float=False,
-        strict_types=True,
-    )
+    return pack_messagepack_document(document)
 
 
 def decode_scan_message(payload: bytes) -> ScanMessage:
     """Decode exactly one v1 scan body and reject ambiguous or invalid input."""
-    if not isinstance(payload, bytes) or not payload:
-        raise ScanCodecError("scan payload must be non-empty bytes")
     try:
-        decoded = _msgpack.unpackb(
-            payload,
-            raw=False,
-            use_list=False,
-            strict_map_key=True,
-            object_pairs_hook=_unique_string_map,
-            max_str_len=len(payload),
-            max_bin_len=len(payload),
-            max_array_len=len(payload),
-            max_map_len=len(payload),
-            max_ext_len=len(payload),
-        )
-    except ScanCodecError:
-        raise
-    except Exception as error:
-        raise ScanCodecError("scan payload is not one complete valid MessagePack object") from error
-
-    if not isinstance(decoded, dict):
-        raise ScanCodecError("scan payload root must be a map")
-    document = cast(dict[str, object], decoded)
+        document = unpack_messagepack_map(payload, "scan payload")
+    except MessagePackDocumentError as error:
+        raise ScanCodecError(str(error)) from error
     actual_fields = set(document)
     if actual_fields != _FIELDS:
         missing = sorted(_FIELDS - actual_fields)
@@ -140,17 +105,6 @@ def decode_scan_message(payload: bytes) -> ScanMessage:
             qualities=qualities,
         ),
     )
-
-
-def _unique_string_map(pairs: Iterable[tuple[object, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if type(key) is not str:
-            raise ScanCodecError("scan payload map keys must be strings")
-        if key in result:
-            raise ScanCodecError(f"scan payload contains duplicate map key: {key}")
-        result[key] = value
-    return result
 
 
 def _decode_points(

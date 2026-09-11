@@ -133,6 +133,22 @@ class DiagnosticsConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class TransportConfig:
+    """TCP delivery limits and timeout controls."""
+
+    host: str
+    port: int
+    max_message_body_bytes: int
+    buffer_max_age_s: float
+    buffer_max_bytes: int
+    connect_timeout_s: float
+    send_timeout_s: float
+    ack_timeout_s: float
+    reconnect_initial_delay_s: float
+    reconnect_max_delay_s: float
+
+
+@dataclass(frozen=True, slots=True)
 class GeneratorConfig:
     """Generator-only execution configuration."""
 
@@ -141,6 +157,7 @@ class GeneratorConfig:
     quality_profile_path: Path
     scenario: ScenarioConfig
     measurement: MeasurementConfig
+    transport: TransportConfig
     diagnostics: DiagnosticsConfig
 
 

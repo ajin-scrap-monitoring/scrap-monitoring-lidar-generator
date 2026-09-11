@@ -9,7 +9,11 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
 from scrap_monitoring_lidar_generator.transport import (
+    AckMessage,
+    ErrorMessage,
+    decode_response_message,
     decode_scan_message,
+    encode_response_message,
     encode_scan_message,
 )
 
@@ -26,6 +30,8 @@ def _load_json(path: Path) -> Any:
     "name",
     [
         "environment.schema.json",
+        "ack.schema.json",
+        "error.schema.json",
         "generator.schema.json",
         "quality-profile.schema.json",
         "scan.schema.json",
@@ -103,6 +109,69 @@ def test_messagepack_scan_fixture_matches_human_readable_contract() -> None:
     assert decoded == expected
     assert encode_scan_message(message) == payload
     Draft202012Validator(schema).validate(decoded)
+
+
+@pytest.mark.parametrize("name", ["ack", "error"])
+def test_messagepack_response_fixture_matches_human_readable_contract(name: str) -> None:
+    schema = _load_json(_CONTRACTS / f"{name}.schema.json")
+    expected = _load_json(_FIXTURES / f"{name}.v1.json")
+    payload = bytes.fromhex(
+        (_FIXTURES / f"{name}.v1.msgpack.hex").read_text(encoding="ascii").strip()
+    )
+
+    response = decode_response_message(payload)
+    if isinstance(response, AckMessage):
+        decoded = {
+            "protocol_version": response.protocol_version,
+            "type": response.message_type,
+            "run_id": response.identity.run_id,
+            "sensor_id": response.identity.sensor_id,
+            "scan_id": response.identity.scan_id,
+        }
+    else:
+        assert isinstance(response, ErrorMessage)
+        decoded = {
+            "protocol_version": response.protocol_version,
+            "type": response.message_type,
+            "code": response.code.value,
+        }
+        if response.message is not None:
+            decoded["message"] = response.message
+        if response.identity is not None:
+            decoded.update(
+                {
+                    "run_id": response.identity.run_id,
+                    "sensor_id": response.identity.sensor_id,
+                    "scan_id": response.identity.scan_id,
+                }
+            )
+
+    assert decoded == expected
+    assert encode_response_message(response) == payload
+    Draft202012Validator(schema).validate(decoded)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        {
+            "protocol_version": 1,
+            "type": "error",
+            "code": "invalid_scan",
+        },
+        {
+            "protocol_version": 1,
+            "type": "error",
+            "code": "temporary_unavailable",
+            "run_id": "run-a",
+        },
+    ],
+)
+def test_error_contract_rejects_missing_identity_fields(error: dict[str, object]) -> None:
+    schema = _load_json(_CONTRACTS / "error.schema.json")
+
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(error)
 
 
 @pytest.mark.parametrize(

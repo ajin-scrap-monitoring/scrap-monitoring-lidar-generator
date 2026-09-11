@@ -1,0 +1,9 @@
+{
+  "protocol_version": 1,
+  "type": "error",
+  "code": "invalid_scan",
+  "message": "scan body failed validation",
+  "run_id": "synthetic-run-a",
+  "sensor_id": "sensor-a",
+  "scan_id": 1
+}

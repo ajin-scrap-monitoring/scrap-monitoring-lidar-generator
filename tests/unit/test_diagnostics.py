@@ -145,7 +145,7 @@ def test_writer_rejects_unknown_sensor_stale_scenario_and_use_after_close(
         writer.__enter__()
 
 
-def test_input_fingerprint_uses_generation_values_but_not_paths_or_diagnostics(
+def test_input_fingerprint_uses_generation_values_but_not_runtime_delivery_settings(
     tmp_path: Path,
 ) -> None:
     inputs = _inputs(tmp_path)
@@ -160,6 +160,12 @@ def test_input_fingerprint_uses_generation_values_but_not_paths_or_diagnostics(
                 enabled=not inputs.generator.diagnostics.enabled,
                 output_path=tmp_path / "elsewhere",
                 sample_scan_limit_per_sensor=999,
+            ),
+            transport=replace(
+                inputs.generator.transport,
+                host="relocated-receiver",
+                port=9_001,
+                ack_timeout_s=4.0,
             ),
         ),
     )

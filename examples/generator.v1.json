@@ -69,6 +69,18 @@
       }
     }
   },
+  "transport": {
+    "host": "receiver",
+    "port": 9000,
+    "max_message_body_bytes": 1048576,
+    "buffer_max_age_s": 5,
+    "buffer_max_bytes": 16777216,
+    "connect_timeout_s": 3,
+    "send_timeout_s": 2,
+    "ack_timeout_s": 2,
+    "reconnect_initial_delay_s": 0.5,
+    "reconnect_max_delay_s": 5
+  },
   "diagnostics": {
     "enabled": true,
     "output_path": "diagnostics",

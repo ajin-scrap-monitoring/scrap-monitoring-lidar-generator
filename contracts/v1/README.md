@@ -1,17 +1,19 @@
-# 입력 계약 버전 1
+# 입력 및 전송 계약 버전 1
 
 ## 적용 범위
 
-이 디렉토리는 공통 환경 및 스캔 입력과 생성 프로그램 전용 설정의 버전 1 계약을 관리한다. JSON Schema의 `2020-12`는 schema 문법의 판이며 이 프로젝트의 계약 버전과 구분한다.
+이 디렉토리는 공통 환경, 스캔 및 응답과 생성 프로그램 전용 설정의 버전 1 계약을 관리한다. JSON Schema의 `2020-12`는 schema 문법의 판이며 이 프로젝트의 계약 버전과 구분한다.
 
 | 파일 | 계약 |
 | --- | --- |
+| `ack.schema.json` | 정상 처리된 스캔의 ACK(Acknowledgement) 응답 |
 | `environment.schema.json` | 공통 환경 및 센서 설치 설정 |
-| `generator.schema.json` | 생성 시나리오, 측정과 진단 실행 설정 |
+| `error.schema.json` | 처리 실패 또는 거부 오류 응답 |
+| `generator.schema.json` | 생성 시나리오, 측정, 전송과 진단 실행 설정 |
 | `quality-profile.schema.json` | 센서별 유효 및 무효 거리 품질 빈도 |
 | `scan.schema.json` | MessagePack에서 디코딩한 스캔 본문 |
 
-`fixtures/scan.v1.json`은 사람이 검토하는 합성 원본이며 `fixtures/scan.v1.msgpack.hex`는 같은 본문을 인코딩한 바이트의 16진수 표현이다. codec의 출력은 두 fixture와 함께 검증한다.
+`fixtures/`의 JSON 파일은 사람이 검토하는 합성 원본이며 같은 이름의 `.msgpack.hex` 파일은 본문을 인코딩한 byte의 16진수 표현이다. codec의 출력은 두 표현과 함께 검증한다.
 
 버전 1 consumer는 schema에 없는 field를 거부한다. field 이름, 필수 여부, 자료형, 범위 또는 의미를 변경하면 새로운 계약 버전을 사용한다.
 
@@ -29,13 +31,13 @@ JSON Schema 검사에 더하여 다음 5개 의미 규칙을 적용한다.
 
 ## 생성 실행 설정
 
-`generator.schema.json`은 생성 프로그램만 사용하는 시나리오, 측정과 진단 설정이다. 전송 대상, message framing, ACK(Acknowledgement), buffer 및 재시도 설정은 수신 프로그램과 전송 계약을 확정한 뒤 별도 계약으로 관리한다.
+`generator.schema.json`은 생성 프로그램만 사용하는 시나리오, 측정, 전송과 진단 설정이다. 생성 프로그램은 TCP(Transmission Control Protocol) client이고 수신 프로그램은 TCP server다. 생성 프로그램은 여러 스캔을 지속 연결로 전송한다.
 
 설정의 `environment_path`, `quality_profile_path`와 진단 출력 경로가 상대 경로이면 생성 실행 설정 파일이 있는 디렉토리를 기준으로 해석한다. 모든 조정값은 설정에 명시하며 schema가 암묵적인 기본값을 제공하지 않는다.
 
 `fill_duration_factor_range`는 회차별 적재 목표 시간을 평균 적재 시간에 대한 배수로 정한다. `collection_duration_factor_range`는 회차별 수거 목표 시간을 평균 적재 시간에 대한 배수로 정한다. 적재 및 수거 속도 배수 범위는 각 회차의 평균 속도를 기준으로 하며 이름이 `_s_range`로 끝나는 시간 범위는 시뮬레이션 초 단위다.
 
-JSON Schema 검사에 더하여 다음 8개 의미 규칙을 적용한다.
+JSON Schema 검사에 더하여 다음 9개 의미 규칙을 적용한다.
 
 - 두 값으로 구성된 모든 범위의 최솟값 우선 순서
 - 평균 1을 중심으로 대칭인 회차별 적재 시간 배수 범위
@@ -45,6 +47,7 @@ JSON Schema 검사에 더하여 다음 8개 의미 규칙을 적용한다.
 - 중복되지 않고 환경 경계 안에 있는 투입 위치
 - 환경 설정과 정확히 일치하는 품질 분포의 센서 식별자 집합
 - 중복되지 않는 품질 분포의 센서 식별자
+- 재연결 최대 지연 이하의 재연결 초기 지연
 
 품질 빈도 객체의 key는 `0`부터 `255`까지의 정수 문자열이다. 객체에 없는 품질 값의 빈도는 0이며 유효 거리와 무효 거리 빈도 객체는 각각 하나 이상의 양의 빈도를 포함한다.
 
@@ -69,3 +72,42 @@ JSON Schema 검사에 더하여 다음 8개 의미 규칙을 적용한다.
 각 측정점은 `[angle_deg, distance_m, quality]` 순서의 배열이다. MessagePack 송신 시 각도와 거리는 64비트 부동소수점으로 인코딩하고 품질은 8비트 범위의 정수 값으로 인코딩한다. 측정점 순서는 생성 또는 수집 순서를 유지한다.
 
 각도와 거리는 유한한 수여야 한다. `angle_deg`의 범위는 `0 <= angle_deg < 360`이다. `distance_m`은 무효 측정의 0 또는 `0.05 <= distance_m <= 30` 범위의 유효 거리다. `quality`의 범위는 `0 <= quality <= 255`다.
+
+## 전송 framing
+
+각 TCP frame은 4 byte unsigned big-endian 정수와 그 정수가 나타내는 길이의 MessagePack 본문으로 구성한다. 길이는 접두부를 제외한 본문 byte 수다. 빈 본문과 `max_message_body_bytes`를 초과하는 본문을 허용하지 않는다. 공개 예시의 개발용 기본값은 1048576 byte다. 송신 프로그램과 수신 프로그램은 같은 상한을 사용한다.
+
+수신 byte는 접두부나 본문 중간에서 나뉘거나 여러 frame이 결합될 수 있다. decoder는 연결별로 불완전한 frame만 보관한다. 0 또는 상한 초과 길이를 읽으면 현재 연결의 부분 상태를 폐기하고 연결을 닫는다. 송신 중단 시 현재 frame 전송을 완료하거나 연결을 닫아 부분 frame 다음에 다른 frame을 이어 붙이지 않는다.
+
+## 수신 응답
+
+수신 프로그램은 스캔 처리와 결과 보존을 모두 완료한 뒤 ACK를 보낸다. ACK는 `run_id`, `sensor_id`, `scan_id`를 모두 포함한다. 생성 프로그램은 세 값이 현재 미응답 스캔과 정확히 일치할 때만 해당 스캔을 전달 완료로 처리한다.
+
+오류 응답의 `code`는 다음 4개 값 중 하나다.
+
+| code | 의미 | 생성 프로그램 처리 |
+| --- | --- | --- |
+| `temporary_unavailable` | 일시적인 처리 불가 | 연결 종료 후 보관 한도 내 재시도 |
+| `invalid_scan` | 식별 가능한 스캔 본문 오류 | 해당 스캔 폐기 후 다음 스캔 진행 |
+| `environment_mismatch` | 수신 환경과 스캔 환경 불일치 | 전송 중단 및 설정 오류 보고 |
+| `unsupported_version` | 지원하지 않는 protocol 버전 | 전송 중단 및 호환 오류 보고 |
+
+오류 응답은 선택적인 비어 있지 않은 `message`를 포함할 수 있다. 스캔 식별 필드는 세 개를 모두 포함하거나 모두 생략한다. `invalid_scan`은 세 식별 필드를 반드시 포함한다.
+
+## 전송 제한과 재연결
+
+| 설정 | 의미 |
+| --- | --- |
+| `host`, `port` | 수신 TCP endpoint |
+| `max_message_body_bytes` | frame 접두부를 제외한 MessagePack 본문 상한 |
+| `buffer_max_age_s` | 미응답 frame의 최초 적재 시각 기준 보존 시간 |
+| `buffer_max_bytes` | 4 byte 접두부를 포함한 미응답 frame 전체 크기 상한 |
+| `connect_timeout_s` | TCP 연결 제한 시간 |
+| `send_timeout_s` | 한 frame 전송 제한 시간 |
+| `ack_timeout_s` | 한 스캔의 ACK 대기 제한 시간 |
+| `reconnect_initial_delay_s` | 첫 재연결 지연 상한 |
+| `reconnect_max_delay_s` | 재연결 지연 상한의 최댓값 |
+
+미응답 buffer는 보존 시간 또는 전체 크기 상한에 도달하면 가장 오래된 frame부터 폐기한다. 연결이 끊겨도 스캔 생성은 계속되고, 재전송하는 frame은 최초 적재 시각을 유지한다.
+
+재연결 지연 상한은 실패마다 초기값부터 2배씩 증가하고 설정한 최댓값을 넘지 않는다. 실제 지연은 0부터 현재 상한까지의 균등 분포인 full jitter를 사용한다. TCP 연결 성공만으로 지연 상한을 초기화하지 않으며 정상 ACK를 받은 뒤 초기값으로 되돌린다. 제한 시간 계산은 단조 증가 시각을 사용한다.
