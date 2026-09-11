@@ -55,6 +55,8 @@ measurement -> scenario
 
 `transport.AsyncFramedTcpConnection`은 연결, frame 전송과 body 수신의 제한 시간을 단조 증가 시계로 적용한다. 수신 frame 상태는 TCP 연결마다 분리하고 제한 시간, 연결 중단 또는 잘못된 frame 뒤에는 연결을 닫아 부분 byte를 폐기한다. 상위 송신 상태 machine은 buffer와 backoff를 이 adapter에 결합한다.
 
+`transport.AsyncScanSender`는 스캔 생성 호출을 네트워크 대기와 분리하고 지속 연결에서 가장 오래된 미응답 frame부터 전송한다. 현재 전송 스캔과 일치하는 ACK만 완료 처리하며 연결 오류, timeout과 일시 오류는 같은 frame을 재전송한다. 입력 오류는 해당 스캔만 폐기하고 환경, 버전 또는 응답 규격 오류는 buffer 만료를 유지하는 전송 중단 상태로 남긴다.
+
 ## 적재 표면 상태
 
 `scenario.HeightField`는 경계 다각형의 bounding box를 일정한 간격의 node 격자로 덮고, 각 cell 안의 높이를 bilinear 보간한다. 경계 다각형과 격자 cell의 교차 면적을 node별 적분 가중치로 계산하여 경계 밖 영역을 부피에서 제외한다.
