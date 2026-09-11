@@ -1,5 +1,6 @@
 """Scan serialization and delivery."""
 
+from scrap_monitoring_lidar_generator.transport.backoff import ReconnectBackoff
 from scrap_monitoring_lidar_generator.transport.codec import (
     ScanCodecError,
     decode_scan_message,
@@ -34,6 +35,13 @@ from scrap_monitoring_lidar_generator.transport.responses import (
     decode_response_message,
     encode_response_message,
 )
+from scrap_monitoring_lidar_generator.transport.unacked import (
+    BufferDiscardReason,
+    BufferedFrame,
+    BufferEnqueueResult,
+    DiscardedFrame,
+    UnackedFrameBuffer,
+)
 
 __all__ = [
     "ACK_MESSAGE_TYPE",
@@ -47,16 +55,22 @@ __all__ = [
     "PROTOCOL_VERSION",
     "SCAN_MESSAGE_TYPE",
     "AckMessage",
+    "BufferDiscardReason",
+    "BufferEnqueueResult",
+    "BufferedFrame",
+    "DiscardedFrame",
     "ErrorCode",
     "ErrorMessage",
     "FrameDecoder",
     "FrameError",
+    "ReconnectBackoff",
     "ResponseCodecError",
     "ResponseMessage",
     "ScanCodecError",
     "ScanIdentity",
     "ScanMessage",
     "ScanMessageFactory",
+    "UnackedFrameBuffer",
     "decode_response_message",
     "decode_scan_message",
     "encode_frame",

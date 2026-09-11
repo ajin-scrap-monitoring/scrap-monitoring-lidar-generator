@@ -51,6 +51,8 @@ measurement -> scenario
 
 `transport.ScanMessageFactory`는 실행 식별자와 시뮬레이션 시각 0에 대응하는 UTC Unix 마이크로초를 최종 측정 스캔에 결합한다. 첫 측정점의 경과 시각은 가장 가까운 마이크로초로 반올림하며 정확히 절반이면 미래 방향으로 정한다. `ScanMessage`는 기존 측정 배열을 복사하지 않고 참조한다. MessagePack codec은 공개 버전 1의 스캔, ACK와 오류 본문을 엄격하게 처리하며 framing은 설정한 최대 본문 크기를 독립적으로 적용한다.
 
+`transport.UnackedFrameBuffer`는 길이 접두부를 포함한 완성 frame과 최초 적재 단조 시각을 함께 보관한다. 보관 시간과 전체 byte 상한을 적용해 가장 오래된 frame부터 폐기하며 ACK는 정확히 일치하는 스캔 식별자 하나만 제거한다. `transport.ReconnectBackoff`는 전송 전용 seed 흐름에서 full jitter를 만들고 연속 실패마다 지연 상한을 증가시키며 정상 ACK 뒤에만 상한을 초기화한다.
+
 ## 적재 표면 상태
 
 `scenario.HeightField`는 경계 다각형의 bounding box를 일정한 간격의 node 격자로 덮고, 각 cell 안의 높이를 bilinear 보간한다. 경계 다각형과 격자 cell의 교차 면적을 node별 적분 가중치로 계산하여 경계 밖 영역을 부피에서 제외한다.
