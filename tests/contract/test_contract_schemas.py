@@ -8,8 +8,14 @@ import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
+from scrap_monitoring_lidar_generator.transport import (
+    decode_scan_message,
+    encode_scan_message,
+)
+
 _ROOT = Path(__file__).parents[2]
 _CONTRACTS = _ROOT / "contracts" / "v1"
+_FIXTURES = _CONTRACTS / "fixtures"
 
 
 def _load_json(path: Path) -> Any:
@@ -67,6 +73,36 @@ def test_scan_sequence_matches_contract() -> None:
     }
 
     Draft202012Validator(schema).validate(scan)
+
+
+def test_messagepack_scan_fixture_matches_human_readable_contract() -> None:
+    schema = _load_json(_CONTRACTS / "scan.schema.json")
+    expected = _load_json(_FIXTURES / "scan.v1.json")
+    payload = bytes.fromhex((_FIXTURES / "scan.v1.msgpack.hex").read_text(encoding="ascii").strip())
+
+    message = decode_scan_message(payload)
+    decoded = {
+        "protocol_version": message.protocol_version,
+        "type": message.message_type,
+        "environment_id": message.environment_id,
+        "run_id": message.run_id,
+        "sensor_id": message.sensor_id,
+        "scan_id": message.scan_id,
+        "captured_at": message.captured_at,
+        "points": [
+            [float(angle_deg), float(distance_m), int(quality)]
+            for angle_deg, distance_m, quality in zip(
+                message.measured_scan.angles_deg,
+                message.measured_scan.distances_m,
+                message.measured_scan.qualities,
+                strict=True,
+            )
+        ],
+    }
+
+    assert decoded == expected
+    assert encode_scan_message(message) == payload
+    Draft202012Validator(schema).validate(decoded)
 
 
 @pytest.mark.parametrize(

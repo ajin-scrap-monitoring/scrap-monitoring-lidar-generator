@@ -11,6 +11,8 @@
 | `quality-profile.schema.json` | 센서별 유효 및 무효 거리 품질 빈도 |
 | `scan.schema.json` | MessagePack에서 디코딩한 스캔 본문 |
 
+`fixtures/scan.v1.json`은 사람이 검토하는 합성 원본이며 `fixtures/scan.v1.msgpack.hex`는 같은 본문을 인코딩한 바이트의 16진수 표현이다. codec의 출력은 두 fixture와 함께 검증한다.
+
 버전 1 consumer는 schema에 없는 field를 거부한다. field 이름, 필수 여부, 자료형, 범위 또는 의미를 변경하면 새로운 계약 버전을 사용한다.
 
 ## 환경 식별
@@ -62,7 +64,7 @@ JSON Schema 검사에 더하여 다음 8개 의미 규칙을 적용한다.
 
 ## 대표 시각과 측정점
 
-`captured_at`은 한 회전의 첫 번째 측정점에 해당하는 UTC(Coordinated Universal Time) Unix 시각이며 마이크로초 단위의 64비트 정수다.
+`captured_at`은 한 회전의 첫 번째 측정점에 해당하는 UTC(Coordinated Universal Time) Unix 시각이며 마이크로초 단위의 64비트 정수다. 첫 측정점 시각이 마이크로초 경계 사이에 있으면 가장 가까운 마이크로초로 반올림하고 정확히 절반이면 미래 방향 값을 사용한다.
 
 각 측정점은 `[angle_deg, distance_m, quality]` 순서의 배열이다. MessagePack 송신 시 각도와 거리는 64비트 부동소수점으로 인코딩하고 품질은 8비트 범위의 정수 값으로 인코딩한다. 측정점 순서는 생성 또는 수집 순서를 유지한다.
 

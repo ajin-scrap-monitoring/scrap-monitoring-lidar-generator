@@ -49,6 +49,8 @@ measurement -> scenario
 
 `transport`만 외부 스캔 계약과 MessagePack 표현을 안다. 정확한 message framing과 ACK 및 오류 응답은 수신 프로그램과 합의한 계약으로 고정한 뒤 구현한다. 내부 계산 모델은 전송 표현에 의존하지 않는다.
 
+`transport.ScanMessageFactory`는 실행 식별자와 시뮬레이션 시각 0에 대응하는 UTC Unix 마이크로초를 최종 측정 스캔에 결합한다. 첫 측정점의 경과 시각은 가장 가까운 마이크로초로 반올림하며 정확히 절반이면 미래 방향으로 정한다. `ScanMessage`는 기존 측정 배열을 복사하지 않고 참조하며 MessagePack codec은 공개 버전 1 본문만 인코딩하거나 엄격하게 디코딩한다. codec은 TCP message framing과 크기 상한을 다루지 않는다.
+
 ## 적재 표면 상태
 
 `scenario.HeightField`는 경계 다각형의 bounding box를 일정한 간격의 node 격자로 덮고, 각 cell 안의 높이를 bilinear 보간한다. 경계 다각형과 격자 cell의 교차 면적을 node별 적분 가중치로 계산하여 경계 밖 영역을 부피에서 제외한다.
