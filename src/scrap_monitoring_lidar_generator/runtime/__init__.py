@@ -1,5 +1,12 @@
 """Runtime orchestration and lifecycle management."""
 
+from scrap_monitoring_lidar_generator.runtime.application import (
+    DeadlineWaiter,
+    GeneratorRunSummary,
+    ScanMessageSink,
+    run_generator_application,
+    run_scan_generation,
+)
 from scrap_monitoring_lidar_generator.runtime.diagnostics import (
     JsonLinesDiagnosticsWriter,
     MeasurementDiagnosticsSink,
@@ -24,10 +31,13 @@ from scrap_monitoring_lidar_generator.runtime.scenario import build_scenario_sim
 from scrap_monitoring_lidar_generator.runtime.transport import build_scan_sender
 
 __all__ = [
+    "DeadlineWaiter",
+    "GeneratorRunSummary",
     "JsonLinesDiagnosticsWriter",
     "MeasurementDiagnosticsSink",
     "MeasurementGenerationRuntime",
     "ReferenceGenerationRuntime",
+    "ScanMessageSink",
     "ScenarioTimeObserver",
     "build_diagnostics_writer",
     "build_measurement_generation_runtime",
@@ -38,4 +48,6 @@ __all__ = [
     "build_scenario_simulator",
     "build_spatial_distortion_timeline",
     "generator_input_fingerprint",
+    "run_generator_application",
+    "run_scan_generation",
 ]

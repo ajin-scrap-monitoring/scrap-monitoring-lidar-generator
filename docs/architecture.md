@@ -95,6 +95,8 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 
 `MeasurementResult`는 같은 회전 일정의 `TimedReferenceScan`과 `TimedMeasuredScan`을 별도 필드로 유지한다. `runtime.MeasurementGenerationRuntime`은 시각 순서로 완료된 기준 스캔에 센서별 측정 생성기를 적용한다.
 
+`runtime.run_scan_generation`은 실행 시작 단조 시각에 회전 완료 경과 시각을 더한 절대 deadline으로 생성 속도를 조절한다. `runtime.run_generator_application`은 실행별 UUID(Universally Unique Identifier)와 UTC 기준 시각을 만들고 측정, 진단 및 비동기 송신의 수명주기를 함께 관리한다. CLI는 `--config`로 실행 설정을 받고 SIGINT와 SIGTERM에서 생성과 송신을 정상 종료한다.
+
 ## 검증 구조
 
 자동 검증은 4개 계층으로 구성한다.
@@ -106,7 +108,7 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 | `tests/contract/` | JSON 및 MessagePack schema, 수신 프로그램과 공유하는 합성 fixture |
 | `tests/performance/` | 지속 생성량, 지연, 메모리와 Linux ARM64(64-bit Arm architecture) 실행 부하 |
 
-단위 및 통합 검증은 외부 네트워크와 실제 시각에 의존하지 않는다. 계약 fixture는 사람이 검토할 수 있는 원본과 인코딩 결과를 함께 관리한다. 성능 검증은 기능 회귀 검사와 분리하고 측정 환경 및 명령을 결과와 함께 기록한다.
+단위 및 통합 검증은 외부 네트워크와 UTC 시각에 의존하지 않는다. 전송 검증은 local loopback과 event loop의 단조 시각을 사용한다. 계약 fixture는 사람이 검토할 수 있는 원본과 인코딩 결과를 함께 관리한다. 성능 검증은 기능 회귀 검사와 분리하고 측정 환경 및 명령을 결과와 함께 기록한다.
 
 ## Repository 구조
 
