@@ -44,6 +44,8 @@ class ScenarioSettings:
     inlet_comparison_radius_m: float
     surface_update_interval_s: float
     pile_spread_radius_m: float
+    roughness_height_range_m: FloatRange
+    roughness_radius_range_m: FloatRange
 
     def __post_init__(self) -> None:
         _require_positive(self.mean_fill_duration_s, "mean fill duration")
@@ -90,6 +92,8 @@ class ScenarioSettings:
         _require_positive(self.inlet_comparison_radius_m, "inlet comparison radius")
         _require_positive(self.surface_update_interval_s, "surface update interval")
         _require_positive(self.pile_spread_radius_m, "pile spread radius")
+        _require_range(self.roughness_height_range_m, "roughness height")
+        _require_range(self.roughness_radius_range_m, "roughness radius", positive=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +182,7 @@ class ScenarioSimulator:
         self._settings = settings
         self._cycle_rng = random.Random(_derive_seed(seed, "cycle-plan"))
         self._rate_rng = random.Random(_derive_seed(seed, "rate-profile"))
+        self._roughness_rng = random.Random(_derive_seed(seed, "surface-roughness"))
         self._elapsed_s = 0.0
         self._surface_updated_at_s = 0.0
         self._next_update_index = 1
@@ -314,6 +319,7 @@ class ScenarioSimulator:
                 center=self._settings.inlet_positions[self._current_inlet_index],
                 spread_radius_m=self._settings.pile_spread_radius_m,
             )
+            self._apply_local_roughness()
         else:
             if through_s == plan.ends_at_s:
                 requested_m3 = self._surface.volume_m3
@@ -327,6 +333,33 @@ class ScenarioSimulator:
         tolerance_m3 = max(1.0, self._surface.capacity_m3) * _STATE_TOLERANCE
         if change.unapplied_m3 > tolerance_m3:
             raise RuntimeError("scenario surface could not apply the planned volume change")
+
+    def _apply_local_roughness(self) -> None:
+        peak_delta_m = self._roughness_rng.uniform(*self._settings.roughness_height_range_m)
+        if peak_delta_m == 0.0:
+            return
+        radius_m = self._roughness_rng.uniform(*self._settings.roughness_radius_range_m)
+        center = self._sample_roughness_center()
+        self._surface.apply_local_roughness(
+            center=center,
+            radius_m=radius_m,
+            peak_delta_m=peak_delta_m,
+        )
+
+    def _sample_roughness_center(self) -> Vec2:
+        inlet = self._settings.inlet_positions[self._current_inlet_index]
+        for _ in range(32):
+            distance_m = self._settings.pile_spread_radius_m * math.sqrt(
+                self._roughness_rng.random()
+            )
+            angle_rad = self._roughness_rng.random() * math.tau
+            candidate = Vec2(
+                inlet.x + distance_m * math.cos(angle_rad),
+                inlet.y + distance_m * math.sin(angle_rad),
+            )
+            if self._surface.boundary.contains(candidate):
+                return candidate
+        return inlet
 
     def _transition_phase(self, transitioned_at_s: float) -> None:
         tolerance_m3 = max(1.0, self._surface.capacity_m3) * _STATE_TOLERANCE

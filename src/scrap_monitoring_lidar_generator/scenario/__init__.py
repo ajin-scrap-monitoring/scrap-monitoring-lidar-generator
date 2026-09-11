@@ -1,6 +1,10 @@
 """Scene state and scenario transitions."""
 
-from scrap_monitoring_lidar_generator.scenario.height_field import HeightField, VolumeChange
+from scrap_monitoring_lidar_generator.scenario.height_field import (
+    HeightField,
+    RoughnessChange,
+    VolumeChange,
+)
 from scrap_monitoring_lidar_generator.scenario.rate_profile import (
     SmoothRateProfile,
     SmoothRateSegment,
@@ -26,6 +30,7 @@ __all__ = [
     "CollectionPlan",
     "FillPlan",
     "HeightField",
+    "RoughnessChange",
     "ScenarioPhase",
     "ScenarioSettings",
     "ScenarioSimulator",

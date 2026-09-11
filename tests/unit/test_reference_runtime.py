@@ -40,6 +40,8 @@ def _scenario() -> ScenarioSimulator:
         inlet_comparison_radius_m=0.2,
         surface_update_interval_s=0.5,
         pile_spread_radius_m=0.5,
+        roughness_height_range_m=(0.0, 0.0),
+        roughness_radius_range_m=(0.2, 0.3),
     )
     return ScenarioSimulator(surface, settings, seed=123)
 

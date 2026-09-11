@@ -44,5 +44,7 @@ def build_scenario_simulator(inputs: GeneratorInputs) -> ScenarioSimulator:
         inlet_comparison_radius_m=config.inlet_comparison_radius_m,
         surface_update_interval_s=config.surface.update_interval_s,
         pile_spread_radius_m=config.surface.pile_spread_radius_m,
+        roughness_height_range_m=config.surface.roughness_height_range_m,
+        roughness_radius_range_m=config.surface.roughness_radius_range_m,
     )
     return ScenarioSimulator(surface, settings, seed=inputs.generator.seed)

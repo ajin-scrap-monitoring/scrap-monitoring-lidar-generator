@@ -38,6 +38,14 @@ class VolumeChange:
         return max(0.0, self.requested_m3 - self.applied_m3)
 
 
+@dataclass(frozen=True, slots=True)
+class RoughnessChange:
+    """Requested and realized signed peak height changes in meters."""
+
+    requested_peak_delta_m: float
+    applied_peak_delta_m: float
+
+
 class HeightField:
     """Mutable bilinear surface over a simple polygon."""
 
@@ -298,6 +306,63 @@ class HeightField:
         applied_m3 = float(np.sum(self._volume_weights_m2 * delta_m))
         return VolumeChange(requested_m3, min(requested_m3, applied_m3))
 
+    def apply_local_roughness(
+        self,
+        *,
+        center: Vec2,
+        radius_m: float,
+        peak_delta_m: float,
+    ) -> RoughnessChange:
+        """Redistribute local height without changing the represented volume."""
+        if not self._boundary.contains(center):
+            raise ValueError("roughness center must lie inside the surface boundary")
+        if not math.isfinite(radius_m) or radius_m <= 0.0:
+            raise ValueError("roughness radius must be a finite positive number")
+        if not math.isfinite(peak_delta_m):
+            raise ValueError("roughness peak delta must be finite")
+        if peak_delta_m == 0.0:
+            return RoughnessChange(peak_delta_m, 0.0)
+
+        x_distance_m = self._x_coordinates_m[np.newaxis, :] - center.x
+        y_distance_m = self._y_coordinates_m[:, np.newaxis] - center.y
+        squared_radius = np.square(x_distance_m / radius_m) + np.square(y_distance_m / radius_m)
+        support = (squared_radius < 1.0) & (self._volume_weights_m2 > 0.0)
+        if np.count_nonzero(support) < 2:
+            return RoughnessChange(peak_delta_m, 0.0)
+
+        profile = np.zeros_like(self._heights_m)
+        profile[support] = np.square(1.0 - squared_radius[support])
+        support_weights_m2 = self._volume_weights_m2[support]
+        weighted_mean = float(
+            np.sum(support_weights_m2 * profile[support]) / np.sum(support_weights_m2)
+        )
+        profile[support] -= weighted_mean
+        positive_peak = float(np.max(profile))
+        negative_peak = float(np.min(profile))
+        if positive_peak <= 0.0 or negative_peak >= 0.0:
+            return RoughnessChange(peak_delta_m, 0.0)
+
+        requested_delta_m = profile * (peak_delta_m / positive_peak)
+        scale = _bounded_change_scale(
+            requested_delta_m,
+            lower_headroom_m=self._heights_m - self._floor_z_m,
+            upper_headroom_m=self._top_z_m - self._heights_m,
+        )
+        applied_delta_m = requested_delta_m * scale
+        volume_delta_m3 = float(np.sum(self._volume_weights_m2 * applied_delta_m))
+        tolerance_m3 = max(1.0, self.capacity_m3) * _VOLUME_TOLERANCE
+        if abs(volume_delta_m3) > tolerance_m3:
+            raise RuntimeError("local roughness did not preserve surface volume")
+
+        self._heights_m += applied_delta_m
+        np.clip(
+            self._heights_m,
+            self._floor_z_m,
+            self._top_z_m,
+            out=self._heights_m,
+        )
+        return RoughnessChange(peak_delta_m, peak_delta_m * scale)
+
     def _build_local_profile(self, center: Vec2, spread_radius_m: float) -> FloatArray:
         if not self._boundary.contains(center):
             raise ValueError("volume change center must lie inside the surface boundary")
@@ -357,6 +422,28 @@ def _solve_height_delta(
         return available_height_m.copy()
 
     return np.minimum(scale * profile, available_height_m)
+
+
+def _bounded_change_scale(
+    requested_delta_m: FloatArray,
+    *,
+    lower_headroom_m: FloatArray,
+    upper_headroom_m: FloatArray,
+) -> float:
+    scale = 1.0
+    positive = requested_delta_m > 0.0
+    if np.any(positive):
+        scale = min(
+            scale,
+            float(np.min(upper_headroom_m[positive] / requested_delta_m[positive])),
+        )
+    negative = requested_delta_m < 0.0
+    if np.any(negative):
+        scale = min(
+            scale,
+            float(np.min(lower_headroom_m[negative] / -requested_delta_m[negative])),
+        )
+    return min(1.0, max(0.0, scale))
 
 
 def _build_volume_weights(
