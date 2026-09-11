@@ -2,7 +2,13 @@
 
 import pytest
 
-from scrap_monitoring_lidar_generator.transport import FrameDecoder, FrameError, encode_frame
+from scrap_monitoring_lidar_generator.transport import (
+    FrameDecoder,
+    FrameError,
+    encode_frame,
+    validate_frame,
+    validate_max_body_bytes,
+)
 
 
 def test_encoder_uses_unsigned_big_endian_body_length() -> None:
@@ -15,6 +21,15 @@ def test_default_limit_is_one_mebibyte() -> None:
     assert len(encode_frame(body)) == 1_048_580
     with pytest.raises(FrameError, match="1048576-byte limit"):
         encode_frame(body + b"x")
+
+
+def test_complete_frame_validation_rejects_length_mismatch_and_limit() -> None:
+    validate_frame(encode_frame(b"test", max_body_bytes=4), max_body_bytes=4)
+
+    with pytest.raises(FrameError, match="match its body"):
+        validate_frame(b"\x00\x00\x00\x03test")
+    with pytest.raises(FrameError, match="4-byte limit"):
+        validate_frame(b"\x00\x00\x00\x05abcde", max_body_bytes=4)
 
 
 def test_decoder_accepts_every_split_position() -> None:
@@ -89,3 +104,5 @@ def test_rejects_invalid_maximum_body_size(limit: int) -> None:
         FrameDecoder(max_body_bytes=limit)
     with pytest.raises(FrameError, match="max body bytes"):
         encode_frame(b"a", max_body_bytes=limit)
+    with pytest.raises(FrameError, match="max body bytes"):
+        validate_max_body_bytes(limit)

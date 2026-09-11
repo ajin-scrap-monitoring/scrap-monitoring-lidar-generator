@@ -13,6 +13,8 @@ from scrap_monitoring_lidar_generator.transport.framing import (
     FrameDecoder,
     FrameError,
     encode_frame,
+    validate_frame,
+    validate_max_body_bytes,
 )
 from scrap_monitoring_lidar_generator.transport.models import (
     MAX_SIGNED_64_BIT,
@@ -35,6 +37,10 @@ from scrap_monitoring_lidar_generator.transport.responses import (
     decode_response_message,
     encode_response_message,
 )
+from scrap_monitoring_lidar_generator.transport.tcp import (
+    AsyncFramedTcpConnection,
+    TcpConnectionClosedError,
+)
 from scrap_monitoring_lidar_generator.transport.unacked import (
     BufferDiscardReason,
     BufferedFrame,
@@ -55,6 +61,7 @@ __all__ = [
     "PROTOCOL_VERSION",
     "SCAN_MESSAGE_TYPE",
     "AckMessage",
+    "AsyncFramedTcpConnection",
     "BufferDiscardReason",
     "BufferEnqueueResult",
     "BufferedFrame",
@@ -70,10 +77,13 @@ __all__ = [
     "ScanIdentity",
     "ScanMessage",
     "ScanMessageFactory",
+    "TcpConnectionClosedError",
     "UnackedFrameBuffer",
     "decode_response_message",
     "decode_scan_message",
     "encode_frame",
     "encode_response_message",
     "encode_scan_message",
+    "validate_frame",
+    "validate_max_body_bytes",
 ]

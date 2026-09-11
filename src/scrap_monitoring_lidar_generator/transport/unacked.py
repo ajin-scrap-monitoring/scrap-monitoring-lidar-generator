@@ -5,7 +5,11 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from enum import StrEnum
 
-from scrap_monitoring_lidar_generator.transport.framing import FRAME_PREFIX_BYTES
+from scrap_monitoring_lidar_generator.transport.framing import (
+    MAX_FRAME_BODY_BYTES,
+    FrameError,
+    validate_frame,
+)
 from scrap_monitoring_lidar_generator.transport.responses import ScanIdentity
 
 
@@ -28,7 +32,10 @@ class BufferedFrame:
     def __post_init__(self) -> None:
         if not isinstance(self.identity, ScanIdentity):
             raise ValueError("buffered frame identity must be a ScanIdentity")
-        _validate_complete_frame(self.frame)
+        try:
+            validate_frame(self.frame, max_body_bytes=MAX_FRAME_BODY_BYTES)
+        except FrameError as error:
+            raise ValueError(str(error)) from error
         _validate_monotonic_time(self.enqueued_at_s, "buffered frame enqueue time")
 
     @property
@@ -155,14 +162,6 @@ class UnackedFrameBuffer:
         _, buffered = self._entries.popitem(last=False)
         self._total_bytes -= buffered.byte_count
         return buffered
-
-
-def _validate_complete_frame(frame: bytes) -> None:
-    if not isinstance(frame, bytes) or len(frame) <= FRAME_PREFIX_BYTES:
-        raise ValueError("buffered frame must be complete non-empty framed bytes")
-    declared_body_bytes = int.from_bytes(frame[:FRAME_PREFIX_BYTES], "big")
-    if declared_body_bytes != len(frame) - FRAME_PREFIX_BYTES:
-        raise ValueError("buffered frame length prefix must match its body")
 
 
 def _validate_monotonic_time(value: float, name: str) -> float:

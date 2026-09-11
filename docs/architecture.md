@@ -53,6 +53,8 @@ measurement -> scenario
 
 `transport.UnackedFrameBuffer`는 길이 접두부를 포함한 완성 frame과 최초 적재 단조 시각을 함께 보관한다. 보관 시간과 전체 byte 상한을 적용해 가장 오래된 frame부터 폐기하며 ACK는 정확히 일치하는 스캔 식별자 하나만 제거한다. `transport.ReconnectBackoff`는 전송 전용 seed 흐름에서 full jitter를 만들고 연속 실패마다 지연 상한을 증가시키며 정상 ACK 뒤에만 상한을 초기화한다.
 
+`transport.AsyncFramedTcpConnection`은 연결, frame 전송과 body 수신의 제한 시간을 단조 증가 시계로 적용한다. 수신 frame 상태는 TCP 연결마다 분리하고 제한 시간, 연결 중단 또는 잘못된 frame 뒤에는 연결을 닫아 부분 byte를 폐기한다. 상위 송신 상태 machine은 buffer와 backoff를 이 adapter에 결합한다.
+
 ## 적재 표면 상태
 
 `scenario.HeightField`는 경계 다각형의 bounding box를 일정한 간격의 node 격자로 덮고, 각 cell 안의 높이를 bilinear 보간한다. 경계 다각형과 격자 cell의 교차 면적을 node별 적분 가중치로 계산하여 경계 밖 영역을 부피에서 제외한다.
