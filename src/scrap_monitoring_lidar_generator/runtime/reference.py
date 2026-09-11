@@ -1,6 +1,7 @@
 """Simulation-time coordination for undistorted reference scans."""
 
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -21,6 +22,10 @@ from scrap_monitoring_lidar_generator.measurement import (
     TimedReferenceScan,
 )
 from scrap_monitoring_lidar_generator.runtime.measurement import build_rotation_schedulers
+from scrap_monitoring_lidar_generator.runtime.performance import (
+    PerformanceRecorder,
+    PerformanceStage,
+)
 from scrap_monitoring_lidar_generator.runtime.scenario import build_scenario_simulator
 from scrap_monitoring_lidar_generator.scenario import ScenarioSimulator
 
@@ -45,7 +50,7 @@ class ScenarioTimeObserver(Protocol):
 class ReferenceGenerationRuntime:
     """Observe one shared scenario in time order for all sensor rotations."""
 
-    __slots__ = ("_observers", "_pending", "_scenario", "_scene")
+    __slots__ = ("_clock_ns", "_observers", "_pending", "_performance", "_scenario", "_scene")
 
     def __init__(
         self,
@@ -55,6 +60,8 @@ class ReferenceGenerationRuntime:
         scanners: tuple[ReferenceScanner, ...],
         schedulers: tuple[SensorRotationScheduler, ...],
         observers: Sequence[ScenarioTimeObserver] = (),
+        performance: PerformanceRecorder | None = None,
+        clock_ns: Callable[[], int] = time.perf_counter_ns,
     ) -> None:
         if scenario.elapsed_s != 0.0:
             raise ValueError("reference runtime scenario must start at simulation time 0")
@@ -73,6 +80,8 @@ class ReferenceGenerationRuntime:
         self._scenario = scenario
         self._scene = scene
         self._observers = tuple(observers)
+        self._performance = performance
+        self._clock_ns = clock_ns
         self._pending = [
             _PendingReferenceScan(
                 scheduler=schedulers_by_id[sensor_id],
@@ -111,7 +120,7 @@ class ReferenceGenerationRuntime:
             for observer in self._observers:
                 observer.advance_to(interval_end_s, scenario=self._scenario)
             self._measure_points_before(interval_end_s)
-            self._scenario.advance_to(interval_end_s)
+            self._advance_scenario(interval_end_s)
 
         completed = [
             pending for pending in self._pending if pending.schedule.completed_at_s == completion_s
@@ -141,15 +150,39 @@ class ReferenceGenerationRuntime:
             if end_index <= pending.next_point_index:
                 continue
             angles_deg = pending.schedule.angles_deg[pending.next_point_index : end_index]
-            partial_scan = pending.scanner.generate(self._scene, angles_deg)
+            if self._performance is None:
+                partial_scan = pending.scanner.generate(self._scene, angles_deg)
+            else:
+                started_ns = self._clock_ns()
+                try:
+                    partial_scan = pending.scanner.generate(self._scene, angles_deg)
+                finally:
+                    self._performance.record(
+                        PerformanceStage.SCAN_GENERATION,
+                        self._clock_ns() - started_ns,
+                    )
             pending.points.extend(partial_scan.points)
             pending.next_point_index = end_index
+
+    def _advance_scenario(self, elapsed_s: float) -> None:
+        if self._performance is None:
+            self._scenario.advance_to(elapsed_s)
+            return
+        started_ns = self._clock_ns()
+        try:
+            self._scenario.advance_to(elapsed_s)
+        finally:
+            self._performance.record(
+                PerformanceStage.SCENE_UPDATE,
+                self._clock_ns() - started_ns,
+            )
 
 
 def build_reference_generation_runtime(
     inputs: GeneratorInputs,
     *,
     observers: Sequence[ScenarioTimeObserver] = (),
+    performance: PerformanceRecorder | None = None,
 ) -> ReferenceGenerationRuntime:
     """Assemble time-aware reference generation from validated inputs."""
     scenario = build_scenario_simulator(inputs)
@@ -170,6 +203,7 @@ def build_reference_generation_runtime(
         scanners=scanners,
         schedulers=build_rotation_schedulers(inputs),
         observers=observers,
+        performance=performance,
     )
 
 

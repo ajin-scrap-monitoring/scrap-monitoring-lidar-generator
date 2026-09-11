@@ -127,6 +127,7 @@ docs/
   deployment.md
   dependencies.md
   development-plan.md
+  performance.md
   project-spec.md
   internal/
 examples/
@@ -139,6 +140,7 @@ src/
     measurement/
     transport/
     runtime/
+      performance.py
     __main__.py
     cli.py
 tests/
@@ -146,6 +148,7 @@ tests/
   integration/
   contract/
   performance/
+    generation.py
 uv.lock
 ```
 
