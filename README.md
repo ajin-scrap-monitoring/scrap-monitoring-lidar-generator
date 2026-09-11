@@ -38,7 +38,7 @@ uv run --locked scrap-monitoring-lidar-generator --config /path/to/generator.v1.
 
 프로그램은 센서 회전 완료 시각에 맞춰 스캔을 생성하고 TCP 수신 프로그램으로 전송한다. 실행마다 UUID(Universally Unique Identifier) 형식의 새로운 `run_id`를 만들며 SIGINT 또는 SIGTERM을 받으면 생성과 송신을 정상 종료하고 집계를 출력한다.
 
-OCI(Open Container Initiative) 이미지의 build, 실행과 multi-platform Release 절차는 [`docs/deployment.md`](docs/deployment.md)를 따른다.
+OCI(Open Container Initiative) 이미지의 build, 실행과 ARM64 Release 절차는 [`docs/deployment.md`](docs/deployment.md)를 따른다.
 
 ## 이용 조건
 
