@@ -15,12 +15,28 @@ def encode_frame(
     max_body_bytes: int = DEFAULT_MAX_MESSAGE_BODY_BYTES,
 ) -> bytes:
     """Prefix one non-empty body with its unsigned big-endian length."""
-    limit = _validate_max_body_bytes(max_body_bytes)
+    limit = validate_max_body_bytes(max_body_bytes)
     if not isinstance(body, bytes) or not body:
         raise FrameError("frame body must be non-empty bytes")
     if len(body) > limit:
         raise FrameError(f"frame body exceeds the {limit}-byte limit")
     return len(body).to_bytes(FRAME_PREFIX_BYTES, "big") + body
+
+
+def validate_frame(
+    frame: bytes,
+    *,
+    max_body_bytes: int = DEFAULT_MAX_MESSAGE_BODY_BYTES,
+) -> None:
+    """Validate one complete length-prefixed frame without copying its body."""
+    limit = validate_max_body_bytes(max_body_bytes)
+    if not isinstance(frame, bytes) or len(frame) <= FRAME_PREFIX_BYTES:
+        raise FrameError("frame must contain a prefix and non-empty body")
+    declared_body_bytes = int.from_bytes(frame[:FRAME_PREFIX_BYTES], "big")
+    if declared_body_bytes != len(frame) - FRAME_PREFIX_BYTES:
+        raise FrameError("frame length prefix must match its body")
+    if declared_body_bytes > limit:
+        raise FrameError(f"frame body exceeds the {limit}-byte limit")
 
 
 class FrameDecoder:
@@ -29,7 +45,7 @@ class FrameDecoder:
     __slots__ = ("_buffer", "_expected_body_bytes", "_failed", "_max_body_bytes")
 
     def __init__(self, *, max_body_bytes: int = DEFAULT_MAX_MESSAGE_BODY_BYTES) -> None:
-        self._max_body_bytes = _validate_max_body_bytes(max_body_bytes)
+        self._max_body_bytes = validate_max_body_bytes(max_body_bytes)
         self._buffer = bytearray()
         self._expected_body_bytes: int | None = None
         self._failed = False
@@ -92,7 +108,8 @@ class FrameDecoder:
         self._failed = False
 
 
-def _validate_max_body_bytes(value: int) -> int:
+def validate_max_body_bytes(value: int) -> int:
+    """Validate and return a body limit representable by the frame prefix."""
     if type(value) is not int or not 1 <= value <= MAX_FRAME_BODY_BYTES:
         raise FrameError(f"max body bytes must be an integer in [1, {MAX_FRAME_BODY_BYTES}]")
     return value
