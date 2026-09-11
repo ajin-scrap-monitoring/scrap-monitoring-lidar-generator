@@ -45,11 +45,11 @@ measurement -> scenario
 
 `configuration`은 UTF-8 JSON(JavaScript Object Notation)을 중복 key와 비유한 숫자까지 검사한 뒤 내부 모델로 변환한다. 공개 예시와 자동 검증은 현장 값에서 파생되지 않은 합성 입력만 사용한다.
 
-입력 계약은 `contracts/v1/`에서 JSON Schema Draft 2020-12로 관리한다. 공통 환경 및 스캔 계약은 생성 프로그램과 수신 프로그램이 공유하고, 생성 실행 설정 및 품질 분포 계약은 생성 프로그램만 사용한다. `configuration`은 각 계약의 구조 규칙과 JSON Schema로 표현할 수 없는 다각형, 방향벡터, 구간 순서 및 참조 입력 사이의 규칙을 함께 검증한다.
+입력 계약은 `contracts/v1/`에서 JSON Schema Draft 2020-12로 관리한다. 공통 환경, 스캔 및 응답 계약은 생성 프로그램과 수신 프로그램이 공유하고, 생성 실행 설정 및 품질 분포 계약은 생성 프로그램만 사용한다. `configuration`은 각 계약의 구조 규칙과 JSON Schema로 표현할 수 없는 다각형, 방향벡터, 구간 순서 및 참조 입력 사이의 규칙을 함께 검증한다.
 
-`transport`만 외부 스캔 계약과 MessagePack 표현을 안다. 정확한 message framing과 ACK 및 오류 응답은 수신 프로그램과 합의한 계약으로 고정한 뒤 구현한다. 내부 계산 모델은 전송 표현에 의존하지 않는다.
+`transport`만 외부 스캔 계약, MessagePack 표현과 TCP(Transmission Control Protocol) framing을 안다. 송신할 때 4 byte unsigned big-endian 본문 길이를 붙이며 연결별 decoder는 분할되거나 결합된 수신 byte에서 본문을 복원한다. ACK(Acknowledgement)와 오류 응답은 `run_id`, `sensor_id`, `scan_id` 조합으로 스캔을 참조한다. 내부 계산 모델은 전송 표현에 의존하지 않는다.
 
-`transport.ScanMessageFactory`는 실행 식별자와 시뮬레이션 시각 0에 대응하는 UTC Unix 마이크로초를 최종 측정 스캔에 결합한다. 첫 측정점의 경과 시각은 가장 가까운 마이크로초로 반올림하며 정확히 절반이면 미래 방향으로 정한다. `ScanMessage`는 기존 측정 배열을 복사하지 않고 참조하며 MessagePack codec은 공개 버전 1 본문만 인코딩하거나 엄격하게 디코딩한다. codec은 TCP message framing과 크기 상한을 다루지 않는다.
+`transport.ScanMessageFactory`는 실행 식별자와 시뮬레이션 시각 0에 대응하는 UTC Unix 마이크로초를 최종 측정 스캔에 결합한다. 첫 측정점의 경과 시각은 가장 가까운 마이크로초로 반올림하며 정확히 절반이면 미래 방향으로 정한다. `ScanMessage`는 기존 측정 배열을 복사하지 않고 참조한다. MessagePack codec은 공개 버전 1의 스캔, ACK와 오류 본문을 엄격하게 처리하며 framing은 설정한 최대 본문 크기를 독립적으로 적용한다.
 
 ## 적재 표면 상태
 

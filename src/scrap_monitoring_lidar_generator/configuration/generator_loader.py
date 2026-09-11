@@ -32,6 +32,7 @@ from scrap_monitoring_lidar_generator.configuration.generator_models import (
     ReflectionErrorConfig,
     ScenarioConfig,
     SurfaceConfig,
+    TransportConfig,
     VoidsConfig,
 )
 from scrap_monitoring_lidar_generator.configuration.loader import load_environment
@@ -40,6 +41,8 @@ from scrap_monitoring_lidar_generator.configuration.quality_loader import load_q
 from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
 
 _MAX_SEED = 18_446_744_073_709_551_615
+_MAX_UNSIGNED_32_BIT = 4_294_967_295
+_MAX_SIGNED_64_BIT = 9_223_372_036_854_775_807
 _MIN_CONTRACT_DISTANCE_M = 0.05
 _MAX_CONTRACT_DISTANCE_M = 30.0
 
@@ -51,6 +54,7 @@ _GENERATOR_FIELDS = frozenset(
         "quality_profile_path",
         "scenario",
         "measurement",
+        "transport",
         "diagnostics",
     }
 )
@@ -131,6 +135,20 @@ _COLLECTION_OCCLUSION_FIELDS = frozenset(
 _REFLECTION_ERROR_FIELDS = frozenset({"enabled", "probability", "distance_reduction_m_range"})
 _DROPOUT_FIELDS = frozenset({"enabled", "event_interval_s_range", "duration_s_range"})
 _DIAGNOSTICS_FIELDS = frozenset({"enabled", "output_path", "sample_scan_limit_per_sensor"})
+_TRANSPORT_FIELDS = frozenset(
+    {
+        "host",
+        "port",
+        "max_message_body_bytes",
+        "buffer_max_age_s",
+        "buffer_max_bytes",
+        "connect_timeout_s",
+        "send_timeout_s",
+        "ack_timeout_s",
+        "reconnect_initial_delay_s",
+        "reconnect_max_delay_s",
+    }
+)
 
 type _NumberParser = Callable[[Any, str], float]
 
@@ -155,6 +173,7 @@ def parse_generator_config(
 
     scenario = _parse_scenario(root["scenario"], "$.scenario")
     measurement = _parse_measurement(root["measurement"], "$.measurement")
+    transport = _parse_transport(root["transport"], "$.transport")
     diagnostics = _parse_diagnostics(root["diagnostics"], "$.diagnostics", base)
     return GeneratorConfig(
         seed=require_integer(root["seed"], "$.seed", minimum=0, maximum=_MAX_SEED),
@@ -166,6 +185,7 @@ def parse_generator_config(
         ),
         scenario=scenario,
         measurement=measurement,
+        transport=transport,
         diagnostics=diagnostics,
     )
 
@@ -471,6 +491,49 @@ def _parse_diagnostics(value: Any, path: str, base: Path) -> DiagnosticsConfig:
             f"{path}.sample_scan_limit_per_sensor",
             minimum=0,
         ),
+    )
+
+
+def _parse_transport(value: Any, path: str) -> TransportConfig:
+    transport = require_object(value, path)
+    require_exact_fields(transport, _TRANSPORT_FIELDS, path)
+    initial_delay_s = _require_positive(
+        transport["reconnect_initial_delay_s"],
+        f"{path}.reconnect_initial_delay_s",
+    )
+    maximum_delay_s = _require_positive(
+        transport["reconnect_max_delay_s"],
+        f"{path}.reconnect_max_delay_s",
+    )
+    if initial_delay_s > maximum_delay_s:
+        raise ConfigurationError(
+            f"{path}.reconnect_initial_delay_s must not exceed {path}.reconnect_max_delay_s"
+        )
+    return TransportConfig(
+        host=require_non_empty_string(transport["host"], f"{path}.host"),
+        port=require_integer(transport["port"], f"{path}.port", minimum=1, maximum=65_535),
+        max_message_body_bytes=require_integer(
+            transport["max_message_body_bytes"],
+            f"{path}.max_message_body_bytes",
+            minimum=1,
+            maximum=_MAX_UNSIGNED_32_BIT,
+        ),
+        buffer_max_age_s=_require_positive(
+            transport["buffer_max_age_s"], f"{path}.buffer_max_age_s"
+        ),
+        buffer_max_bytes=require_integer(
+            transport["buffer_max_bytes"],
+            f"{path}.buffer_max_bytes",
+            minimum=1,
+            maximum=_MAX_SIGNED_64_BIT,
+        ),
+        connect_timeout_s=_require_positive(
+            transport["connect_timeout_s"], f"{path}.connect_timeout_s"
+        ),
+        send_timeout_s=_require_positive(transport["send_timeout_s"], f"{path}.send_timeout_s"),
+        ack_timeout_s=_require_positive(transport["ack_timeout_s"], f"{path}.ack_timeout_s"),
+        reconnect_initial_delay_s=initial_delay_s,
+        reconnect_max_delay_s=maximum_delay_s,
     )
 
 

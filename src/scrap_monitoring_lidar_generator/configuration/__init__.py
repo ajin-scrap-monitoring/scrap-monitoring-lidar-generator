@@ -10,6 +10,7 @@ from scrap_monitoring_lidar_generator.configuration.generator_models import (
     GeneratorConfig,
     GeneratorInputs,
     QualityProfileConfig,
+    TransportConfig,
 )
 from scrap_monitoring_lidar_generator.configuration.geometry import (
     build_environment_scene,
@@ -39,6 +40,7 @@ __all__ = [
     "GeneratorInputs",
     "QualityProfileConfig",
     "SensorConfig",
+    "TransportConfig",
     "build_environment_scene",
     "build_sensor_frame",
     "load_environment",

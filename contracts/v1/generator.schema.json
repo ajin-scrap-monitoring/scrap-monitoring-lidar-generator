@@ -11,6 +11,7 @@
     "quality_profile_path",
     "scenario",
     "measurement",
+    "transport",
     "diagnostics"
   ],
   "properties": {
@@ -35,6 +36,9 @@
     },
     "measurement": {
       "$ref": "#/$defs/measurement"
+    },
+    "transport": {
+      "$ref": "#/$defs/transport"
     },
     "diagnostics": {
       "$ref": "#/$defs/diagnostics"
@@ -380,6 +384,61 @@
         },
         "duration_s_range": {
           "$ref": "#/$defs/positiveRange"
+        }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "port",
+        "max_message_body_bytes",
+        "buffer_max_age_s",
+        "buffer_max_bytes",
+        "connect_timeout_s",
+        "send_timeout_s",
+        "ack_timeout_s",
+        "reconnect_initial_delay_s",
+        "reconnect_max_delay_s"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "max_message_body_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "buffer_max_age_s": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "buffer_max_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "connect_timeout_s": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "send_timeout_s": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "ack_timeout_s": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "reconnect_initial_delay_s": {
+          "$ref": "#/$defs/positiveNumber"
+        },
+        "reconnect_max_delay_s": {
+          "$ref": "#/$defs/positiveNumber"
         }
       }
     },

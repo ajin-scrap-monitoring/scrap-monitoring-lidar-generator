@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-generator/contracts/v1/error.schema.json",
+  "title": "LiDAR scan error response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "type", "code"],
+  "properties": {
+    "protocol_version": {
+      "const": 1
+    },
+    "type": {
+      "const": "error"
+    },
+    "code": {
+      "enum": [
+        "temporary_unavailable",
+        "invalid_scan",
+        "environment_mismatch",
+        "unsupported_version"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sensor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scan_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    }
+  },
+  "dependentRequired": {
+    "run_id": ["sensor_id", "scan_id"],
+    "sensor_id": ["run_id", "scan_id"],
+    "scan_id": ["run_id", "sensor_id"]
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "invalid_scan"
+          }
+        },
+        "required": ["code"]
+      },
+      "then": {
+        "required": ["run_id", "sensor_id", "scan_id"]
+      }
+    }
+  ]
+}
