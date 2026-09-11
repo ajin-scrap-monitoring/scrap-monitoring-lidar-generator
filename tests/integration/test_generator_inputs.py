@@ -204,6 +204,53 @@ def test_generator_inputs_apply_shared_falling_material_events(tmp_path: Path) -
     )
 
 
+def test_generator_inputs_apply_collection_occlusion_events(tmp_path: Path) -> None:
+    generator = _load_example("generator.v1.json")
+    environment = _load_example("environment.v1.json")
+    quality = _load_example("quality-profile.v1.json")
+    generator["scenario"]["mean_fill_duration_s"] = 1
+    generator["scenario"]["fill_duration_factor_range"] = [1, 1]
+    generator["scenario"]["fill_rate_factor_range"] = [1, 1]
+    generator["scenario"]["collection_threshold_range"] = [0.5, 0.5]
+    generator["scenario"]["collection_duration_factor_range"] = [1, 1]
+    generator["scenario"]["collection_rate_factor_range"] = [1, 1]
+    generator["scenario"]["collection_rate_change_duration_s_range"] = [8_640, 17_280]
+    generator["scenario"]["surface"]["update_interval_s"] = 0.05
+    generator["scenario"]["surface"]["roughness_height_range_m"] = [0, 0]
+    generator["measurement"]["distance_noise"]["enabled"] = False
+    generator["measurement"]["distortions"]["falling_material"]["enabled"] = False
+    generator["measurement"]["distortions"]["voids"]["enabled"] = False
+    generator["measurement"]["distortions"]["reflection_error"]["enabled"] = False
+    generator["measurement"]["distortions"]["dropout"]["enabled"] = False
+    generator["measurement"]["distortions"]["collection_occlusion"] = {
+        "enabled": True,
+        "event_interval_s_range": [8_640, 8_640],
+        "radius_m_range": [2, 2],
+        "duration_s_range": [17_280, 17_280],
+        "distance_reduction_m_range": [0.2, 0.2],
+    }
+    path = _write_inputs(tmp_path, generator, environment, quality)
+    runtime = build_measurement_generation_runtime(load_generator_inputs(path))
+
+    results = [runtime.next_completed_scans()[0] for _ in range(5)]
+    reductions_m: list[float] = []
+    for result in results:
+        for reference_point, measured_distance_m in zip(
+            result.reference.scan.points,
+            result.measured.scan.distances_m,
+            strict=True,
+        ):
+            if reference_point.hit_kind is HitKind.SURFACE:
+                reductions_m.append(reference_point.distance_m - float(measured_distance_m))
+
+    assert reductions_m
+    assert any(reduction_m == pytest.approx(0.2) for reduction_m in reductions_m)
+    assert all(
+        reduction_m == pytest.approx(0.0) or reduction_m == pytest.approx(0.2)
+        for reduction_m in reductions_m
+    )
+
+
 def test_rejects_invalid_measurement_runtime_sensor_sets() -> None:
     inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
     reference_runtime = build_reference_generation_runtime(inputs)

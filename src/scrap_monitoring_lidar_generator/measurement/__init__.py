@@ -21,12 +21,15 @@ from scrap_monitoring_lidar_generator.measurement.rotation import (
     create_seeded_rotation_scheduler,
 )
 from scrap_monitoring_lidar_generator.measurement.spatial import (
+    CollectionOcclusionEvent,
+    CollectionOcclusionSettings,
     FallingMaterialEvent,
     FallingMaterialSettings,
     SpatialDistanceResolver,
     SpatialDistortionTimeline,
     VoidEvent,
     VoidSettings,
+    resolve_collection_occlusion_distances,
     resolve_falling_material_distances,
     resolve_void_distances,
 )
@@ -34,6 +37,8 @@ from scrap_monitoring_lidar_generator.measurement.spatial import (
 __all__ = [
     "DEFAULT_MAX_DISTANCE_M",
     "DEFAULT_MIN_DISTANCE_M",
+    "CollectionOcclusionEvent",
+    "CollectionOcclusionSettings",
     "FallingMaterialEvent",
     "FallingMaterialSettings",
     "MeasuredScan",
@@ -52,6 +57,7 @@ __all__ = [
     "VoidEvent",
     "VoidSettings",
     "create_seeded_rotation_scheduler",
+    "resolve_collection_occlusion_distances",
     "resolve_falling_material_distances",
     "resolve_void_distances",
 ]

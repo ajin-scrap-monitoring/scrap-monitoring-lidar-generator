@@ -7,6 +7,7 @@ from scrap_monitoring_lidar_generator.configuration import (
 )
 from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
 from scrap_monitoring_lidar_generator.measurement import (
+    CollectionOcclusionSettings,
     FallingMaterialSettings,
     MeasurementGenerator,
     SensorDropoutScheduler,
@@ -100,7 +101,8 @@ def build_spatial_distortion_timeline(
     config = inputs.generator
     falling = config.measurement.distortions.falling_material
     voids = config.measurement.distortions.voids
-    if not falling.enabled and not voids.enabled:
+    collection = config.measurement.distortions.collection_occlusion
+    if not falling.enabled and not voids.enabled and not collection.enabled:
         return None
 
     time_scale = scenario_time_scale(config.scenario.mean_fill_duration_s)
@@ -138,6 +140,22 @@ def build_spatial_distortion_timeline(
                 distance_increase_m_range=voids.distance_increase_m_range,
             )
             if voids.enabled
+            else None
+        ),
+        collection_occlusion=(
+            CollectionOcclusionSettings(
+                event_interval_s_range=scale_duration_range(
+                    collection.event_interval_s_range,
+                    time_scale,
+                ),
+                radius_m_range=collection.radius_m_range,
+                duration_s_range=scale_duration_range(
+                    collection.duration_s_range,
+                    time_scale,
+                ),
+                distance_reduction_m_range=collection.distance_reduction_m_range,
+            )
+            if collection.enabled
             else None
         ),
         seed=config.seed,
