@@ -36,7 +36,7 @@ GitHub Container Registry(GHCR) image는 Public이므로 pull credential이 필�
 Release asset에서 불변 image 참조를 가져와 image를 준비한다.
 
 ```bash
-gh release download v0.2.0 \
+gh release download v0.2.1 \
   --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
   --pattern oci-image.txt \
   --dir /tmp/scrap-monitoring-lidar-generator-release
@@ -108,18 +108,13 @@ Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PA
 
 ## 현재 검증 기준
 
-현재 ARM64 배포 기준은 `v0.2.0` Release다. source revision은
-`3b29786c1d850ad14a41b94c3713de8ef6f0e92d`이고 불변 image 참조는 다음과 같다.
+현재 ARM64 배포 기준은 `v0.2.1` Release다. Release asset의 image는 `linux/arm64` 단일
+실행 platform과 Public package 상태를 확인했다. 센서별 독립 전송 lane, 전체 전송 중단
+오류의 즉시 보고와 진단 version 2를 포함한다.
 
-```text
-ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:359681841a572ec37255a5db45baacd655d49d8cc5fa3529ca7cda181f0d1e68
-```
-
-이 image는 `linux/arm64` 단일 실행 platform과 Public package 상태를 확인했다. Raspberry
-Pi 5에서 공개 합성 설정, scan ACK test double과 관찰 stream test double을 사용한 실행
-검증을 통과했다. 실제 scan 수신 프로그램과 별도 시각화 장비의 endpoint가 확정되면 같은
-digest와 외부 운영 설정으로 상시 container를 배치한다.
-
-`v0.2.0` 검증은 공개 합성 센서 1개를 사용했다. 현재 source의 센서별 독립 전송 lane과
-진단 version 2는 이 image에 포함되지 않는다. 센서가 여러 개인 배포와 해당 진단 형식은
-후속 Release image를 사용한다.
+Raspberry Pi 5에서 공개 합성 센서 1개, scan ACK test double과 관찰 stream test double을
+사용한 실행 검증을 통과했다. 센서 2개 추가 검증은 CPU 1 core 상한에서 지속 가능한 ACK
+처리량을 확보하지 못했으므로 실제 센서 수와 함께 자원 상한을 다시 검증해야 한다. source
+revision, 불변 image digest와 장비별 관측값은 [`performance.md`](performance.md)가 정본이다.
+실제 scan 수신 프로그램과 별도 시각화 장비의 endpoint가 확정되면 검증한 digest와 외부
+운영 설정으로 상시 container를 배치한다.
