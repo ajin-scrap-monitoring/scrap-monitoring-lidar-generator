@@ -73,6 +73,8 @@ JSON Schema 검사에 더하여 다음 9개 의미 규칙을 적용한다.
 
 각도와 거리는 유한한 수여야 한다. `angle_deg`의 범위는 `0 <= angle_deg < 360`이다. `distance_m`은 무효 측정의 0 또는 `0.05 <= distance_m <= 30` 범위의 유효 거리다. `quality`의 범위는 `0 <= quality <= 255`다.
 
+수신 프로그램은 같은 `environment_id`의 환경 설정에서 `sensor_id`와 일치하는 센서를 선택한다. `angle_rad = angle_deg * pi / 180`, `direction = cos(angle_rad) * u0 + sin(angle_rad) * u90`, `point = p0_m + distance_m * direction` 순서로 유효 측정의 공간 좌표를 계산한다. `distance_m`이 0인 측정은 공간 좌표로 변환하지 않는다.
+
 ## 전송 framing
 
 각 TCP frame은 4 byte unsigned big-endian 정수와 그 정수가 나타내는 길이의 MessagePack 본문으로 구성한다. 길이는 접두부를 제외한 본문 byte 수다. 빈 본문과 `max_message_body_bytes`를 초과하는 본문을 허용하지 않는다. 공개 예시의 개발용 기본값은 1048576 byte다. 송신 프로그램과 수신 프로그램은 같은 상한을 사용한다.
@@ -82,6 +84,10 @@ JSON Schema 검사에 더하여 다음 9개 의미 규칙을 적용한다.
 ## 수신 응답
 
 수신 프로그램은 스캔 처리와 결과 보존을 모두 완료한 뒤 ACK를 보낸다. ACK는 `run_id`, `sensor_id`, `scan_id`를 모두 포함한다. 생성 프로그램은 세 값이 현재 미응답 스캔과 정확히 일치할 때만 해당 스캔을 전달 완료로 처리한다.
+
+생성 프로그램은 ACK 제한 시간, 연결 중단 또는 일시 오류가 발생하면 보관 한도 안에서 같은 frame을 재전송한다. 이 계약의 전달 방식은 보관 한도가 있는 at-least-once이며 exactly-once가 아니다. 수신 프로그램은 `(run_id, sensor_id, scan_id)`를 멱등성 key로 사용하고 처리 결과와 멱등성 기록을 함께 보존한다.
+
+이미 처리를 완료한 key와 같은 frame을 다시 받으면 수신 프로그램은 계산과 결과 보존을 반복하지 않고 같은 ACK를 보낸다. 같은 key에 다른 본문을 받으면 기존 결과를 변경하지 않고 `invalid_scan`을 보낸다. 같은 key의 최초 처리가 진행 중이면 중복 처리를 동시에 실행하지 않으며 최초 처리가 완료된 뒤 ACK를 보내거나 `temporary_unavailable`을 보낸다. 수신 프로그램은 멱등성 기록을 송신 프로그램의 `buffer_max_age_s` 이상 보존한다.
 
 오류 응답의 `code`는 다음 4개 값 중 하나다.
 
@@ -109,5 +115,7 @@ JSON Schema 검사에 더하여 다음 9개 의미 규칙을 적용한다.
 | `reconnect_max_delay_s` | 재연결 지연 상한의 최댓값 |
 
 미응답 buffer는 보존 시간 또는 전체 크기 상한에 도달하면 가장 오래된 frame부터 폐기한다. 연결이 끊겨도 스캔 생성은 계속되고, 재전송하는 frame은 최초 적재 시각을 유지한다.
+
+수신 프로그램은 TCP 연결을 실행 또는 시퀀스 경계로 사용하지 않는다. 재연결된 frame은 기존 `run_id`, `sensor_id`, `scan_id`를 유지한다. `scan_id` 순서는 같은 `run_id`와 `sensor_id` 안에서만 비교하며 누락된 번호를 기다리지 않고 다음 수신 스캔을 처리한다.
 
 재연결 지연 상한은 실패마다 초기값부터 2배씩 증가하고 설정한 최댓값을 넘지 않는다. 실제 지연은 0부터 현재 상한까지의 균등 분포인 full jitter를 사용한다. TCP 연결 성공만으로 지연 상한을 초기화하지 않으며 정상 ACK를 받은 뒤 초기값으로 되돌린다. 제한 시간 계산은 단조 증가 시각을 사용한다.

@@ -13,6 +13,7 @@
 | [`docs/configuration.md`](docs/configuration.md) | 공개 설정 정본, 기본값 출처와 합성값 분류 |
 | [`docs/deployment.md`](docs/deployment.md) | OCI 이미지, 컨테이너 실행과 Release 절차 |
 | [`docs/performance.md`](docs/performance.md) | 생성 구간별 부하 측정과 결과 해석 |
+| [`docs/height-calculation-integration.md`](docs/height-calculation-integration.md) | 한 회전 scan의 높이 계산 프로세스 인계 계약 |
 | [`docs/observation.md`](docs/observation.md) | 적재 모델 관찰 stream과 외부 시각화 경계 |
 | [`docs/visualizer-requirements.md`](docs/visualizer-requirements.md) | 별도 시각화 Repository 구현 요구사항 |
 | [`contracts/v1/`](contracts/v1/) | 환경, 생성 실행, 품질 분포와 스캔 및 응답 계약 버전 1 |
