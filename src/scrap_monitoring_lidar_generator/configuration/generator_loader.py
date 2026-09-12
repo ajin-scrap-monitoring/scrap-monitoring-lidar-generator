@@ -202,6 +202,10 @@ def load_generator_inputs(path: str | Path) -> GeneratorInputs:
         raise ConfigurationError(
             "quality profile sensor_id values must exactly match environment sensors"
         )
+    if generator.transport.buffer_max_bytes < len(environment.sensors):
+        raise ConfigurationError(
+            "$.transport.buffer_max_bytes must be at least the environment sensor count"
+        )
 
     boundary = Polygon2(tuple(Vec2(x, y) for x, y in environment.boundary_xy_m))
     if any(not boundary.contains(Vec2(x, y)) for x, y in generator.scenario.inlet_positions_xy_m):

@@ -16,6 +16,7 @@ from scrap_monitoring_lidar_generator.observation import (
     MAX_OBSERVATION_INTERVAL_S,
 )
 from scrap_monitoring_lidar_generator.runtime import run_generator_application
+from scrap_monitoring_lidar_generator.transport import SenderHalt
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,6 +64,17 @@ async def _run_config(
     handled_signals = (signal.SIGINT, signal.SIGTERM)
     for handled_signal in handled_signals:
         loop.add_signal_handler(handled_signal, stop_event.set)
+    reported_halt: SenderHalt | None = None
+
+    def report_sender_halt(halt: SenderHalt) -> None:
+        nonlocal reported_halt
+        reported_halt = halt
+        sensor = "" if halt.sensor_id is None else f" sensor_id={halt.sensor_id}"
+        print(
+            f"transport halted{sensor}: {halt.code.value}: {halt.detail}",
+            file=sys.stderr,
+        )
+
     try:
         summary = await run_generator_application(
             inputs,
@@ -70,6 +82,7 @@ async def _run_config(
             observation_host=observation_host,
             observation_port=observation_port,
             observation_interval_s=observation_interval_s,
+            on_sender_halt=report_sender_halt,
         )
     finally:
         for handled_signal in handled_signals:
@@ -87,10 +100,8 @@ async def _run_config(
         f"connection_failures={summary.observation_stats.connection_failures}"
     )
     if summary.sender_halt is not None:
-        print(
-            f"transport halted: {summary.sender_halt.code.value}: {summary.sender_halt.detail}",
-            file=sys.stderr,
-        )
+        if summary.sender_halt != reported_halt:
+            report_sender_halt(summary.sender_halt)
         return 1
     return 0
 

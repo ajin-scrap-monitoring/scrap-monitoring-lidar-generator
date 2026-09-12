@@ -53,9 +53,10 @@ uv build --no-sources
 `diagnostics.output_path`를 container 내부의 `/data/diagnostics`로 지정한다. 실제 사설
 주소와 자격 증명은 Repository에 commit하지 않는다.
 
-생성기는 두 TCP(Transmission Control Protocol) server로 각각 outbound connection을
-만든다. 두 host는 container network에서 해석되고 접근 가능해야 한다. 관찰 수신기가
-연결되지 않아도 scan 생성과 기존 scan 송신은 계속된다.
+생성기는 scan 수신 server에 센서마다 독립된 outbound TCP(Transmission Control Protocol)
+connection을 만들고 관찰 수신 server에 별도 connection을 만든다. 두 host는 container
+network에서 해석되고 접근 가능해야 한다. 관찰 수신기가 연결되지 않아도 scan 생성과 기존
+scan 송신은 계속된다.
 
 개발 환경에서는 다음 명령으로 같은 실행 경로를 확인할 수 있다.
 
@@ -66,7 +67,7 @@ uv run --locked scrap-monitoring-lidar-generator \
   --observation-port 9100
 ```
 
-프로그램은 센서 회전 완료 시각에 맞춰 스캔을 생성하고 TCP 수신 프로그램으로 전송한다. 실행마다 UUID(Universally Unique Identifier) 형식의 새로운 `run_id`를 만들며 SIGINT 또는 SIGTERM을 받으면 생성과 송신을 정상 종료하고 집계를 출력한다.
+프로그램은 센서 회전 완료 시각에 맞춰 스캔을 생성하고 센서별 전송 lane으로 TCP 수신 프로그램에 전달한다. 실행마다 UUID(Universally Unique Identifier) 형식의 새로운 `run_id`를 만들며 SIGINT 또는 SIGTERM을 받으면 생성과 송신을 정상 종료하고 집계를 출력한다. 환경, version 또는 응답 규격 오류로 전체 scan 전송이 중단되면 원인 센서와 오류를 즉시 표준 오류에 기록하고 시나리오 계산과 bounded buffer 만료는 계속한다.
 
 OCI(Open Container Initiative) 이미지 선택, 설정 준비, container 실행과 ARM64 Release
 절차는 [`docs/deployment.md`](docs/deployment.md)를 따른다.

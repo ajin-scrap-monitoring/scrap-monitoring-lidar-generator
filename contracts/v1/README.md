@@ -31,13 +31,13 @@ JSON Schema 검사에 더하여 다음 5개 의미 규칙을 적용한다.
 
 ## 생성 실행 설정
 
-`generator.schema.json`은 생성 프로그램만 사용하는 시나리오, 측정, 전송과 진단 설정이다. 생성 프로그램은 TCP(Transmission Control Protocol) client이고 수신 프로그램은 TCP server다. 생성 프로그램은 여러 스캔을 지속 연결로 전송한다.
+`generator.schema.json`은 생성 프로그램만 사용하는 시나리오, 측정, 전송과 진단 설정이다. 생성 프로그램은 TCP(Transmission Control Protocol) client이고 수신 프로그램은 TCP server다. 생성 프로그램은 설정된 센서마다 같은 수신 endpoint에 독립된 지속 연결을 하나씩 만들고 해당 센서의 여러 스캔을 전송한다. 수신 프로그램은 설정된 센서 수만큼의 동시 연결을 수락한다.
 
 설정의 `environment_path`, `quality_profile_path`와 진단 출력 경로가 상대 경로이면 생성 실행 설정 파일이 있는 디렉토리를 기준으로 해석한다. 모든 조정값은 설정에 명시하며 schema가 암묵적인 기본값을 제공하지 않는다.
 
 `fill_duration_factor_range`는 회차별 적재 목표 시간을 평균 적재 시간에 대한 배수로 정한다. `collection_duration_factor_range`는 회차별 수거 목표 시간을 평균 적재 시간에 대한 배수로 정한다. 적재 및 수거 속도 배수 범위는 각 회차의 평균 속도를 기준으로 하며 이름이 `_s_range`로 끝나는 시간 범위는 시뮬레이션 초 단위다.
 
-JSON Schema 검사에 더하여 다음 9개 의미 규칙을 적용한다.
+JSON Schema 검사에 더하여 다음 10개 의미 규칙을 적용한다.
 
 - 두 값으로 구성된 모든 범위의 최솟값 우선 순서
 - 평균 1을 중심으로 대칭인 회차별 적재 시간 배수 범위
@@ -47,6 +47,7 @@ JSON Schema 검사에 더하여 다음 9개 의미 규칙을 적용한다.
 - 중복되지 않고 환경 경계 안에 있는 투입 위치
 - 환경 설정과 정확히 일치하는 품질 분포의 센서 식별자 집합
 - 중복되지 않는 품질 분포의 센서 식별자
+- 환경 센서 수 이상인 미응답 buffer byte 상한
 - 재연결 최대 지연 이하의 재연결 초기 지연
 
 품질 빈도 객체의 key는 `0`부터 `255`까지의 정수 문자열이다. 객체에 없는 품질 값의 빈도는 0이며 유효 거리와 무효 거리 빈도 객체는 각각 하나 이상의 양의 빈도를 포함한다.
@@ -85,7 +86,7 @@ JSON Schema 검사에 더하여 다음 9개 의미 규칙을 적용한다.
 
 수신 프로그램은 스캔 처리와 결과 보존을 모두 완료한 뒤 ACK를 보낸다. ACK는 `run_id`, `sensor_id`, `scan_id`를 모두 포함한다. 생성 프로그램은 세 값이 현재 미응답 스캔과 정확히 일치할 때만 해당 스캔을 전달 완료로 처리한다.
 
-생성 프로그램은 ACK 제한 시간, 연결 중단 또는 일시 오류가 발생하면 보관 한도 안에서 같은 frame을 재전송한다. 이 계약의 전달 방식은 보관 한도가 있는 at-least-once이며 exactly-once가 아니다. 수신 프로그램은 `(run_id, sensor_id, scan_id)`를 멱등성 key로 사용하고 처리 결과와 멱등성 기록을 함께 보존한다.
+각 센서 전송 lane은 ACK 제한 시간, 연결 중단 또는 일시 오류가 발생하면 보관 한도 안에서 같은 frame을 재전송한다. 다른 센서 lane은 해당 ACK나 재연결을 기다리지 않는다. 이 계약의 전달 방식은 보관 한도가 있는 at-least-once이며 exactly-once가 아니다. 수신 프로그램은 `(run_id, sensor_id, scan_id)`를 멱등성 key로 사용하고 처리 결과와 멱등성 기록을 함께 보존한다.
 
 이미 처리를 완료한 key와 같은 frame을 다시 받으면 수신 프로그램은 계산과 결과 보존을 반복하지 않고 같은 ACK를 보낸다. 같은 key에 다른 본문을 받으면 기존 결과를 변경하지 않고 `invalid_scan`을 보낸다. 같은 key의 최초 처리가 진행 중이면 중복 처리를 동시에 실행하지 않으며 최초 처리가 완료된 뒤 ACK를 보내거나 `temporary_unavailable`을 보낸다. 수신 프로그램은 멱등성 기록을 송신 프로그램의 `buffer_max_age_s` 이상 보존한다.
 
@@ -107,14 +108,16 @@ JSON Schema 검사에 더하여 다음 9개 의미 규칙을 적용한다.
 | `host`, `port` | 수신 TCP endpoint |
 | `max_message_body_bytes` | frame 접두부를 제외한 MessagePack 본문 상한 |
 | `buffer_max_age_s` | 미응답 frame의 최초 적재 시각 기준 보존 시간 |
-| `buffer_max_bytes` | 4 byte 접두부를 포함한 미응답 frame 전체 크기 상한 |
+| `buffer_max_bytes` | 4 byte 접두부를 포함한 전체 센서 lane의 미응답 frame 합산 크기 상한 |
 | `connect_timeout_s` | TCP 연결 제한 시간 |
 | `send_timeout_s` | 한 frame 전송 제한 시간 |
 | `ack_timeout_s` | 한 스캔의 ACK 대기 제한 시간 |
 | `reconnect_initial_delay_s` | 첫 재연결 지연 상한 |
 | `reconnect_max_delay_s` | 재연결 지연 상한의 최댓값 |
 
-미응답 buffer는 보존 시간 또는 전체 크기 상한에 도달하면 가장 오래된 frame부터 폐기한다. 연결이 끊겨도 스캔 생성은 계속되고, 재전송하는 frame은 최초 적재 시각을 유지한다.
+미응답 buffer는 보존 시간 또는 센서별 byte 할당량에 도달하면 해당 lane의 가장 오래된 frame부터 폐기한다. 전체 byte 상한은 센서 식별자 순서로 lane에 균등 분할한다. 연결이 끊겨도 스캔 생성은 계속되고, 재전송하는 frame은 최초 적재 시각을 유지한다.
+
+환경, version 또는 응답 규격 오류가 한 lane에서 발생하면 생성 프로그램은 전체 센서 lane의 전송을 중단하고 최초 오류와 원인 센서를 즉시 보고한다. 시나리오 계산과 미응답 buffer의 보존 시간 만료는 계속된다.
 
 수신 프로그램은 TCP 연결을 실행 또는 시퀀스 경계로 사용하지 않는다. 재연결된 frame은 기존 `run_id`, `sensor_id`, `scan_id`를 유지한다. `scan_id` 순서는 같은 `run_id`와 `sensor_id` 안에서만 비교하며 누락된 번호를 기다리지 않고 다음 수신 스캔을 처리한다.
 

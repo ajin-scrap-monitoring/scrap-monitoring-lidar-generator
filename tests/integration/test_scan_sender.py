@@ -9,11 +9,14 @@ import pytest
 from scrap_monitoring_lidar_generator.measurement import MeasuredScan
 from scrap_monitoring_lidar_generator.transport import (
     AckMessage,
+    AsyncMultiSensorScanSender,
     AsyncScanSender,
     ErrorCode,
     ErrorMessage,
     ScanIdentity,
     ScanMessage,
+    SenderHalt,
+    SenderHaltCallback,
     SenderHaltCode,
     decode_scan_message,
     encode_frame,
@@ -23,14 +26,14 @@ from scrap_monitoring_lidar_generator.transport import (
 type ServerHandler = Callable[[asyncio.StreamReader, asyncio.StreamWriter], Awaitable[None]]
 
 
-def _message(scan_id: int = 1) -> ScanMessage:
+def _message(scan_id: int = 1, *, sensor_id: str = "sensor-a") -> ScanMessage:
     return ScanMessage(
         environment_id="environment-a",
         run_id="run-a",
         scan_id=scan_id,
         captured_at=1_800_000_000_000_000 + scan_id,
         measured_scan=MeasuredScan(
-            sensor_id="sensor-a",
+            sensor_id=sensor_id,
             angles_deg=np.asarray([0.0], dtype=np.float64),
             distances_m=np.asarray([2.5], dtype=np.float64),
             qualities=np.asarray([64], dtype=np.uint8),
@@ -55,6 +58,29 @@ def _sender(host: str, port: int, *, ack_timeout_s: float = 0.05) -> AsyncScanSe
         reconnect_initial_delay_s=0.001,
         reconnect_max_delay_s=0.002,
         seed=123,
+    )
+
+
+def _multi_sensor_sender(
+    host: str,
+    port: int,
+    *,
+    on_halt: SenderHaltCallback | None = None,
+) -> AsyncMultiSensorScanSender:
+    return AsyncMultiSensorScanSender(
+        sensor_ids=("sensor-a", "sensor-b"),
+        host=host,
+        port=port,
+        max_body_bytes=1_048_576,
+        buffer_max_age_s=2.0,
+        buffer_max_bytes=2_097_160,
+        connect_timeout_s=0.05,
+        send_timeout_s=0.05,
+        ack_timeout_s=1.0,
+        reconnect_initial_delay_s=0.001,
+        reconnect_max_delay_s=0.002,
+        seed=123,
+        on_halt=on_halt,
     )
 
 
@@ -215,6 +241,49 @@ def test_sender_accepts_new_scan_while_waiting_for_ack() -> None:
     asyncio.run(_run_with_server(handler, scenario))
 
 
+def test_multi_sensor_sender_does_not_block_one_sensor_on_another_sensors_ack() -> None:
+    sensor_a_received = asyncio.Event()
+    sensor_b_acknowledged = asyncio.Event()
+    release_sensor_a = asyncio.Event()
+
+    async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        message = decode_scan_message(await _read_frame_body(reader))
+        if message.sensor_id == "sensor-a":
+            sensor_a_received.set()
+            await release_sensor_a.wait()
+        await _send_response(
+            writer,
+            AckMessage(identity=ScanIdentity(message.run_id, message.sensor_id, message.scan_id)),
+        )
+        if message.sensor_id == "sensor-b":
+            sensor_b_acknowledged.set()
+        await reader.read()
+        writer.close()
+        await writer.wait_closed()
+
+    async def scenario(host: str, port: int) -> None:
+        sender = _multi_sensor_sender(host, port)
+        sender.enqueue_scan(_message(sensor_id="sensor-a"))
+        sender.enqueue_scan(_message(sensor_id="sensor-b"))
+        task = asyncio.create_task(sender.run())
+        try:
+            await asyncio.wait_for(sensor_a_received.wait(), timeout=1.0)
+            await asyncio.wait_for(sensor_b_acknowledged.wait(), timeout=1.0)
+            await _wait_until(lambda: sender.pending_frames == 1)
+
+            release_sensor_a.set()
+            await _wait_until(lambda: sender.pending_frames == 0)
+        finally:
+            release_sensor_a.set()
+            sender.request_stop()
+            await asyncio.wait_for(task, timeout=1.0)
+
+        assert sender.stats.sent_frames == 2
+        assert sender.stats.acknowledged_frames == 2
+
+    asyncio.run(_run_with_server(handler, scenario))
+
+
 def test_temporary_unavailable_reconnects_without_removing_scan() -> None:
     connection_count = 0
 
@@ -321,5 +390,44 @@ def test_malformed_response_halts_transport_without_removing_scan() -> None:
         assert sender.halt is not None
         assert sender.halt.code is SenderHaltCode.PROTOCOL_ERROR
         assert sender.pending_frames == 1
+
+    asyncio.run(_run_with_server(handler, scenario))
+
+
+def test_multi_sensor_sender_reports_the_first_global_halt_with_source_sensor() -> None:
+    received_sensor_ids: list[str] = []
+
+    async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        message = decode_scan_message(await _read_frame_body(reader))
+        received_sensor_ids.append(message.sensor_id)
+        await _send_response(
+            writer,
+            ErrorMessage(
+                code=ErrorCode.ENVIRONMENT_MISMATCH,
+                message="wrong environment",
+                identity=ScanIdentity(message.run_id, message.sensor_id, message.scan_id),
+            ),
+        )
+        await reader.read()
+        writer.close()
+        await writer.wait_closed()
+
+    async def scenario(host: str, port: int) -> None:
+        reported: list[SenderHalt] = []
+        sender = _multi_sensor_sender(host, port, on_halt=reported.append)
+        sender.enqueue_scan(_message(sensor_id="sensor-b"))
+        task = asyncio.create_task(sender.run())
+        await _wait_until(lambda: sender.halt is not None)
+        sender.enqueue_scan(_message(sensor_id="sensor-a"))
+        await asyncio.sleep(0.02)
+        sender.request_stop()
+        await asyncio.wait_for(task, timeout=1.0)
+
+        assert sender.halt is not None
+        assert sender.halt.code is SenderHaltCode.ENVIRONMENT_MISMATCH
+        assert sender.halt.sensor_id == "sensor-b"
+        assert reported == [sender.halt]
+        assert received_sensor_ids == ["sensor-b"]
+        assert sender.pending_frames == 2
 
     asyncio.run(_run_with_server(handler, scenario))

@@ -11,8 +11,13 @@ from typing import Protocol, TextIO
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
 from scrap_monitoring_lidar_generator.measurement import MeasurementResult
 from scrap_monitoring_lidar_generator.scenario import ScenarioSimulator
+from scrap_monitoring_lidar_generator.transport import (
+    MAX_SIGNED_64_BIT,
+    scan_captured_at_utc_us,
+)
 
 _MAX_SEED = 18_446_744_073_709_551_615
+_DIAGNOSTICS_VERSION = 2
 
 
 class MeasurementDiagnosticsSink(Protocol):
@@ -32,6 +37,8 @@ class JsonLinesDiagnosticsWriter:
         "_input_fingerprint",
         "_output_directory",
         "_recorded_counts",
+        "_run_id",
+        "_run_started_at_utc_us",
         "_sample_scan_limit_per_sensor",
         "_seed",
         "_sensor_ids",
@@ -46,6 +53,8 @@ class JsonLinesDiagnosticsWriter:
         environment_id: str,
         input_fingerprint: str,
         seed: int,
+        run_id: str,
+        run_started_at_utc_us: int,
         sensor_ids: tuple[str, ...],
         sample_scan_limit_per_sensor: int,
     ) -> None:
@@ -57,6 +66,16 @@ class JsonLinesDiagnosticsWriter:
             raise ValueError("diagnostics input fingerprint must be lowercase SHA-256 hex")
         if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= _MAX_SEED:
             raise ValueError("diagnostics seed must be an unsigned 64-bit integer")
+        if not isinstance(run_id, str) or not run_id:
+            raise ValueError("diagnostics run_id must be non-empty")
+        if (
+            isinstance(run_started_at_utc_us, bool)
+            or not isinstance(run_started_at_utc_us, int)
+            or not 0 <= run_started_at_utc_us <= MAX_SIGNED_64_BIT
+        ):
+            raise ValueError(
+                "diagnostics run start UTC timestamp must be a non-negative 64-bit integer"
+            )
         if not sensor_ids or any(not sensor_id for sensor_id in sensor_ids):
             raise ValueError("diagnostics sensor identifiers must be non-empty")
         if len(set(sensor_ids)) != len(sensor_ids):
@@ -72,6 +91,8 @@ class JsonLinesDiagnosticsWriter:
         self._environment_id = environment_id
         self._input_fingerprint = input_fingerprint
         self._seed = seed
+        self._run_id = run_id
+        self._run_started_at_utc_us = run_started_at_utc_us
         self._sensor_ids = frozenset(sensor_ids)
         self._sample_scan_limit_per_sensor = sample_scan_limit_per_sensor
         self._recorded_counts = dict.fromkeys(sensor_ids, 0)
@@ -131,7 +152,10 @@ class JsonLinesDiagnosticsWriter:
         self._output_directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         sequence = 1
         while True:
-            candidate = self._output_directory / f"reference-scans.v1.{sequence:04d}.jsonl"
+            candidate = (
+                self._output_directory
+                / f"reference-scans.v{_DIAGNOSTICS_VERSION}.{sequence:04d}.jsonl"
+            )
             try:
                 descriptor = os.open(
                     candidate,
@@ -153,12 +177,18 @@ class JsonLinesDiagnosticsWriter:
         snapshot = scenario.snapshot
         surface = scenario.surface
         return {
-            "diagnostics_version": 1,
+            "diagnostics_version": _DIAGNOSTICS_VERSION,
             "environment_id": self._environment_id,
             "input_fingerprint_sha256": self._input_fingerprint,
             "seed": self._seed,
+            "run_id": self._run_id,
+            "run_started_at_utc_us": self._run_started_at_utc_us,
             "sensor_id": result.sensor_id,
             "scan_id": result.scan_id,
+            "captured_at": scan_captured_at_utc_us(
+                self._run_started_at_utc_us,
+                result.measured.captured_elapsed_s,
+            ),
             "captured_elapsed_s": result.reference.captured_elapsed_s,
             "completed_at_s": result.reference.completed_at_s,
             "scenario": {
@@ -214,7 +244,12 @@ def generator_input_fingerprint(inputs: GeneratorInputs) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def build_diagnostics_writer(inputs: GeneratorInputs) -> JsonLinesDiagnosticsWriter:
+def build_diagnostics_writer(
+    inputs: GeneratorInputs,
+    *,
+    run_id: str,
+    run_started_at_utc_us: int,
+) -> JsonLinesDiagnosticsWriter:
     """Build a bounded writer from validated generator inputs."""
     config = inputs.generator.diagnostics
     return JsonLinesDiagnosticsWriter(
@@ -222,6 +257,8 @@ def build_diagnostics_writer(inputs: GeneratorInputs) -> JsonLinesDiagnosticsWri
         environment_id=inputs.environment.environment_id,
         input_fingerprint=generator_input_fingerprint(inputs),
         seed=inputs.generator.seed,
+        run_id=run_id,
+        run_started_at_utc_us=run_started_at_utc_us,
         sensor_ids=tuple(sensor.sensor_id for sensor in inputs.environment.sensors),
         sample_scan_limit_per_sensor=config.sample_scan_limit_per_sensor,
     )

@@ -1,12 +1,14 @@
 """Async scan delivery state machine with bounded recovery."""
 
 import asyncio
+import hashlib
 import math
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import partial
 
 from scrap_monitoring_lidar_generator.transport.backoff import ReconnectBackoff
 from scrap_monitoring_lidar_generator.transport.codec import encode_scan_message
@@ -32,6 +34,8 @@ from scrap_monitoring_lidar_generator.transport.unacked import (
     UnackedFrameBuffer,
 )
 
+_MAX_SEED = 18_446_744_073_709_551_615
+
 
 class SenderHaltCode(StrEnum):
     """Non-retryable reason that network delivery stopped."""
@@ -47,6 +51,10 @@ class SenderHalt:
 
     code: SenderHaltCode
     detail: str
+    sensor_id: str | None = None
+
+
+type SenderHaltCallback = Callable[[SenderHalt], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +88,7 @@ class _ReconnectRequested(Exception):
 
 
 class AsyncScanSender:
-    """Deliver scans independently from generation with bounded retry state."""
+    """Deliver one scan lane independently from generation with bounded retry state."""
 
     __slots__ = (
         "_ack_timeout_s",
@@ -92,6 +100,7 @@ class AsyncScanSender:
         "_halt",
         "_host",
         "_max_body_bytes",
+        "_on_halt",
         "_port",
         "_running",
         "_send_timeout_s",
@@ -116,6 +125,7 @@ class AsyncScanSender:
         reconnect_max_delay_s: float,
         seed: int,
         clock: Callable[[], float] = time.monotonic,
+        on_halt: SenderHaltCallback | None = None,
     ) -> None:
         if not isinstance(host, str) or not host:
             raise ValueError("sender host must be a non-empty string")
@@ -143,6 +153,7 @@ class AsyncScanSender:
             seed=seed,
         )
         self._clock = clock
+        self._on_halt = on_halt
         self._stats = _MutableSenderStats()
         self._halt: SenderHalt | None = None
         self._wakeup = asyncio.Event()
@@ -289,6 +300,8 @@ class AsyncScanSender:
                     self._backoff.reset_after_ack()
             else:
                 self._handle_error(response, identity)
+                if self._halt is not None:
+                    return
 
     def _handle_error(self, response: ErrorMessage, current_identity: ScanIdentity) -> None:
         if response.code is ErrorCode.TEMPORARY_UNAVAILABLE:
@@ -308,15 +321,24 @@ class AsyncScanSender:
             if response.code is ErrorCode.ENVIRONMENT_MISMATCH
             else SenderHaltCode.UNSUPPORTED_VERSION
         )
-        self._halt = SenderHalt(
-            code=halt_code,
-            detail=response.message or response.code.value,
+        self._set_halt(
+            SenderHalt(
+                code=halt_code,
+                detail=response.message or response.code.value,
+            )
         )
-        self._wakeup.set()
 
     def _set_protocol_halt(self, error: Exception) -> None:
-        self._halt = SenderHalt(code=SenderHaltCode.PROTOCOL_ERROR, detail=str(error))
+        self._set_halt(SenderHalt(code=SenderHaltCode.PROTOCOL_ERROR, detail=str(error)))
+
+    def _set_halt(self, halt: SenderHalt, *, notify: bool = True) -> None:
+        if self._halt is not None:
+            return
+        self._halt = halt
         self._wakeup.set()
+        if notify and self._on_halt is not None:
+            with suppress(Exception):
+                self._on_halt(halt)
 
     def _expire(self) -> None:
         self._record_discards(self._buffer.expire(now_s=self._clock()))
@@ -342,6 +364,8 @@ class AsyncScanSender:
 
     async def _wait_while_halted(self) -> None:
         self._wakeup.clear()
+        if self._stop_requested:
+            return
         entries = self._buffer.entries
         if not entries:
             await self._wakeup.wait()
@@ -350,6 +374,154 @@ class AsyncScanSender:
         remaining_s = max(0.0, oldest.enqueued_at_s + self._buffer_max_age_s - self._clock())
         with suppress(TimeoutError):
             await asyncio.wait_for(self._wakeup.wait(), timeout=remaining_s)
+
+
+class AsyncMultiSensorScanSender:
+    """Route each configured sensor through an independent scan delivery lane."""
+
+    __slots__ = (
+        "_halt",
+        "_on_halt",
+        "_running",
+        "_senders",
+        "_stop_requested",
+    )
+
+    def __init__(
+        self,
+        *,
+        sensor_ids: Sequence[str],
+        host: str,
+        port: int,
+        max_body_bytes: int,
+        buffer_max_age_s: float,
+        buffer_max_bytes: int,
+        connect_timeout_s: float,
+        send_timeout_s: float,
+        ack_timeout_s: float,
+        reconnect_initial_delay_s: float,
+        reconnect_max_delay_s: float,
+        seed: int,
+        clock: Callable[[], float] = time.monotonic,
+        on_halt: SenderHaltCallback | None = None,
+    ) -> None:
+        if isinstance(sensor_ids, str):
+            raise ValueError("multi-sensor sender identifiers must be a sequence of strings")
+        received_identifiers = tuple(sensor_ids)
+        if not received_identifiers or any(
+            not isinstance(sensor_id, str) or not sensor_id for sensor_id in received_identifiers
+        ):
+            raise ValueError("multi-sensor sender identifiers must be non-empty strings")
+        identifiers = tuple(sorted(received_identifiers))
+        if len(set(identifiers)) != len(identifiers):
+            raise ValueError("multi-sensor sender identifiers must be unique")
+        if type(buffer_max_bytes) is not int or buffer_max_bytes < len(identifiers):
+            raise ValueError("multi-sensor sender buffer bytes must be at least the sensor count")
+        if type(seed) is not int or not 0 <= seed <= _MAX_SEED:
+            raise ValueError("multi-sensor sender seed must be an unsigned 64-bit integer")
+        self._halt: SenderHalt | None = None
+        self._on_halt = on_halt
+        self._running = False
+        self._stop_requested = False
+        base_buffer_bytes, extra_buffer_lanes = divmod(buffer_max_bytes, len(identifiers))
+        self._senders = {
+            sensor_id: AsyncScanSender(
+                host=host,
+                port=port,
+                max_body_bytes=max_body_bytes,
+                buffer_max_age_s=buffer_max_age_s,
+                buffer_max_bytes=base_buffer_bytes + int(index < extra_buffer_lanes),
+                connect_timeout_s=connect_timeout_s,
+                send_timeout_s=send_timeout_s,
+                ack_timeout_s=ack_timeout_s,
+                reconnect_initial_delay_s=reconnect_initial_delay_s,
+                reconnect_max_delay_s=reconnect_max_delay_s,
+                seed=_derive_lane_seed(seed, sensor_id),
+                clock=clock,
+                on_halt=partial(self._halt_all, sensor_id),
+            )
+            for index, sensor_id in enumerate(identifiers)
+        }
+
+    @property
+    def stats(self) -> SenderStats:
+        """Return counters aggregated across every sensor lane."""
+        lane_stats = tuple(sender.stats for sender in self._senders.values())
+        return SenderStats(
+            enqueued_frames=sum(stats.enqueued_frames for stats in lane_stats),
+            sent_frames=sum(stats.sent_frames for stats in lane_stats),
+            acknowledged_frames=sum(stats.acknowledged_frames for stats in lane_stats),
+            rejected_frames=sum(stats.rejected_frames for stats in lane_stats),
+            expired_frames=sum(stats.expired_frames for stats in lane_stats),
+            capacity_discarded_frames=sum(stats.capacity_discarded_frames for stats in lane_stats),
+            oversized_frames=sum(stats.oversized_frames for stats in lane_stats),
+            connection_failures=sum(stats.connection_failures for stats in lane_stats),
+        )
+
+    @property
+    def halt(self) -> SenderHalt | None:
+        """Return the first non-retryable state that stopped every lane."""
+        return self._halt
+
+    @property
+    def pending_frames(self) -> int:
+        """Return retained frame count aggregated across every sensor lane."""
+        return sum(sender.pending_frames for sender in self._senders.values())
+
+    @property
+    def pending_bytes(self) -> int:
+        """Return retained wire bytes aggregated across every sensor lane."""
+        return sum(sender.pending_bytes for sender in self._senders.values())
+
+    def enqueue_scan(self, message: ScanMessage) -> BufferEnqueueResult:
+        """Route one scan to the lane identified by its sensor_id."""
+        if self._stop_requested:
+            raise RuntimeError("multi-sensor scan sender has stopped")
+        try:
+            sender = self._senders[message.sensor_id]
+        except KeyError as error:
+            raise ValueError("scan sensor_id is not configured for delivery") from error
+        return sender.enqueue_scan(message)
+
+    def request_stop(self) -> None:
+        """Request a clean stop for every sensor lane."""
+        self._stop_requested = True
+        for sender in self._senders.values():
+            sender.request_stop()
+
+    async def run(self) -> None:
+        """Run all sensor delivery lanes until stopped or cancelled."""
+        if self._running:
+            raise RuntimeError("multi-sensor scan sender is already running")
+        if self._stop_requested:
+            return
+        self._running = True
+        try:
+            async with asyncio.TaskGroup() as tasks:
+                for sender in self._senders.values():
+                    tasks.create_task(sender.run())
+        finally:
+            self._running = False
+
+    def _halt_all(self, sensor_id: str, halt: SenderHalt) -> None:
+        if self._halt is not None:
+            return
+        shared_halt = SenderHalt(
+            code=halt.code,
+            detail=halt.detail,
+            sensor_id=sensor_id,
+        )
+        self._halt = shared_halt
+        for sender in self._senders.values():
+            sender._set_halt(shared_halt, notify=False)
+        if self._on_halt is not None:
+            with suppress(Exception):
+                self._on_halt(shared_halt)
+
+
+def _derive_lane_seed(seed: int, sensor_id: str) -> int:
+    payload = b"scan-sender-lane\0" + seed.to_bytes(8, byteorder="big") + sensor_id.encode("utf-8")
+    return int.from_bytes(hashlib.sha256(payload).digest()[:8], byteorder="big")
 
 
 def _require_positive_duration(value: float, name: str) -> float:
