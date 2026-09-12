@@ -8,6 +8,10 @@ import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
+from scrap_monitoring_lidar_generator.observation import (
+    decode_observation_header_line,
+    decode_observation_line,
+)
 from scrap_monitoring_lidar_generator.transport import (
     AckMessage,
     ErrorMessage,
@@ -43,21 +47,27 @@ def test_contract_schema_is_valid_draft_2020_12(name: str) -> None:
 
 
 def test_observation_contract_schema_is_valid_draft_2020_12() -> None:
-    Draft202012Validator.check_schema(
-        _load_json(_OBSERVATION_CONTRACTS / "observation.schema.json")
-    )
+    for name in ("header.schema.json", "observation.schema.json"):
+        Draft202012Validator.check_schema(_load_json(_OBSERVATION_CONTRACTS / name))
 
 
 def test_observation_fixture_matches_contract() -> None:
-    schema = _load_json(_OBSERVATION_CONTRACTS / "observation.schema.json")
+    header_schema = _load_json(_OBSERVATION_CONTRACTS / "header.schema.json")
+    observation_schema = _load_json(_OBSERVATION_CONTRACTS / "observation.schema.json")
     lines = (
         (_OBSERVATION_CONTRACTS / "fixtures" / "observation.v1.jsonl")
         .read_text(encoding="utf-8")
         .splitlines()
     )
 
-    assert len(lines) == 1
-    Draft202012Validator(schema).validate(json.loads(lines[0]))
+    assert len(lines) == 2
+    Draft202012Validator(header_schema).validate(json.loads(lines[0]))
+    Draft202012Validator(observation_schema).validate(json.loads(lines[1]))
+    header = decode_observation_header_line(lines[0])
+    record = decode_observation_line(lines[1])
+    assert header.run_id == record.run_id
+    assert header.scene.sensors[0].sensor_id == "sensor-a"
+    assert record.sequence == 1
 
 
 def test_synthetic_environment_matches_contract() -> None:

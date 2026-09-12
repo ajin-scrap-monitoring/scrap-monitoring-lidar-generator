@@ -1,4 +1,4 @@
-"""Tests for read-only model snapshots and bounded observation output."""
+"""Tests for read-only model snapshots and bounded observation streaming."""
 
 import asyncio
 import json
@@ -10,10 +10,15 @@ import pytest
 from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
 from scrap_monitoring_lidar_generator.geometry import Vec2
 from scrap_monitoring_lidar_generator.observation import (
-    JsonLinesObservationRecorder,
     ObservationFormatError,
     ObservationRecord,
+    ObservationScene,
+    ObservationStreamHeader,
+    TcpObservationPublisher,
+    decode_observation_header_line,
     decode_observation_line,
+    encode_observation_frame,
+    encode_observation_header_line,
     encode_observation_line,
 )
 from scrap_monitoring_lidar_generator.runtime import build_scenario_simulator
@@ -25,6 +30,18 @@ from scrap_monitoring_lidar_generator.scenario import (
 )
 
 _ROOT = Path(__file__).parents[2]
+_INPUTS = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
+_SCENE = ObservationScene.from_inputs(_INPUTS)
+
+
+def _header() -> ObservationStreamHeader:
+    return ObservationStreamHeader(
+        environment_id="synthetic-room-v1",
+        run_id="run-a",
+        input_fingerprint_sha256="0" * 64,
+        seed=42,
+        scene=_SCENE,
+    )
 
 
 def _record(elapsed_s: float = 1.0) -> ObservationRecord:
@@ -50,10 +67,8 @@ def _record(elapsed_s: float = 1.0) -> ObservationRecord:
     )
     return ObservationRecord.from_snapshot(
         ScenarioModelSnapshot(state=state, surface=surface),
-        environment_id="synthetic-room-v1",
+        sequence=max(1, round(elapsed_s * 10)),
         run_id="run-a",
-        input_fingerprint_sha256="0" * 64,
-        seed=42,
     )
 
 
@@ -80,12 +95,29 @@ def test_observation_line_round_trips_without_scan_fields() -> None:
     encoded = encode_observation_line(_record())
     decoded = decode_observation_line(encoded)
 
-    assert decoded.environment_id == "synthetic-room-v1"
+    assert decoded.run_id == "run-a"
+    assert decoded.sequence == 10
     assert decoded.snapshot.state.elapsed_s == pytest.approx(1.0)
     np.testing.assert_array_equal(decoded.snapshot.surface.heights_m, [[0.0, 0.1], [0.2, 0.3]])
     document = json.loads(encoded)
     assert document["type"] == "load_model_observation"
+    assert "scene" not in document
     assert "points" not in document
+
+
+def test_observation_header_round_trips_with_static_scene() -> None:
+    encoded = encode_observation_header_line(_header())
+    decoded = decode_observation_header_line(encoded)
+
+    assert decoded.environment_id == "synthetic-room-v1"
+    assert decoded.run_id == "run-a"
+    assert decoded.scene.boundary_xy_m == (
+        (0.0, 0.0),
+        (8.0, 0.0),
+        (8.0, 6.0),
+        (0.0, 6.0),
+    )
+    assert decoded.scene.sensors[0].sensor_id == "sensor-a"
 
 
 def test_observation_decoder_rejects_unknown_fields() -> None:
@@ -98,59 +130,122 @@ def test_observation_decoder_rejects_unknown_fields() -> None:
 
 def test_observation_decoder_rejects_duplicate_fields() -> None:
     encoded = encode_observation_line(_record())
-    duplicate = encoded[:-1] + ',"seed":42}'
+    duplicate = encoded[:-1] + ',"run_id":"run-b"}'
 
     with pytest.raises(ObservationFormatError, match="invalid observation JSON"):
         decode_observation_line(duplicate)
 
 
-def test_recorder_flushes_bounded_records_asynchronously(tmp_path: Path) -> None:
-    async def run() -> None:
-        recorder = JsonLinesObservationRecorder(
-            output_path=tmp_path / "observations.jsonl",
-            environment_id="synthetic-room-v1",
-            run_id="run-a",
-            input_fingerprint_sha256="0" * 64,
-            seed=42,
-            interval_s=1.0,
-            max_records=2,
-            queue_capacity=2,
-        )
-        await recorder.start()
-        assert recorder.publish(_record(0.1).snapshot)
-        assert not recorder.publish(_record(0.2).snapshot)
-        assert recorder.publish(_record(1.0).snapshot)
-        assert not recorder.publish(_record(2.0).snapshot)
-        await recorder.close()
+def test_observation_frame_enforces_the_wire_size_bound() -> None:
+    with pytest.raises(ObservationFormatError, match="exceeds 100 bytes"):
+        encode_observation_frame(_record(), max_line_bytes=100)
 
-        lines = (tmp_path / "observations.jsonl").read_text(encoding="utf-8").splitlines()
-        assert len(lines) == 2
-        assert recorder.recorded_count == len(lines)
-        assert recorder.error is None
-        assert [json.loads(line)["scenario"]["elapsed_s"] for line in lines] == [0.1, 1.0]
+
+def _publisher(port: int) -> TcpObservationPublisher:
+    return TcpObservationPublisher(
+        host="127.0.0.1",
+        port=port,
+        environment_id="synthetic-room-v1",
+        run_id="run-a",
+        input_fingerprint_sha256="0" * 64,
+        seed=42,
+        scene=_SCENE,
+        interval_s=1.0,
+        connect_timeout_s=0.2,
+        send_timeout_s=0.2,
+        reconnect_initial_delay_s=0.01,
+        reconnect_max_delay_s=0.02,
+    )
+
+
+def test_publisher_streams_due_records_as_json_lines() -> None:
+    async def run() -> None:
+        received: list[str] = []
+        complete = asyncio.Event()
+
+        async def receive(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            while len(received) < 3:
+                received.append((await reader.readline()).decode("utf-8"))
+            complete.set()
+            writer.close()
+            await writer.wait_closed()
+
+        server = await asyncio.start_server(receive, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        publisher = _publisher(port)
+        await publisher.start()
+        assert publisher.is_due(0.1)
+        assert publisher.publish(_record(0.1).snapshot)
+        while publisher.stats.sent_records < 1:
+            await asyncio.sleep(0)
+        assert not publisher.is_due(0.2)
+        assert publisher.is_due(1.0)
+        assert publisher.publish(_record(1.0).snapshot)
+        await asyncio.wait_for(complete.wait(), timeout=1.0)
+        await publisher.close()
+        server.close()
+        await server.wait_closed()
+
+        documents = [json.loads(line) for line in received]
+        assert [document["type"] for document in documents] == [
+            "load_model_stream_header",
+            "load_model_observation",
+            "load_model_observation",
+        ]
+        assert [document["scenario"]["elapsed_s"] for document in documents[1:]] == [0.1, 1.0]
+        assert [document["sequence"] for document in documents[1:]] == [1, 2]
+        assert publisher.stats.accepted_records == 2
+        assert publisher.stats.sent_records == 2
+        assert publisher.stats.dropped_records == 0
 
     asyncio.run(run())
 
 
-def test_recorder_keeps_latest_snapshot_when_queue_is_full(tmp_path: Path) -> None:
+def test_publisher_keeps_only_latest_pending_snapshot() -> None:
     async def run() -> None:
-        recorder = JsonLinesObservationRecorder(
-            output_path=tmp_path / "latest.jsonl",
-            environment_id="synthetic-room-v1",
-            run_id="run-a",
-            input_fingerprint_sha256="0" * 64,
-            seed=42,
-            interval_s=1.0,
-            max_records=3,
-            queue_capacity=1,
-        )
-        await recorder.start()
-        assert recorder.publish(_record(0.1).snapshot)
-        assert recorder.publish(_record(1.0).snapshot)
-        await recorder.close()
+        received = asyncio.Future[tuple[str, str]]()
 
-        lines = (tmp_path / "latest.jsonl").read_text(encoding="utf-8").splitlines()
-        assert [json.loads(line)["scenario"]["elapsed_s"] for line in lines] == [1.0]
-        assert recorder.dropped_count == 1
+        async def receive(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            header = (await reader.readline()).decode("utf-8")
+            observation = (await reader.readline()).decode("utf-8")
+            received.set_result((header, observation))
+            writer.close()
+            await writer.wait_closed()
+
+        server = await asyncio.start_server(receive, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        publisher = _publisher(port)
+        assert publisher.publish(_record(0.1).snapshot)
+        assert publisher.publish(_record(1.0).snapshot)
+        await publisher.start()
+        header_line, line = await asyncio.wait_for(received, timeout=1.0)
+        await publisher.close()
+        server.close()
+        await server.wait_closed()
+
+        assert json.loads(header_line)["type"] == "load_model_stream_header"
+        assert json.loads(line)["scenario"]["elapsed_s"] == 1.0
+        assert json.loads(line)["sequence"] == 2
+        assert publisher.stats.dropped_records == 1
+
+    asyncio.run(run())
+
+
+def test_connection_failure_is_isolated_and_shutdown_is_prompt() -> None:
+    async def run() -> None:
+        server = await asyncio.start_server(lambda _reader, _writer: None, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        server.close()
+        await server.wait_closed()
+        publisher = _publisher(port)
+        await publisher.start()
+        assert publisher.publish(_record().snapshot)
+        async with asyncio.timeout(1.0):
+            while publisher.stats.connection_failures == 0:
+                await asyncio.sleep(0.001)
+        await asyncio.wait_for(publisher.close(), timeout=0.1)
+
+        assert publisher.stats.sent_records == 0
+        assert publisher.stats.dropped_records == 1
 
     asyncio.run(run())

@@ -65,9 +65,6 @@ jobs:
       - name: Smoke test CLI
         run: uv run --locked scrap-monitoring-lidar-generator --help
 
-      - name: Smoke test visualization CLI
-        run: uv run --locked python -m tools.visualization.cli --help
-
       - name: Build package
         run: uv build --no-sources
 

@@ -34,7 +34,7 @@ Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로�
 
 공개 실행 설정의 출처와 분류는 [`docs/configuration.md`](../docs/configuration.md)가 정본이다. `measurement.sample_rate_hz`, `measurement.rotation_rate_hz`와 측정 거리 범위는 RPLIDAR S2E 기준을 반영하고, 시나리오, 측정 noise 및 distortion, 품질 분포, 전송과 진단 값은 프로젝트 합성 또는 개발 정책값으로 구분한다. 실제 센서 출력의 배열 길이는 고정하지 않으며 공개 예시의 측정점 수를 하드웨어 계약으로 해석하지 않는다.
 
-선택적 개발 관찰 기능은 [`docs/observation.md`](../docs/observation.md)와 `contracts/observation/v1/`을 정본으로 사용한다. 생성기는 읽기 전용 적재 모델 snapshot을 기존 scan 전송과 별도 JSON Lines 경계로 기록한다. 관찰 기능은 기본 비활성화하고 비동기 bounded 정책으로 생성 및 기존 scan 전송을 막지 않게 한다. 렌더링과 MP4 생성은 별도 개발 장비에서 수행하며 운영 이미지와 엣지 실행 경로에 포함하지 않는다.
+적재 모델 관찰 기능은 [`docs/observation.md`](../docs/observation.md)와 `contracts/observation/v1/`을 정본으로 사용한다. 생성기는 읽기 전용 적재 모델 snapshot을 기존 scan 전송과 별도 JSON Lines TCP stream으로 계속 전송한다. publisher는 최신 snapshot 1개만 보관하며 연결 실패와 느린 수신기가 생성 및 기존 scan 전송을 막지 않게 한다. 렌더링, 기록과 MP4 생성은 별도 시각화 Repository가 담당하며 운영 이미지와 엣지 실행 경로에 포함하지 않는다. 별도 Repository 구현 인계는 [`docs/visualizer-requirements.md`](../docs/visualizer-requirements.md)를 따른다.
 
 ## 내부 자료
 

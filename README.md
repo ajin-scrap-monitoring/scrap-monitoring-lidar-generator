@@ -13,7 +13,8 @@
 | [`docs/configuration.md`](docs/configuration.md) | 공개 설정 정본, 기본값 출처와 합성값 분류 |
 | [`docs/deployment.md`](docs/deployment.md) | OCI 이미지, 컨테이너 실행과 Release 절차 |
 | [`docs/performance.md`](docs/performance.md) | 생성 구간별 부하 측정과 결과 해석 |
-| [`docs/observation.md`](docs/observation.md) | 선택적 적재 모델 관찰 기록과 3D 시각화 |
+| [`docs/observation.md`](docs/observation.md) | 적재 모델 관찰 stream과 외부 시각화 경계 |
+| [`docs/visualizer-requirements.md`](docs/visualizer-requirements.md) | 별도 시각화 Repository 구현 요구사항 |
 | [`contracts/v1/`](contracts/v1/) | 환경, 생성 실행, 품질 분포와 스캔 및 응답 계약 버전 1 |
 | [`contracts/observation/v1/`](contracts/observation/v1/) | 적재 모델 관찰 출력 계약 버전 1 |
 | [Organization 개발 운영 규칙](https://github.com/ajin-scrap-monitoring/.github/blob/main/GOVERNANCE.md) | Issue, 브랜치, Pull Request, CI(Continuous Integration)와 Release 기준 |
@@ -36,14 +37,17 @@ uv build --no-sources
 생성 설정의 수신 주소와 입력 경로를 실행 환경에 맞게 지정한 뒤 다음 명령으로 실행한다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator --config /path/to/generator.v1.json
+uv run --locked scrap-monitoring-lidar-generator \
+  --config /path/to/generator.v1.json \
+  --observation-host visualizer-host \
+  --observation-port 9100
 ```
 
 프로그램은 센서 회전 완료 시각에 맞춰 스캔을 생성하고 TCP 수신 프로그램으로 전송한다. 실행마다 UUID(Universally Unique Identifier) 형식의 새로운 `run_id`를 만들며 SIGINT 또는 SIGTERM을 받으면 생성과 송신을 정상 종료하고 집계를 출력한다.
 
 OCI(Open Container Initiative) 이미지의 build, 실행과 ARM64 Release 절차는 [`docs/deployment.md`](docs/deployment.md)를 따른다.
 
-엣지 생성기의 선택적 적재 모델 관찰 기록과 별도 장비의 3D MP4 생성은 [`docs/observation.md`](docs/observation.md)를 따른다.
+엣지 생성기의 상시 적재 모델 관찰 stream과 별도 장비의 3D 시각화는 [`docs/observation.md`](docs/observation.md)를 따른다.
 
 ## 이용 조건
 

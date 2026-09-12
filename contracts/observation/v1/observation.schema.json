@@ -7,10 +7,8 @@
   "required": [
     "observation_version",
     "type",
-    "environment_id",
+    "sequence",
     "run_id",
-    "input_fingerprint_sha256",
-    "seed",
     "scenario",
     "surface"
   ],
@@ -21,22 +19,14 @@
     "type": {
       "const": "load_model_observation"
     },
-    "environment_id": {
-      "type": "string",
-      "minLength": 1
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
     },
     "run_id": {
       "type": "string",
       "minLength": 1
-    },
-    "input_fingerprint_sha256": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
-    },
-    "seed": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 18446744073709551615
     },
     "scenario": {
       "$ref": "#/$defs/scenario"

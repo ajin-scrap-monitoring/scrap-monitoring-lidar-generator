@@ -31,14 +31,16 @@ docker run --rm \
   --mount type=bind,src=/path/to/config,dst=/config,readonly \
   --mount type=bind,src=/path/to/diagnostics,dst=/data/diagnostics \
   ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:<manifest-digest> \
-  --config /config/generator.v1.json
+  --config /config/generator.v1.json \
+  --observation-host <visualizer-host> \
+  --observation-port 9100
 ```
 
 컨테이너 네트워크에서 접근 가능한 수신 주소를 생성 설정에 사용한다. Docker Engine의 `--cpus`와 `--memory`로 생성 프로그램의 자원 상한을 지정할 수 있다. 대상 Raspberry Pi 5의 공유 부하 측정 결과가 확정되기 전에는 Repository가 기본 자원 상한을 정하지 않는다.
 
 Docker Engine은 SIGTERM을 전달하며 프로그램은 진행 중인 생성과 송신 작업을 종료한 뒤 마지막 집계를 표준 출력에 기록한다. 전송 계약 오류와 설정 오류는 표준 오류에 기록한다. `docker logs`로 두 stream을 확인한다.
 
-선택적 적재 모델 관찰은 [`docs/observation.md`](observation.md)의 별도 개발 장비 경로를 사용한다. 운영 이미지에는 관찰 렌더러와 FFmpeg가 없으며, 관찰을 켠 엣지는 JSON Lines snapshot만 기록한다.
+적재 모델 관찰은 [`docs/observation.md`](observation.md)의 별도 TCP stream을 사용한다. 운영 이미지는 JSON Lines snapshot을 계속 전송하지만 관찰 기록, 3D 렌더러와 FFmpeg를 포함하지 않는다.
 
 ## Release
 

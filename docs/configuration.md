@@ -65,7 +65,7 @@
 
 ### 전송과 진단 정책
 
-`transport`의 endpoint, frame 크기, buffer, timeout과 재접속 값은 센서 사양이 아닌 개발용 TCP 전송 정책이다. 전송 계약과 기본 frame 상한은 [`contracts/v1/README.md`](../contracts/v1/README.md)에서 정의한다. `diagnostics`와 `seed`는 검증 출력의 범위와 결정론을 제어하는 개발 정책이다.
+`transport`의 endpoint, frame 크기, buffer, timeout과 재접속 값은 센서 사양이 아닌 개발용 TCP 전송 정책이다. 전송 계약과 기본 frame 상한은 [`contracts/v1/README.md`](../contracts/v1/README.md)에서 정의한다. `diagnostics`와 `seed`는 검증 출력의 범위와 결정론을 제어하는 개발 정책이다. 관찰 수신 endpoint는 실제 주소를 공개 설정에 복제하지 않도록 필수 CLI 인자로 받고, 관찰 주기의 코드 기본값은 1초다.
 
 운영 실행은 설정 파일에 명시한 전송 endpoint를 사용한다. 공개 예시의 `receiver` 주소는 합성 실행을 위한 container network 이름이며 실제 운영 주소를 나타내지 않는다.
 
@@ -79,6 +79,9 @@
 | `measurement.reference.DEFAULT_MIN_DISTANCE_M` | 0.05m | 직접 생성 API의 거리 기본값 |
 | `measurement.reference.DEFAULT_MAX_DISTANCE_M` | 30m | 직접 생성 API의 거리 기본값 |
 | `transport.framing.DEFAULT_MAX_MESSAGE_BODY_BYTES` | 1,048,576 byte | 직접 framing API의 개발용 frame 상한 |
+| `observation.publisher.DEFAULT_OBSERVATION_INTERVAL_S` | 1초 | 관찰 stream 전송 주기 |
+| `observation.publisher.DEFAULT_OBSERVATION_HOST` | `127.0.0.1` | 직접 application API의 개발용 TCP host |
+| `observation.publisher.DEFAULT_OBSERVATION_PORT` | 9,100 | 직접 application API의 개발용 TCP port |
 | `geometry.intersections.DEFAULT_MIN_DISTANCE_M` | 1e-9m | 광선 교차 수치 epsilon, 센서 측정 하한 아님 |
 
 전송 계약의 유효 거리 상수 0.05m와 30m는 메시지 검증 범위다. frame prefix가 표현할 수 있는 최대 길이와 각종 입력 검증 상한은 운영 프로파일의 기본값이 아니라 형식 안전성 제한이다.

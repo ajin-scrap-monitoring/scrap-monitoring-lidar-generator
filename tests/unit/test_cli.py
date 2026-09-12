@@ -7,6 +7,7 @@ import pytest
 
 import scrap_monitoring_lidar_generator.cli as cli
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
+from scrap_monitoring_lidar_generator.observation import ObservationPublisherStats
 from scrap_monitoring_lidar_generator.runtime import GeneratorRunSummary
 from scrap_monitoring_lidar_generator.transport import SenderHalt, SenderHaltCode, SenderStats
 
@@ -30,30 +31,17 @@ def _summary(sender_halt: SenderHalt | None = None) -> GeneratorRunSummary:
             connection_failures=0,
         ),
         sender_halt=sender_halt,
+        observation_endpoint="127.0.0.1:9100",
+        observation_stats=ObservationPublisherStats(
+            accepted_records=2,
+            sent_records=1,
+            dropped_records=1,
+            connection_failures=0,
+        ),
     )
 
 
 def test_main_runs_requested_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
-    received: list[Path] = []
-
-    async def run_config(path: Path) -> int:
-        received.append(path)
-        return 0
-
-    monkeypatch.setattr(cli, "_run_config", run_config)
-
-    assert cli.main(["--config", "generator.json"]) == 0
-    assert received == [Path("generator.json")]
-
-
-def test_main_requires_configuration() -> None:
-    with pytest.raises(SystemExit) as exit_info:
-        cli.main([])
-
-    assert exit_info.value.code == 2
-
-
-def test_main_passes_optional_observation_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
     received: dict[str, object] = {}
 
     async def run_config(path: Path, **kwargs: object) -> int:
@@ -68,53 +56,94 @@ def test_main_passes_optional_observation_arguments(monkeypatch: pytest.MonkeyPa
             [
                 "--config",
                 "generator.json",
-                "--observation-path",
-                "observations.jsonl",
-                "--observation-interval-s",
-                "2",
-                "--observation-max-records",
-                "12",
+                "--observation-host",
+                "127.0.0.1",
+                "--observation-port",
+                "9100",
             ]
         )
         == 0
     )
     assert received == {
         "path": Path("generator.json"),
-        "observation_path": Path("observations.jsonl"),
-        "observation_interval_s": 2.0,
-        "observation_max_records": 12,
+        "observation_host": "127.0.0.1",
+        "observation_port": 9100,
+        "observation_interval_s": 1.0,
     }
 
 
-@pytest.mark.parametrize(
-    "argument",
-    [
-        "--observation-interval-s",
-        "--observation-max-records",
-    ],
-)
-def test_main_rejects_observation_limits_without_path(argument: str) -> None:
+def test_main_requires_configuration() -> None:
     with pytest.raises(SystemExit) as exit_info:
-        cli.main(["--config", "generator.json", argument, "2"])
+        cli.main([])
 
     assert exit_info.value.code == 2
+
+
+@pytest.mark.parametrize("missing", ["host", "port"])
+def test_main_requires_observation_endpoint(missing: str) -> None:
+    arguments = ["--config", "generator.json"]
+    if missing != "host":
+        arguments.extend(("--observation-host", "127.0.0.1"))
+    if missing != "port":
+        arguments.extend(("--observation-port", "9100"))
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(arguments)
+
+    assert exit_info.value.code == 2
+
+
+def test_main_passes_observation_stream_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    received: dict[str, object] = {}
+
+    async def run_config(path: Path, **kwargs: object) -> int:
+        received["path"] = path
+        received.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "_run_config", run_config)
+
+    assert (
+        cli.main(
+            [
+                "--config",
+                "generator.json",
+                "--observation-host",
+                "visualizer",
+                "--observation-port",
+                "9200",
+                "--observation-interval-s",
+                "2",
+            ]
+        )
+        == 0
+    )
+    assert received == {
+        "path": Path("generator.json"),
+        "observation_host": "visualizer",
+        "observation_port": 9200,
+        "observation_interval_s": 2.0,
+    }
 
 
 @pytest.mark.parametrize(
     ("argument", "value"),
     [
+        ("--observation-port", "0"),
+        ("--observation-port", "65536"),
         ("--observation-interval-s", "86400.1"),
-        ("--observation-max-records", "10001"),
     ],
 )
-def test_main_rejects_observation_limits_over_cap(argument: str, value: str) -> None:
+def test_main_rejects_invalid_observation_arguments(argument: str, value: str) -> None:
     with pytest.raises(SystemExit) as exit_info:
         cli.main(
             [
                 "--config",
                 "generator.json",
-                "--observation-path",
-                "observations.jsonl",
+                "--observation-host",
+                "127.0.0.1",
+                "--observation-port",
+                "9100",
                 argument,
                 value,
             ]
@@ -124,7 +153,19 @@ def test_main_rejects_observation_limits_over_cap(argument: str, value: str) -> 
 
 
 def test_main_reports_configuration_error(capsys: pytest.CaptureFixture[str]) -> None:
-    assert cli.main(["--config", "missing.json"]) == 2
+    assert (
+        cli.main(
+            [
+                "--config",
+                "missing.json",
+                "--observation-host",
+                "127.0.0.1",
+                "--observation-port",
+                "9100",
+            ]
+        )
+        == 2
+    )
     assert "configuration error:" in capsys.readouterr().err
 
 
@@ -148,8 +189,9 @@ def test_run_config_reports_final_delivery_state(
     expected_code: int,
 ) -> None:
     async def run_application(
-        inputs: GeneratorInputs, *, stop_event: asyncio.Event
+        inputs: GeneratorInputs, *, stop_event: asyncio.Event, **kwargs: object
     ) -> GeneratorRunSummary:
+        del kwargs
         assert inputs.environment.environment_id == "synthetic-room-v1"
         stop_event.set()
         return _summary(halt)
@@ -161,6 +203,7 @@ def test_run_config_reports_final_delivery_state(
 
     assert code == expected_code
     assert "run_id=run-a generated=2 acknowledged=1 pending=1" in output.out
+    assert "observation=127.0.0.1:9100 sent=1 dropped=1" in output.out
     assert ("transport halted" in output.err) is (halt is not None)
 
 
