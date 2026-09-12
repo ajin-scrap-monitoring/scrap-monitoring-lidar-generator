@@ -46,7 +46,7 @@ wire 형식, 전달 의미와 field 의미는
 ```bash
 uv run --locked scrap-monitoring-lidar-generator \
   --config /path/to/generator.v1.json \
-  --observation-host visualizer-host \
+  --observation-host observation-receiver-host \
   --observation-port 9100
 ```
 

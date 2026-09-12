@@ -34,18 +34,41 @@ uv run --locked scrap-monitoring-lidar-generator --help
 uv build --no-sources
 ```
 
-생성 설정의 수신 주소와 입력 경로를 실행 환경에 맞게 지정한 뒤 다음 명령으로 실행한다.
+## 엣지 배포
+
+엣지 배포에는 build 도구가 필요하지 않다. GitHub Release의 `oci-image.txt`에 기록된
+불변 digest의 ARM64 OCI(Open Container Initiative) image와 실행 설정 3개를 전달한다.
+배포 담당자가 준비해야 하는 입력은 다음 4개다.
+
+| 입력 | 설정 위치 | 의미 |
+| --- | --- | --- |
+| 생성 실행 설정 | `generator.v1.json` | 시나리오, 측정, scan 송신과 진단 정책 |
+| scan 수신 endpoint | `generator.v1.json`의 `transport.host`, `transport.port` | 높이 계산 process가 수신하는 기존 scan stream |
+| 관찰 수신 endpoint | `--observation-host`, `--observation-port` | 별도 시각화 프로그램이 수신하는 적재 모델 stream |
+| 불변 image | GitHub Release의 `oci-image.txt` | digest로 고정한 `linux/arm64` image |
+
+`examples/`의 3개 JSON 파일을 같은 directory에 복사하고
+`generator.v1.json`의 scan 수신 endpoint를 배포 환경 값으로 바꾼다. 진단을 사용하면
+`diagnostics.output_path`를 container 내부의 `/data/diagnostics`로 지정한다. 실제 사설
+주소와 자격 증명은 Repository에 commit하지 않는다.
+
+생성기는 두 TCP(Transmission Control Protocol) server로 각각 outbound connection을
+만든다. 두 host는 container network에서 해석되고 접근 가능해야 한다. 관찰 수신기가
+연결되지 않아도 scan 생성과 기존 scan 송신은 계속된다.
+
+개발 환경에서는 다음 명령으로 같은 실행 경로를 확인할 수 있다.
 
 ```bash
 uv run --locked scrap-monitoring-lidar-generator \
   --config /path/to/generator.v1.json \
-  --observation-host visualizer-host \
+  --observation-host observation-receiver-host \
   --observation-port 9100
 ```
 
 프로그램은 센서 회전 완료 시각에 맞춰 스캔을 생성하고 TCP 수신 프로그램으로 전송한다. 실행마다 UUID(Universally Unique Identifier) 형식의 새로운 `run_id`를 만들며 SIGINT 또는 SIGTERM을 받으면 생성과 송신을 정상 종료하고 집계를 출력한다.
 
-OCI(Open Container Initiative) 이미지의 build, 실행과 ARM64 Release 절차는 [`docs/deployment.md`](docs/deployment.md)를 따른다.
+OCI(Open Container Initiative) 이미지 선택, 설정 준비, container 실행과 ARM64 Release
+절차는 [`docs/deployment.md`](docs/deployment.md)를 따른다.
 
 엣지 생성기의 상시 적재 모델 관찰 stream과 별도 장비의 3D 시각화는 [`docs/observation.md`](docs/observation.md)를 따른다.
 

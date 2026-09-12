@@ -23,22 +23,75 @@ docker run --rm scrap-monitoring-lidar-generator:local --help
 
 ## 컨테이너 실행
 
-생성 설정은 이미지에 포함하지 않고 읽기 전용 bind mount로 전달한다. 진단 출력을 활성화한 설정은 컨테이너의 `/data/diagnostics`를 사용하고 쓰기 가능한 host 디렉토리를 mount한다.
+배포 입력은 4개다.
+
+| 입력 | 제공 방법 | 필수 조건 |
+| --- | --- | --- |
+| ARM64 image | Release asset `oci-image.txt`의 불변 참조 | `linux/arm64`, Public GHCR package |
+| 생성 설정 directory | `examples/`의 3개 JSON 파일을 기반으로 만든 외부 설정 | container의 `/config`에 읽기 전용 mount |
+| scan 수신 endpoint | `generator.v1.json`의 `transport.host`, `transport.port` | container에서 접근 가능한 높이 계산 process의 TCP server |
+| 관찰 수신 endpoint | `--observation-host`, `--observation-port` | container에서 접근 가능한 시각화 프로그램의 TCP server |
+
+GitHub Container Registry(GHCR) image는 Public이므로 pull credential이 필요하지 않다.
+Release asset에서 불변 image 참조를 가져와 image를 준비한다.
 
 ```bash
-docker run --rm \
+gh release download v0.2.0 \
+  --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
+  --pattern oci-image.txt \
+  --dir /tmp/scrap-monitoring-lidar-generator-release
+IMAGE_REF="$(sed -n '1p' /tmp/scrap-monitoring-lidar-generator-release/oci-image.txt)"
+docker image pull "$IMAGE_REF"
+```
+
+엣지 장비에는 Repository clone, Python, uv와 compiler가 필요하지 않다. 배포 제어 장비가
+`examples/environment.v1.json`, `examples/generator.v1.json`과
+`examples/quality-profile.v1.json`을 설정 directory에 함께 배치한다. 상대 경로인
+`environment_path`와 `quality_profile_path`는 `generator.v1.json`이 있는 directory를
+기준으로 해석된다.
+
+`generator.v1.json`의 `transport.host`와 `transport.port`를 실제 scan 수신 endpoint로
+바꾼다. 진단을 사용하면 `diagnostics.output_path`를 `/data/diagnostics`로 바꾸고 host의
+진단 directory를 UID(User Identifier)와 GID(Group Identifier) 10001이 쓸 수 있게
+준비한다. 진단을 사용하지 않으면 `diagnostics.enabled`를 `false`로 바꾸고 진단 mount를
+생략할 수 있다. 실제 사설 주소, 자격 증명과 운영 설정은 Git에 추가하지 않는다.
+
+생성 설정은 이미지에 포함하지 않고 읽기 전용 bind mount로 전달한다. 다음 명령은 재부팅
+후에도 container를 다시 시작하며 Docker log file의 크기를 제한한다.
+
+```bash
+docker run --detach \
   --name scrap-monitoring-lidar-generator \
+  --restart unless-stopped \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
   --mount type=bind,src=/path/to/config,dst=/config,readonly \
   --mount type=bind,src=/path/to/diagnostics,dst=/data/diagnostics \
-  ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:<manifest-digest> \
+  "$IMAGE_REF" \
   --config /config/generator.v1.json \
-  --observation-host <visualizer-host> \
+  --observation-host <observation-receiver-host> \
   --observation-port 9100
 ```
 
-컨테이너 네트워크에서 접근 가능한 수신 주소를 생성 설정에 사용한다. Docker Engine의 `--cpus`와 `--memory`로 생성 프로그램의 자원 상한을 지정할 수 있다. 대상 Raspberry Pi 5의 공유 부하 측정 결과가 확정되기 전에는 Repository가 기본 자원 상한을 정하지 않는다.
+scan 수신 endpoint와 관찰 수신 endpoint는 서로 다른 설정이다. 두 TCP server는 같은
+장비의 서로 다른 port일 수도 있고 서로 다른 장비일 수도 있다. 두 host에는 Docker
+container 안에서 이름을 해석하고 router를 거쳐 접근할 수 있는 DNS(Domain Name System)
+이름 또는 IP 주소를 사용한다. 공개 Repository에는 실제 사설 주소를 기록하지 않는다.
 
-Docker Engine은 SIGTERM을 전달하며 프로그램은 진행 중인 생성과 송신 작업을 종료한 뒤 마지막 집계를 표준 출력에 기록한다. 전송 계약 오류와 설정 오류는 표준 오류에 기록한다. `docker logs`로 두 stream을 확인한다.
+Docker Engine의 `--cpus`와 `--memory`로 생성 프로그램의 자원 상한을 지정할 수 있다.
+대상 Raspberry Pi 5에서 다른 edge process와 함께 측정한 결과가 확정되기 전에는
+Repository가 기본 자원 상한을 정하지 않는다.
+
+Docker Engine은 SIGTERM을 전달하며 프로그램은 진행 중인 생성과 송신 작업을 종료한 뒤
+마지막 집계를 표준 출력에 기록한다. 전송 계약 오류와 설정 오류는 표준 오류에 기록한다.
+`docker logs scrap-monitoring-lidar-generator`로 시작 및 종료 결과를 확인한다. 실행 중인
+container와 적용 image digest는 다음 명령으로 확인한다.
+
+```bash
+docker container inspect scrap-monitoring-lidar-generator \
+  --format '{{.State.Status}} {{.State.ExitCode}} {{.Image}}'
+docker image inspect "$IMAGE_REF" --format '{{index .RepoDigests 0}}'
+```
 
 적재 모델 관찰은 [`docs/observation.md`](observation.md)의 별도 TCP stream을 사용한다. 운영 이미지는 JSON Lines snapshot을 계속 전송하지만 관찰 기록, 3D 렌더러와 FFmpeg를 포함하지 않는다.
 
@@ -48,4 +101,5 @@ Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PA
 
 프로젝트 버전과 tag 버전을 일치시킨 검증 완료 commit에만 release tag를 생성한다. 게시된 tag, image tag와 Release asset은 변경하지 않는다.
 
-현재 검증된 Release는 `v0.1.0`이며 source revision은 `a8943848fa32089253ccd9e48752f1a7449efe1d`다. Raspberry Pi 5에서 사용하는 불변 image 참조는 `ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:75877ace8dbda3fffa717fecf9e2b733a85e0610e9dd2e22227ca2bae70268c7`다. `0.1.0`과 `sha-a8943848fa32089253ccd9e48752f1a7449efe1d` tag는 같은 manifest digest를 가리키며 실행 platform은 `linux/arm64` 하나다. Release asset `oci-image.txt`는 이 불변 image 참조를 기록한다.
+배포할 version의 Release asset `oci-image.txt`를 불변 image 참조의 정본으로 사용한다.
+장비별 검증 결과와 적용한 digest는 [`performance.md`](performance.md)에 기록한다.
