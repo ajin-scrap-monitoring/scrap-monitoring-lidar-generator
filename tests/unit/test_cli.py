@@ -53,6 +53,76 @@ def test_main_requires_configuration() -> None:
     assert exit_info.value.code == 2
 
 
+def test_main_passes_optional_observation_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    received: dict[str, object] = {}
+
+    async def run_config(path: Path, **kwargs: object) -> int:
+        received["path"] = path
+        received.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "_run_config", run_config)
+
+    assert (
+        cli.main(
+            [
+                "--config",
+                "generator.json",
+                "--observation-path",
+                "observations.jsonl",
+                "--observation-interval-s",
+                "2",
+                "--observation-max-records",
+                "12",
+            ]
+        )
+        == 0
+    )
+    assert received == {
+        "path": Path("generator.json"),
+        "observation_path": Path("observations.jsonl"),
+        "observation_interval_s": 2.0,
+        "observation_max_records": 12,
+    }
+
+
+@pytest.mark.parametrize(
+    "argument",
+    [
+        "--observation-interval-s",
+        "--observation-max-records",
+    ],
+)
+def test_main_rejects_observation_limits_without_path(argument: str) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["--config", "generator.json", argument, "2"])
+
+    assert exit_info.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("argument", "value"),
+    [
+        ("--observation-interval-s", "86400.1"),
+        ("--observation-max-records", "10001"),
+    ],
+)
+def test_main_rejects_observation_limits_over_cap(argument: str, value: str) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(
+            [
+                "--config",
+                "generator.json",
+                "--observation-path",
+                "observations.jsonl",
+                argument,
+                value,
+            ]
+        )
+
+    assert exit_info.value.code == 2
+
+
 def test_main_reports_configuration_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["--config", "missing.json"]) == 2
     assert "configuration error:" in capsys.readouterr().err

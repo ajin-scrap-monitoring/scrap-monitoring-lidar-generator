@@ -38,6 +38,8 @@ docker run --rm \
 
 Docker Engine은 SIGTERM을 전달하며 프로그램은 진행 중인 생성과 송신 작업을 종료한 뒤 마지막 집계를 표준 출력에 기록한다. 전송 계약 오류와 설정 오류는 표준 오류에 기록한다. `docker logs`로 두 stream을 확인한다.
 
+선택적 적재 모델 관찰은 [`docs/observation.md`](observation.md)의 별도 개발 장비 경로를 사용한다. 운영 이미지에는 관찰 렌더러와 FFmpeg가 없으며, 관찰을 켠 엣지는 JSON Lines snapshot만 기록한다.
+
 ## Release
 
 Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PATCH` tag만 처리한다. workflow는 전체 소스 검증과 package build를 실행하고 `linux/arm64` 이미지를 GitHub Container Registry에 `MAJOR.MINOR.PATCH`와 `sha-<full-git-sha>` tag로 게시한다. 두 tag가 같은 manifest digest를 가리키는지, 실행 platform이 ARM64 하나인지와 package가 Public인지 검증한 뒤 package 파일과 불변 image 참조를 기록한 `oci-image.txt`를 GitHub Release asset으로 게시한다. 배포 환경은 tag 대신 검증한 manifest digest를 사용한다. 이미지는 Software Bill of Materials(SBOM)와 provenance attestation을 포함한다.

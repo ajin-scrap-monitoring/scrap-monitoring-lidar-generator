@@ -14,6 +14,13 @@ build/
 # Local diagnostics can contain reference data that Git must not track.
 diagnostics/
 
+# Local observation records and rendered media are development outputs.
+observation-records/
+observations/
+frames/
+rendered/
+*.mp4
+
 # Public repository must not track site-specific specifications or measurements.
 docs/internal/*
 !docs/internal/README.md
