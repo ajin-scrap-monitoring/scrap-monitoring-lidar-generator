@@ -111,7 +111,7 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 
 ## 검증 구조
 
-자동 검증은 4개 계층으로 구성한다.
+자동 검증은 5개 계층으로 구성한다.
 
 | 경로 | 검증 범위 |
 | --- | --- |
@@ -121,7 +121,7 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 | `tests/performance/` | 지속 생성량, 지연, 메모리와 Linux ARM64(64-bit Arm architecture) 실행 부하 |
 | `tests/edge/` | Docker Engine만 사용하는 digest image의 scan 및 관찰 TCP 검증 |
 
-단위 및 통합 검증은 외부 네트워크와 UTC 시각에 의존하지 않는다. 전송 검증은 local loopback과 event loop의 단조 시각을 사용한다. 계약 fixture는 사람이 검토할 수 있는 원본과 인코딩 결과를 함께 관리한다. 성능 검증은 기능 회귀 검사와 분리하고 측정 환경 및 명령을 결과와 함께 기록한다.
+단위 및 통합 검증은 외부 네트워크와 UTC 시각에 의존하지 않는다. 전송 검증은 local loopback과 event loop의 단조 시각을 사용한다. 계약 fixture는 사람이 검토할 수 있는 원본과 인코딩 결과를 함께 관리한다. 성능 검증은 기능 회귀 검사와 분리하고 측정 환경 및 명령을 결과와 함께 기록한다. Ruff는 함수별 cyclomatic complexity를 10 이하로 제한한다.
 
 ## Repository 구조
 

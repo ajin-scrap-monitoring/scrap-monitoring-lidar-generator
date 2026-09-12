@@ -36,35 +36,18 @@ class ScheduledScan:
         angles_deg: FloatArray,
         point_elapsed_times_s: FloatArray,
     ) -> None:
-        if not sensor_id:
-            raise ValueError("scheduled scan sensor_id must be non-empty")
-        if isinstance(scan_id, bool) or not isinstance(scan_id, int):
-            raise ValueError("scheduled scan scan_id must be an integer")
-        if not 1 <= scan_id <= _MAX_SCAN_ID:
-            raise ValueError("scheduled scan scan_id must be a positive 64-bit integer")
-        if not math.isfinite(rotation_started_at_s) or rotation_started_at_s < 0.0:
-            raise ValueError("rotation start must be a finite non-negative time")
-        if not math.isfinite(completed_at_s) or completed_at_s <= rotation_started_at_s:
-            raise ValueError("rotation completion must be finite and after its start")
-
-        angles = np.array(angles_deg, dtype=np.float64, copy=True)
-        point_times_s = np.array(point_elapsed_times_s, dtype=np.float64, copy=True)
-        if angles.ndim != 1 or point_times_s.ndim != 1 or angles.shape != point_times_s.shape:
-            raise ValueError("scheduled scan angle and time arrays must have the same 1D shape")
-        if angles.size == 0:
-            raise ValueError("scheduled scan must contain at least one point")
-        if not bool(np.all(np.isfinite(angles))) or not bool(np.all(np.isfinite(point_times_s))):
-            raise ValueError("scheduled scan angles and times must be finite")
-        if bool(np.any(angles < 0.0)) or bool(np.any(angles >= 360.0)):
-            raise ValueError("scheduled scan angles must be in [0, 360)")
-        if bool(np.any(np.diff(point_times_s) <= 0.0)):
-            raise ValueError("scheduled scan point times must be strictly increasing")
-
-        tolerance_s = max(1.0, completed_at_s) * _TIME_TOLERANCE
-        if point_times_s[0] < rotation_started_at_s - tolerance_s:
-            raise ValueError("scheduled scan points must not precede the rotation start")
-        if point_times_s[-1] >= completed_at_s:
-            raise ValueError("scheduled scan points must precede rotation completion")
+        _validate_scheduled_scan_metadata(
+            sensor_id=sensor_id,
+            scan_id=scan_id,
+            rotation_started_at_s=rotation_started_at_s,
+            completed_at_s=completed_at_s,
+        )
+        angles, point_times_s = _copy_scheduled_scan_arrays(
+            angles_deg=angles_deg,
+            point_elapsed_times_s=point_elapsed_times_s,
+            rotation_started_at_s=rotation_started_at_s,
+            completed_at_s=completed_at_s,
+        )
 
         angles.flags.writeable = False
         point_times_s.flags.writeable = False
@@ -222,6 +205,52 @@ def create_seeded_rotation_scheduler(
 
 def _ceil_fraction(value: Fraction) -> int:
     return -(-value.numerator // value.denominator)
+
+
+def _validate_scheduled_scan_metadata(
+    *,
+    sensor_id: str,
+    scan_id: int,
+    rotation_started_at_s: float,
+    completed_at_s: float,
+) -> None:
+    if not sensor_id:
+        raise ValueError("scheduled scan sensor_id must be non-empty")
+    if isinstance(scan_id, bool) or not isinstance(scan_id, int):
+        raise ValueError("scheduled scan scan_id must be an integer")
+    if not 1 <= scan_id <= _MAX_SCAN_ID:
+        raise ValueError("scheduled scan scan_id must be a positive 64-bit integer")
+    if not math.isfinite(rotation_started_at_s) or rotation_started_at_s < 0.0:
+        raise ValueError("rotation start must be a finite non-negative time")
+    if not math.isfinite(completed_at_s) or completed_at_s <= rotation_started_at_s:
+        raise ValueError("rotation completion must be finite and after its start")
+
+
+def _copy_scheduled_scan_arrays(
+    *,
+    angles_deg: FloatArray,
+    point_elapsed_times_s: FloatArray,
+    rotation_started_at_s: float,
+    completed_at_s: float,
+) -> tuple[FloatArray, FloatArray]:
+    angles = np.array(angles_deg, dtype=np.float64, copy=True)
+    point_times_s = np.array(point_elapsed_times_s, dtype=np.float64, copy=True)
+    if angles.ndim != 1 or point_times_s.ndim != 1 or angles.shape != point_times_s.shape:
+        raise ValueError("scheduled scan angle and time arrays must have the same 1D shape")
+    if angles.size == 0:
+        raise ValueError("scheduled scan must contain at least one point")
+    if not bool(np.all(np.isfinite(angles))) or not bool(np.all(np.isfinite(point_times_s))):
+        raise ValueError("scheduled scan angles and times must be finite")
+    if bool(np.any(angles < 0.0)) or bool(np.any(angles >= 360.0)):
+        raise ValueError("scheduled scan angles must be in [0, 360)")
+    if bool(np.any(np.diff(point_times_s) <= 0.0)):
+        raise ValueError("scheduled scan point times must be strictly increasing")
+    tolerance_s = max(1.0, completed_at_s) * _TIME_TOLERANCE
+    if point_times_s[0] < rotation_started_at_s - tolerance_s:
+        raise ValueError("scheduled scan points must not precede the rotation start")
+    if point_times_s[-1] >= completed_at_s:
+        raise ValueError("scheduled scan points must precede rotation completion")
+    return angles, point_times_s
 
 
 def _require_positive_rate(value: float, name: str) -> float:

@@ -223,7 +223,6 @@ class AsyncScanSender:
         if self._stop_requested:
             return
         self._running = True
-        connection: AsyncFramedTcpConnection | None = None
         try:
             while not self._stop_requested:
                 self._expire()
@@ -233,31 +232,32 @@ class AsyncScanSender:
                 if not self._buffer.entries:
                     await self._wait_for_work()
                     continue
-                reconnect = False
-                try:
-                    connection = await AsyncFramedTcpConnection.connect(
-                        host=self._host,
-                        port=self._port,
-                        timeout_s=self._connect_timeout_s,
-                        max_body_bytes=self._max_body_bytes,
-                    )
-                    await self._use_connection(connection)
-                except _ReconnectRequested, OSError:
-                    self._stats.connection_failures += 1
-                    reconnect = True
-                except (FrameError, ResponseCodecError) as error:
-                    self._set_protocol_halt(error)
-                finally:
-                    if connection is not None:
-                        await connection.close()
-                        connection = None
+                reconnect = await self._run_connection_cycle()
                 if reconnect and not self._stop_requested:
                     delay_s = self._backoff.next_delay_after_failure()
                     await self._wait_reconnect_delay(delay_s)
         finally:
+            self._running = False
+
+    async def _run_connection_cycle(self) -> bool:
+        connection: AsyncFramedTcpConnection | None = None
+        try:
+            connection = await AsyncFramedTcpConnection.connect(
+                host=self._host,
+                port=self._port,
+                timeout_s=self._connect_timeout_s,
+                max_body_bytes=self._max_body_bytes,
+            )
+            await self._use_connection(connection)
+        except _ReconnectRequested, OSError:
+            self._stats.connection_failures += 1
+            return True
+        except (FrameError, ResponseCodecError) as error:
+            self._set_protocol_halt(error)
+        finally:
             if connection is not None:
                 await connection.close()
-            self._running = False
+        return False
 
     async def _use_connection(self, connection: AsyncFramedTcpConnection) -> None:
         while not self._stop_requested and self._halt is None:

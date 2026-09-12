@@ -1,6 +1,6 @@
 [project]
 name = "scrap-monitoring-lidar-generator"
-version = "0.3.0"
+version = "0.3.1"
 description = "Synthetic LiDAR scan data generator for scrap monitoring development."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
@@ -34,7 +34,10 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["B", "E4", "E7", "E9", "F", "I", "RUF", "SIM", "UP"]
+select = ["B", "C90", "E4", "E7", "E9", "F", "I", "RUF", "SIM", "UP"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 [tool.rumdl]
 disable = ["MD013"]

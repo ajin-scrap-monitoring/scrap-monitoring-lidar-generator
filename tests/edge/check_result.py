@@ -3,6 +3,7 @@
 import argparse
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -57,50 +58,49 @@ def _mapping_of_ints(value: object, name: str) -> dict[str, int]:
     return result
 
 
-def validate_result(
-    *,
-    environment_path: Path,
-    generator_log_path: Path,
-    receiver_log_path: Path,
-    max_pending_frames: int,
-) -> str:
-    """Validate clean two-sensor delivery and return a compact report."""
-    environment = load_environment(environment_path)
-    expected_sensor_ids = tuple(sensor.sensor_id for sensor in environment.sensors)
-    if len(expected_sensor_ids) != 2:
-        raise ValueError("edge validation requires exactly 2 configured sensors")
-    if max_pending_frames < 0:
-        raise ValueError("max pending frames must be non-negative")
+@dataclass(frozen=True, slots=True)
+class _GeneratorResult:
+    run_id: str | None
+    run: Mapping[str, int]
+    transport: Mapping[str, int]
+    observation: Mapping[str, int]
 
-    generator_lines = generator_log_path.read_text(encoding="utf-8").splitlines()
-    run_values = _parse_key_values(_find_last_line(generator_lines, "run_id="), "")
-    transport_values = _parse_key_values(
-        _find_last_line(generator_lines, "transport "), "transport "
-    )
-    observation_values = _parse_key_values(_find_last_line(generator_lines, "observation="), "")
-    run = _integers(run_values, ("generated", "acknowledged", "pending"), "run")
-    transport = _integers(
-        transport_values,
-        (
-            "enqueued",
-            "sent",
-            "acknowledged",
-            "rejected",
-            "expired",
-            "capacity_discarded",
-            "oversized",
-            "connection_failures",
-            "pending_frames",
-            "pending_bytes",
+
+def _load_generator_result(path: Path) -> _GeneratorResult:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    run_values = _parse_key_values(_find_last_line(lines, "run_id="), "")
+    transport_values = _parse_key_values(_find_last_line(lines, "transport "), "transport ")
+    observation_values = _parse_key_values(_find_last_line(lines, "observation="), "")
+    return _GeneratorResult(
+        run_id=run_values.get("run_id"),
+        run=_integers(run_values, ("generated", "acknowledged", "pending"), "run"),
+        transport=_integers(
+            transport_values,
+            (
+                "enqueued",
+                "sent",
+                "acknowledged",
+                "rejected",
+                "expired",
+                "capacity_discarded",
+                "oversized",
+                "connection_failures",
+                "pending_frames",
+                "pending_bytes",
+            ),
+            "transport",
         ),
-        "transport",
-    )
-    observation = _integers(
-        observation_values,
-        ("sent", "dropped", "connection_failures"),
-        "observation",
+        observation=_integers(
+            observation_values,
+            ("sent", "dropped", "connection_failures"),
+            "observation",
+        ),
     )
 
+
+def _validate_generator_result(result: _GeneratorResult, max_pending_frames: int) -> None:
+    run = result.run
+    transport = result.transport
     if run["generated"] != transport["enqueued"]:
         raise ValueError("generated and enqueued scan counts differ")
     if run["acknowledged"] != transport["acknowledged"]:
@@ -122,18 +122,29 @@ def validate_result(
         raise ValueError("scan transport pending count exceeds the validation bound")
     if (transport["pending_frames"] == 0) != (transport["pending_bytes"] == 0):
         raise ValueError("pending frame and byte counters are inconsistent")
-    if observation["dropped"] != 0 or observation["connection_failures"] != 0:
+    if result.observation["dropped"] != 0 or result.observation["connection_failures"] != 0:
         raise ValueError("observation transport reported a drop or connection failure")
 
-    receiver_lines = receiver_log_path.read_text(encoding="utf-8").splitlines()
-    receiver_line = _find_last_line(receiver_lines, "validation_receiver=")
-    document = _require_mapping(
-        json.loads(receiver_line.removeprefix("validation_receiver=")),
+
+def _load_receiver_result(path: Path) -> Mapping[str, Any]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    line = _find_last_line(lines, "validation_receiver=")
+    return _require_mapping(
+        json.loads(line.removeprefix("validation_receiver=")),
         "receiver result",
     )
-    if document.get("environment_id") != environment.environment_id:
+
+
+def _validate_receiver_identity(
+    document: Mapping[str, Any],
+    *,
+    environment_id: str,
+    expected_sensor_ids: tuple[str, ...],
+    run_id: str | None,
+) -> None:
+    if document.get("environment_id") != environment_id:
         raise ValueError("receiver environment_id differs from the configured environment")
-    if document.get("run_id") != run_values.get("run_id"):
+    if document.get("run_id") != run_id:
         raise ValueError("receiver run_id differs from the generator run_id")
     if document.get("expected_sensor_ids") != list(expected_sensor_ids):
         raise ValueError("receiver expected sensors differ from the configured sensors")
@@ -141,6 +152,13 @@ def validate_result(
     if errors != []:
         raise ValueError(f"receiver reported errors: {errors}")
 
+
+def _validate_receiver_scans(
+    document: Mapping[str, Any],
+    *,
+    expected_sensor_ids: tuple[str, ...],
+    transport: Mapping[str, int],
+) -> None:
     connections = _mapping_of_ints(document.get("scan_connections"), "scan_connections")
     unique = _mapping_of_ints(document.get("scan_unique"), "scan_unique")
     if set(connections) != set(expected_sensor_ids) or any(
@@ -158,6 +176,12 @@ def validate_result(
         raise ValueError("receiver scan count differs from its unique scan count")
     if document.get("scan_gaps") != 0:
         raise ValueError("receiver observed a scan sequence gap")
+
+
+def _validate_receiver_observations(
+    document: Mapping[str, Any],
+    observation: Mapping[str, int],
+) -> None:
     if (
         not isinstance(document.get("observation_headers"), int)
         or document["observation_headers"] < 1
@@ -170,10 +194,42 @@ def validate_result(
     if document["observations"] != observation["sent"]:
         raise ValueError("receiver and sender observation counts differ")
 
+
+def validate_result(
+    *,
+    environment_path: Path,
+    generator_log_path: Path,
+    receiver_log_path: Path,
+    max_pending_frames: int,
+) -> str:
+    """Validate clean two-sensor delivery and return a compact report."""
+    environment = load_environment(environment_path)
+    expected_sensor_ids = tuple(sensor.sensor_id for sensor in environment.sensors)
+    if len(expected_sensor_ids) != 2:
+        raise ValueError("edge validation requires exactly 2 configured sensors")
+    if max_pending_frames < 0:
+        raise ValueError("max pending frames must be non-negative")
+
+    generator = _load_generator_result(generator_log_path)
+    _validate_generator_result(generator, max_pending_frames)
+    receiver = _load_receiver_result(receiver_log_path)
+    _validate_receiver_identity(
+        receiver,
+        environment_id=environment.environment_id,
+        expected_sensor_ids=expected_sensor_ids,
+        run_id=generator.run_id,
+    )
+    _validate_receiver_scans(
+        receiver,
+        expected_sensor_ids=expected_sensor_ids,
+        transport=generator.transport,
+    )
+    _validate_receiver_observations(receiver, generator.observation)
+
     return (
-        f"edge_validation=passed sensors=2 generated={run['generated']} "
-        f"acknowledged={run['acknowledged']} pending={run['pending']} "
-        f"observations={document['observations']}"
+        f"edge_validation=passed sensors=2 generated={generator.run['generated']} "
+        f"acknowledged={generator.run['acknowledged']} pending={generator.run['pending']} "
+        f"observations={receiver['observations']}"
     )
 
 
