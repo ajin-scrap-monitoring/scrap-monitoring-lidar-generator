@@ -1,6 +1,7 @@
 """Tests for paced generation and the application lifecycle."""
 
 import asyncio
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -178,7 +179,12 @@ def test_application_composes_one_generated_scan_and_closes_diagnostics(tmp_path
         assert summary.sender_stats.enqueued_frames == 1
         diagnostic_files = list((tmp_path / "diagnostics").iterdir())
         assert len(diagnostic_files) == 1
-        assert diagnostic_files[0].read_text(encoding="utf-8").endswith("\n")
+        diagnostic_text = diagnostic_files[0].read_text(encoding="utf-8")
+        assert diagnostic_text.endswith("\n")
+        diagnostic = json.loads(diagnostic_text)
+        assert diagnostic["run_id"] == "run-a"
+        assert diagnostic["run_started_at_utc_us"] == 123
+        assert diagnostic["captured_at"] == 123
 
     asyncio.run(run())
 

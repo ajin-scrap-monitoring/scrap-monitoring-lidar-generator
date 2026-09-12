@@ -33,6 +33,7 @@ from scrap_monitoring_lidar_generator.transport import (
     ScanMessage,
     ScanMessageFactory,
     SenderHalt,
+    SenderHaltCallback,
     SenderStats,
 )
 
@@ -100,14 +101,10 @@ async def run_generator_application(
     observation_port: int = DEFAULT_OBSERVATION_PORT,
     observation_interval_s: float = DEFAULT_OBSERVATION_INTERVAL_S,
     observation_publisher: ObservationPublisher | None = None,
+    on_sender_halt: SenderHaltCallback | None = None,
 ) -> GeneratorRunSummary:
     """Build and run measurement, diagnostics and delivery until stopped."""
     effective_run_id = str(uuid.uuid4()) if run_id is None else run_id
-    diagnostics: JsonLinesDiagnosticsWriter | None = None
-    if inputs.generator.diagnostics.enabled:
-        diagnostics = build_diagnostics_writer(inputs)
-    runtime = build_measurement_generation_runtime(inputs, diagnostics_sink=diagnostics)
-    sender = build_scan_sender(inputs)
     effective_utc_us = (
         run_started_at_utc_us if run_started_at_utc_us is not None else time.time_ns() // 1_000
     )
@@ -117,6 +114,15 @@ async def run_generator_application(
         run_id=effective_run_id,
         run_started_at_utc_us=effective_utc_us,
     )
+    diagnostics: JsonLinesDiagnosticsWriter | None = None
+    if inputs.generator.diagnostics.enabled:
+        diagnostics = build_diagnostics_writer(
+            inputs,
+            run_id=effective_run_id,
+            run_started_at_utc_us=effective_utc_us,
+        )
+    runtime = build_measurement_generation_runtime(inputs, diagnostics_sink=diagnostics)
+    sender = build_scan_sender(inputs, on_halt=on_sender_halt)
     publisher = observation_publisher
     if publisher is None:
         publisher = TcpObservationPublisher(

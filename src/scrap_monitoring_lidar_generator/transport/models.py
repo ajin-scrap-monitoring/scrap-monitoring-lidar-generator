@@ -101,16 +101,28 @@ class ScanMessageFactory:
 
     def build(self, result: MeasurementResult) -> ScanMessage:
         """Build a wire message from the final measurement without retaining its reference scan."""
-        captured_offset_us = _elapsed_microseconds(result.measured.captured_elapsed_s)
-        if captured_offset_us > MAX_SIGNED_64_BIT - self._run_started_at_utc_us:
-            raise OverflowError("scan message captured_at exceeds the signed 64-bit range")
         return ScanMessage(
             environment_id=self._environment_id,
             run_id=self._run_id,
             scan_id=result.scan_id,
-            captured_at=self._run_started_at_utc_us + captured_offset_us,
+            captured_at=scan_captured_at_utc_us(
+                self._run_started_at_utc_us,
+                result.measured.captured_elapsed_s,
+            ),
             measured_scan=result.measured.scan,
         )
+
+
+def scan_captured_at_utc_us(run_started_at_utc_us: int, captured_elapsed_s: float) -> int:
+    """Return the v1 UTC timestamp for a run-relative first measurement time."""
+    run_start_us = _require_non_negative_64_bit_integer(
+        run_started_at_utc_us,
+        "run start UTC timestamp",
+    )
+    captured_offset_us = _elapsed_microseconds(captured_elapsed_s)
+    if captured_offset_us > MAX_SIGNED_64_BIT - run_start_us:
+        raise OverflowError("scan message captured_at exceeds the signed 64-bit range")
+    return run_start_us + captured_offset_us
 
 
 def _elapsed_microseconds(elapsed_s: float) -> int:

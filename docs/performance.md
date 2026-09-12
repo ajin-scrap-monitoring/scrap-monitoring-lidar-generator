@@ -9,9 +9,9 @@
 | `scene_update` | 적재 표면과 시나리오 상태 갱신 |
 | `scan_generation` | 광선 교차, 측정 왜곡과 품질 생성 |
 | `serialization` | MessagePack body와 길이 prefix 생성 |
-| `transport_wait` | loopback TCP 연결, frame 전송과 ACK 대기 |
+| `transport_wait` | 센서별 loopback TCP 연결, frame 전송과 ACK 대기 |
 
-benchmark는 생성 pacing을 제거하고 설정된 시뮬레이션 시간만큼의 스캔을 가능한 빠르게 처리한다. 수신 test double은 별도 process에서 실행하므로 생성 process의 CPU(Central Processing Unit) 시간에 수신 처리 부하가 포함되지 않는다. 진단 파일 기록, 연결 실패, 재전송과 실제 수신 프로그램의 처리 시간은 측정 범위에 포함하지 않는다.
+benchmark는 생성 pacing을 제거하고 설정된 시뮬레이션 시간만큼의 스캔을 가능한 빠르게 처리한다. 송신 경로는 설정된 센서마다 독립된 지속 TCP 연결을 사용한다. 수신 test double은 별도 process에서 실행하므로 생성 process의 CPU(Central Processing Unit) 시간에 수신 처리 부하가 포함되지 않는다. 진단 파일 기록, 연결 실패, 재전송과 실제 수신 프로그램의 처리 시간은 측정 범위에 포함하지 않는다.
 
 ## 실행
 

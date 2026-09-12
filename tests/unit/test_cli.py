@@ -2,6 +2,7 @@
 
 import asyncio
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -9,7 +10,12 @@ import scrap_monitoring_lidar_generator.cli as cli
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
 from scrap_monitoring_lidar_generator.observation import ObservationPublisherStats
 from scrap_monitoring_lidar_generator.runtime import GeneratorRunSummary
-from scrap_monitoring_lidar_generator.transport import SenderHalt, SenderHaltCode, SenderStats
+from scrap_monitoring_lidar_generator.transport import (
+    SenderHalt,
+    SenderHaltCallback,
+    SenderHaltCode,
+    SenderStats,
+)
 
 _ROOT = Path(__file__).parents[2]
 
@@ -177,6 +183,7 @@ def test_main_reports_configuration_error(capsys: pytest.CaptureFixture[str]) ->
             SenderHalt(
                 code=SenderHaltCode.ENVIRONMENT_MISMATCH,
                 detail="wrong environment",
+                sensor_id="sensor-b",
             ),
             1,
         ),
@@ -191,8 +198,11 @@ def test_run_config_reports_final_delivery_state(
     async def run_application(
         inputs: GeneratorInputs, *, stop_event: asyncio.Event, **kwargs: object
     ) -> GeneratorRunSummary:
-        del kwargs
         assert inputs.environment.environment_id == "synthetic-room-v1"
+        callback = cast(SenderHaltCallback | None, kwargs.get("on_sender_halt"))
+        assert callback is None or callable(callback)
+        if halt is not None and callback is not None:
+            callback(halt)
         stop_event.set()
         return _summary(halt)
 
@@ -205,6 +215,8 @@ def test_run_config_reports_final_delivery_state(
     assert "run_id=run-a generated=2 acknowledged=1 pending=1" in output.out
     assert "observation=127.0.0.1:9100 sent=1 dropped=1" in output.out
     assert ("transport halted" in output.err) is (halt is not None)
+    assert output.err.count("transport halted") == int(halt is not None)
+    assert ("sensor_id=sensor-b" in output.err) is (halt is not None)
 
 
 def test_help_exits_successfully(capsys: pytest.CaptureFixture[str]) -> None:

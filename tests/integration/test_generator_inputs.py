@@ -64,6 +64,31 @@ def test_loads_generator_and_referenced_inputs() -> None:
     assert inputs.quality_profile.sensors[0].sensor_id == "sensor-a"
 
 
+def test_rejects_buffer_limit_smaller_than_the_environment_sensor_count(
+    tmp_path: Path,
+) -> None:
+    generator = _load_example("generator.v1.json")
+    environment = _load_example("environment.v1.json")
+    quality = _load_example("quality-profile.v1.json")
+    environment["sensors"].append(
+        {
+            **environment["sensors"][0],
+            "sensor_id": "sensor-b",
+        }
+    )
+    quality["sensors"].append(
+        {
+            **quality["sensors"][0],
+            "sensor_id": "sensor-b",
+        }
+    )
+    generator["transport"]["buffer_max_bytes"] = 1
+    path = _write_inputs(tmp_path, generator, environment, quality)
+
+    with pytest.raises(ConfigurationError, match="at least the environment sensor count"):
+        load_generator_inputs(path)
+
+
 def test_builds_running_scenario_from_generator_inputs() -> None:
     inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
     simulator = build_scenario_simulator(inputs)

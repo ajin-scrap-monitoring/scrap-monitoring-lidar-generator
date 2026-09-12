@@ -26,6 +26,9 @@
 3. 별도 시각화 Repository가 실시간 rendering을 구현할 수 있는 version 1 관찰 계약 제공
 
 첫 번째 목표의 schema, 합성 fixture, 송신 및 응답 구현과 소비자 인계 기준은 완료됐다.
+송신 구현은 센서별 독립 TCP lane과 ACK 대기, 전체 byte 상한 안의 분할 buffer, 전체
+전송 중단 오류의 즉시 보고를 제공한다. 로컬 기준 진단 version 2는 wire scan과 같은 실행
+식별자 및 대표 시각을 기록한다.
 두 번째 목표의 Release, digest 기반 실행과 test double 대상 장비 검증도 완료됐다. 실제
 수신 endpoint를 사용하는 상시 배포는 높이 계산 프로세스가 준비된 뒤 진행한다. 세 번째
 목표의 생성기 측 interface는 구현되어 있으며 별도 시각화 프로그램의 수신 및 rendering은
@@ -33,10 +36,11 @@
 
 ## 다음 작업
 
-남은 공동 검증 작업은 2개다.
+남은 작업은 3개다.
 
-1. 실제 높이 계산 프로세스에 version 1 계약과 합성 fixture를 적용하고 생성 프로그램과 통합 검증한다.
-2. Raspberry Pi 5 8GB에서 실제 실행 설정으로 생성 프로그램 단독 및 다른 edge process와의 동시 부하를 각각 측정하고 허용 CPU, 메모리, 지연 및 지속 실행 기준을 확정한다.
+1. 현재 source의 센서별 독립 전송 lane과 진단 version 2를 포함하는 ARM64 Release를 만들고 Raspberry Pi 5에서 scan 및 관찰 test double 검증을 반복한다.
+2. 실제 높이 계산 프로세스에 version 1 계약과 합성 fixture를 적용하고 생성 프로그램과 통합 검증한다.
+3. Raspberry Pi 5 8GB에서 실제 실행 설정으로 생성 프로그램 단독 및 다른 edge process와의 동시 부하를 각각 측정하고 허용 CPU, 메모리, 지연 및 지속 실행 기준을 확정한다.
 
 높이 계산 프로세스의 구현 책임과 통합 완료 조건은
 [`docs/height-calculation-integration.md`](height-calculation-integration.md)가 정본이다. 높이 계산

@@ -24,6 +24,7 @@ from scrap_monitoring_lidar_generator.transport.models import (
     SCAN_MESSAGE_TYPE,
     ScanMessage,
     ScanMessageFactory,
+    scan_captured_at_utc_us,
 )
 from scrap_monitoring_lidar_generator.transport.responses import (
     ACK_MESSAGE_TYPE,
@@ -38,8 +39,10 @@ from scrap_monitoring_lidar_generator.transport.responses import (
     encode_response_message,
 )
 from scrap_monitoring_lidar_generator.transport.sender import (
+    AsyncMultiSensorScanSender,
     AsyncScanSender,
     SenderHalt,
+    SenderHaltCallback,
     SenderHaltCode,
     SenderStats,
 )
@@ -68,6 +71,7 @@ __all__ = [
     "SCAN_MESSAGE_TYPE",
     "AckMessage",
     "AsyncFramedTcpConnection",
+    "AsyncMultiSensorScanSender",
     "AsyncScanSender",
     "BufferDiscardReason",
     "BufferEnqueueResult",
@@ -85,6 +89,7 @@ __all__ = [
     "ScanMessage",
     "ScanMessageFactory",
     "SenderHalt",
+    "SenderHaltCallback",
     "SenderHaltCode",
     "SenderStats",
     "TcpConnectionClosedError",
@@ -94,6 +99,7 @@ __all__ = [
     "encode_frame",
     "encode_response_message",
     "encode_scan_message",
+    "scan_captured_at_utc_us",
     "validate_frame",
     "validate_max_body_bytes",
 ]

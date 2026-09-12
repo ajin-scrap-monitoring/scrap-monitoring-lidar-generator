@@ -83,7 +83,9 @@ Docker Engine의 `--cpus`와 `--memory`로 생성 프로그램의 자원 상한�
 Repository가 기본 자원 상한을 정하지 않는다.
 
 Docker Engine은 SIGTERM을 전달하며 프로그램은 진행 중인 생성과 송신 작업을 종료한 뒤
-마지막 집계를 표준 출력에 기록한다. 전송 계약 오류와 설정 오류는 표준 오류에 기록한다.
+마지막 집계를 표준 출력에 기록한다. 환경, version 또는 응답 규격 오류로 전체 scan 전송이
+중단되면 원인 센서와 오류를 최초 발생 시 표준 오류에 기록한다. 시나리오 계산과 bounded
+buffer 만료는 container가 종료될 때까지 계속된다. 설정 오류도 표준 오류에 기록한다.
 `docker logs scrap-monitoring-lidar-generator`로 시작 및 종료 결과를 확인한다. 실행 중인
 container와 적용 image digest는 다음 명령으로 확인한다.
 
@@ -117,3 +119,7 @@ ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:359681841a
 Pi 5에서 공개 합성 설정, scan ACK test double과 관찰 stream test double을 사용한 실행
 검증을 통과했다. 실제 scan 수신 프로그램과 별도 시각화 장비의 endpoint가 확정되면 같은
 digest와 외부 운영 설정으로 상시 container를 배치한다.
+
+`v0.2.0` 검증은 공개 합성 센서 1개를 사용했다. 현재 source의 센서별 독립 전송 lane과
+진단 version 2는 이 image에 포함되지 않는다. 센서가 여러 개인 배포와 해당 진단 형식은
+후속 Release image를 사용한다.

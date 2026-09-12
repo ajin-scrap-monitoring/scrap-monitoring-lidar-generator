@@ -9,6 +9,7 @@ import platform
 import resource
 import socket
 import sys
+import threading
 import time
 from collections.abc import Sequence
 from multiprocessing.connection import Connection
@@ -65,48 +66,76 @@ def _receive_exact(connection: socket.socket, byte_count: int) -> bytes | None:
     return bytes(received)
 
 
+def _serve_loopback_connection(connection: socket.socket, max_body_bytes: int) -> None:
+    with connection:
+        while True:
+            prefix = _receive_exact(connection, 4)
+            if prefix is None:
+                return
+            body_size = int.from_bytes(prefix, "big")
+            if body_size > max_body_bytes:
+                raise ValueError("loopback receiver frame exceeds configured maximum")
+            body = _receive_exact(connection, body_size)
+            if body is None:
+                raise ConnectionError("loopback receiver frame body is missing")
+            message = decode_scan_message(body)
+            response = AckMessage(
+                identity=ScanIdentity(
+                    run_id=message.run_id,
+                    sensor_id=message.sensor_id,
+                    scan_id=message.scan_id,
+                )
+            )
+            connection.sendall(encode_frame(encode_response_message(response)))
+
+
 def _serve_loopback(
     listener: socket.socket,
     ready: Connection,
     max_body_bytes: int,
+    connection_count: int,
 ) -> None:
+    failures: list[BaseException] = []
+
+    def serve(connection: socket.socket) -> None:
+        try:
+            _serve_loopback_connection(connection, max_body_bytes)
+        except BaseException as error:
+            failures.append(error)
+
     with listener:
         ready.send(None)
         ready.close()
-        connection, _ = listener.accept()
-        with connection:
-            while True:
-                prefix = _receive_exact(connection, 4)
-                if prefix is None:
-                    return
-                body_size = int.from_bytes(prefix, "big")
-                if body_size > max_body_bytes:
-                    raise ValueError("loopback receiver frame exceeds configured maximum")
-                body = _receive_exact(connection, body_size)
-                if body is None:
-                    raise ConnectionError("loopback receiver frame body is missing")
-                message = decode_scan_message(body)
-                response = AckMessage(
-                    identity=ScanIdentity(
-                        run_id=message.run_id,
-                        sensor_id=message.sensor_id,
-                        scan_id=message.scan_id,
-                    )
-                )
-                connection.sendall(encode_frame(encode_response_message(response)))
+        threads = []
+        for index in range(connection_count):
+            connection, _ = listener.accept()
+            thread = threading.Thread(
+                target=serve,
+                args=(connection,),
+                name=f"benchmark-loopback-connection-{index + 1}",
+            )
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
+    if failures:
+        raise RuntimeError("loopback receiver connection failed") from failures[0]
 
 
-def _start_loopback_receiver(max_body_bytes: int) -> tuple[SpawnProcess, str, int]:
+def _start_loopback_receiver(
+    max_body_bytes: int,
+    connection_count: int,
+) -> tuple[SpawnProcess, str, int]:
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind(("127.0.0.1", 0))
-    listener.listen(1)
+    listener.listen(connection_count)
     host, port = listener.getsockname()[:2]
     context = multiprocessing.get_context("spawn")
     ready_reader, ready_writer = context.Pipe(duplex=False)
     process = context.Process(
         target=_serve_loopback,
-        args=(listener, ready_writer, max_body_bytes),
+        args=(listener, ready_writer, max_body_bytes, connection_count),
         name="benchmark-loopback-receiver",
     )
     process.start()
@@ -150,8 +179,8 @@ async def _run_benchmark(config_path: Path, scans_per_sensor: int) -> dict[str, 
         run_started_at_utc_us=_RUN_STARTED_AT_UTC_US,
     )
     max_body_bytes = inputs.generator.transport.max_message_body_bytes
-    receiver, host, port = _start_loopback_receiver(max_body_bytes)
-    connection: AsyncFramedTcpConnection | None = None
+    receiver, host, port = _start_loopback_receiver(max_body_bytes, len(runtime.sensor_ids))
+    connections: dict[str, AsyncFramedTcpConnection] = {}
     generated_scans = 0
     generated_points = 0
     scan_wire_bytes = 0
@@ -159,14 +188,18 @@ async def _run_benchmark(config_path: Path, scans_per_sensor: int) -> dict[str, 
     process_started_s = time.process_time()
     wall_started_ns = time.perf_counter_ns()
     try:
-        started_ns = time.perf_counter_ns()
-        connection = await AsyncFramedTcpConnection.connect(
-            host=host,
-            port=port,
-            timeout_s=inputs.generator.transport.connect_timeout_s,
-            max_body_bytes=max_body_bytes,
-        )
-        recorder.record(PerformanceStage.TRANSPORT_WAIT, time.perf_counter_ns() - started_ns)
+        for sensor_id in runtime.sensor_ids:
+            started_ns = time.perf_counter_ns()
+            connections[sensor_id] = await AsyncFramedTcpConnection.connect(
+                host=host,
+                port=port,
+                timeout_s=inputs.generator.transport.connect_timeout_s,
+                max_body_bytes=max_body_bytes,
+            )
+            recorder.record(
+                PerformanceStage.TRANSPORT_WAIT,
+                time.perf_counter_ns() - started_ns,
+            )
 
         while min(per_sensor.values()) < scans_per_sensor:
             for result in runtime.next_completed_scans():
@@ -183,6 +216,7 @@ async def _run_benchmark(config_path: Path, scans_per_sensor: int) -> dict[str, 
                     time.perf_counter_ns() - started_ns,
                 )
 
+                connection = connections[result.sensor_id]
                 started_ns = time.perf_counter_ns()
                 await connection.send_frame(
                     frame,
@@ -210,7 +244,7 @@ async def _run_benchmark(config_path: Path, scans_per_sensor: int) -> dict[str, 
                 generated_points += len(message.measured_scan.angles_deg)
                 scan_wire_bytes += len(frame)
     finally:
-        if connection is not None:
+        for connection in connections.values():
             await connection.close()
         receiver.join(timeout=5.0)
         if receiver.is_alive():
