@@ -1,6 +1,6 @@
 [project]
 name = "scrap-monitoring-lidar-generator"
-version = "0.2.0"
+version = "0.2.1"
 description = "Synthetic LiDAR scan data generator for scrap monitoring development."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
