@@ -34,9 +34,10 @@ header의 `scene.coordinate_system`은 오른손 좌표계이며 z축이 위쪽�
 단위는 meter이고 각도 단위는 degree다. `boundary_xy_m`은 적재 공간의 수평 경계
 polygon이고 `floor_z_m`과 `top_z_m`은 바닥과 외벽 상단의 절대 z 좌표다.
 
-sensor의 `p0_m`은 원점이고 `u0`과 `u90`은 서로 직교하는 단위 방향 벡터다. 각도 `a`의
-광선 방향은 `cos(a) * u0 + sin(a) * u90`이다. 관찰 renderer는 sensor 위치와 기본 방향을
-표시하는 데 이 값을 사용한다.
+sensor의 `p0_m`은 원점이고 `u0`과 `u90`은 서로 직교하는 단위 방향 벡터다. degree 단위
+각도 `angle_deg`를 radian으로 변환한 `angle_rad`를 사용하여 광선 방향을
+`cos(angle_rad) * u0 + sin(angle_rad) * u90`으로 계산한다. 관찰 renderer는 sensor
+위치와 기본 방향을 표시하는 데 이 값을 사용한다.
 
 `inlet_positions_xy_m`의 배열 순서는 `scenario.current_inlet_index`가 참조하는 순서다.
 `current_inlet_index`는 filling 상태에서 현재 투입구를 가리키며 collecting 상태에서는
