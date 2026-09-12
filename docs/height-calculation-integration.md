@@ -16,7 +16,7 @@ wire 형식, field, 자료형, 허용 범위와 센서 좌표 변환의 정본�
 
 ## 연결 역할과 설정
 
-생성기는 `generator.v1.json`의 `transport.host`와 `transport.port`가 가리키는 높이 계산 프로세스에 설정된 센서마다 outbound 연결을 하나씩 만든다. 높이 계산 프로세스는 해당 endpoint에서 센서 수만큼의 동시 연결을 수락한다. 한 연결에는 해당 센서의 scan만 전송된다. 배포 담당자는 다음 설정을 두 프로세스에 일치시킨다.
+생성기는 `generator.v1.json`의 `transport.host`와 `transport.port`가 가리키는 높이 계산 프로세스에 LiDAR 2대의 outbound 연결을 하나씩 만든다. 높이 계산 프로세스는 해당 endpoint에서 2개의 동시 연결을 수락한다. 한 연결에는 해당 센서의 scan만 전송된다. 배포 담당자는 다음 설정을 두 프로세스에 일치시킨다.
 
 | 설정 | 생성기 입력 | 높이 계산 프로세스 입력 |
 | --- | --- | --- |
@@ -53,15 +53,15 @@ scan 본문은 적재 공간 형상과 sensor 설치값을 반복해서 포함�
 
 ## 처리 용량과 지연
 
-현재 실행 설정은 모든 센서에 같은 측정 빈도와 회전 빈도를 적용한다. 센서 수를 `N`으로 둘 때 높이 계산 프로세스가 지속적으로 처리해야 하는 입력량은 다음과 같다.
+현재 실행 설정은 두 센서에 같은 측정 빈도와 회전 빈도를 적용한다. 높이 계산 프로세스가 지속적으로 처리해야 하는 입력량은 다음과 같다.
 
 ```text
-aggregate_scans_per_second = N * rotation_rate_hz
-aggregate_points_per_second = N * sample_rate_hz
+aggregate_scans_per_second = 2 * rotation_rate_hz
+aggregate_points_per_second = 2 * sample_rate_hz
 per_lane_ack_cycle_seconds < 1 / rotation_rate_hz
 ```
 
-공개 합성 프로파일의 센서 1개는 초당 10 scan과 32,000 point를 만든다. 같은 프로파일의 센서가 2개면 합산 입력은 초당 20 scan과 64,000 point다. 각 lane의 수신, 높이 계산, 결과 보존과 ACK 완료 시간은 장기적으로 한 회전 주기보다 짧아야 하며, 높이 계산 프로세스의 전체 처리 용량도 합산 입력량 이상이어야 한다.
+공개 합성 프로파일은 센서별 초당 10 scan과 32,000 point, 합산 초당 20 scan과 64,000 point를 만든다. 각 lane의 수신, 높이 계산, 결과 보존과 ACK 완료 시간은 장기적으로 한 회전 주기보다 짧아야 하며, 높이 계산 프로세스의 전체 처리 용량도 합산 입력량 이상이어야 한다.
 
 생성기의 bounded buffer는 일시적인 지연과 재연결만 흡수한다. 높이 계산 프로세스의 지속 처리량이 합산 입력량보다 작으면 오래된 scan이 보존 시간 또는 센서별 byte 할당량에 따라 폐기된다. 실제 수신 프로그램과 다른 process를 함께 실행한 부하 검증 전에는 Repository가 허용 지연이나 자원 상한을 확정하지 않는다.
 

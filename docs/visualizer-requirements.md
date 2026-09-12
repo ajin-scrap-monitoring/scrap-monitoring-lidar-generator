@@ -32,6 +32,8 @@ line 크기 1,048,576 byte를 넘는 입력과 알 수 없는 version 또는 typ
 추정하지 않는다. header가 장면을 제공하고 observation이 현재 적재물 표면을 제공하므로
 생성기 설정 파일은 필수 입력이 아니다.
 
+유효한 header는 LiDAR 2대의 위치와 방향을 정확히 포함한다. renderer는 두 센서를 모두 표시하고 `sensor_id`로 구분한다.
+
 ## 실시간 동작
 
 live 경로는 수신, 기록과 rendering 사이에 bounded queue를 사용한다. 느린 renderer는

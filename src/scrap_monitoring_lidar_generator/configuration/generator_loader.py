@@ -196,6 +196,9 @@ def load_generator_inputs(path: str | Path) -> GeneratorInputs:
     environment = load_environment(generator.environment_path)
     quality_profile = load_quality_profile(generator.quality_profile_path)
 
+    if len(environment.sensors) != 2:
+        raise ConfigurationError("generator inputs must contain exactly 2 environment sensors")
+
     environment_sensor_ids = {sensor.sensor_id for sensor in environment.sensors}
     quality_sensor_ids = {sensor.sensor_id for sensor in quality_profile.sensors}
     if quality_sensor_ids != environment_sensor_ids:

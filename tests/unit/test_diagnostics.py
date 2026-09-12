@@ -67,9 +67,9 @@ def test_runtime_writes_bounded_reference_diagnostics_without_changing_results(
     assert output_path is not None
     assert output_path.name == "reference-scans.v2.0001.jsonl"
     assert stat.S_IMODE(output_path.stat().st_mode) == 0o600
-    assert writer.recorded_counts == {"sensor-a": 2}
+    assert writer.recorded_counts == {"lidar_1": 2, "lidar_2": 2}
     documents = _documents(output_path)
-    assert len(documents) == 2
+    assert len(documents) == 4
     first_document = documents[0]
     first_result = recorded_results[0]
     assert first_document["diagnostics_version"] == 2
@@ -85,11 +85,12 @@ def test_runtime_writes_bounded_reference_diagnostics_without_changing_results(
     assert first_document["completed_at_s"] == first_result.reference.completed_at_s
     assert first_document["scenario"]["elapsed_s"] == first_result.reference.completed_at_s
     assert first_document["surface"]["snapshot_at_s"] == first_result.reference.completed_at_s
-    assert first_document["surface"]["shape"] == [25, 33]
-    assert len(first_document["surface"]["heights_m"]) == 25
+    assert first_document["surface"]["shape"] == [23, 17]
+    assert len(first_document["surface"]["heights_m"]) == 23
     assert len(first_document["reference_points"]) == len(first_result.reference.scan.points)
     assert "measured_points" not in first_document
-    assert documents[1]["captured_at"] == _RUN_STARTED_AT_UTC_US + 100_000
+    assert documents[1]["captured_at"] == _RUN_STARTED_AT_UTC_US
+    assert documents[2]["captured_at"] == _RUN_STARTED_AT_UTC_US + 100_000
 
     for recorded, plain in zip(recorded_results, plain_results, strict=True):
         assert recorded.reference.scan == plain.reference.scan

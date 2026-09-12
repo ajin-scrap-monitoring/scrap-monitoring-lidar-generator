@@ -12,7 +12,7 @@
     "collection_duration_factor_range": [0.03333333333333333, 0.05],
     "collection_rate_factor_range": [0.3, 1.7],
     "collection_rate_change_duration_s_range": [60, 180],
-    "inlet_positions_xy_m": [[2, 2], [6, 4]],
+    "inlet_positions_xy_m": [[1.5, 1.9], [2.588, 2.593]],
     "inlet_switch_activation_ratio": 0.5,
     "inlet_switch_height_difference_m": 0.5,
     "inlet_comparison_radius_m": 0.5,

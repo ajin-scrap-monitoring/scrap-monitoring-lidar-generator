@@ -32,7 +32,7 @@ def test_loads_generator_and_resolves_relative_paths() -> None:
     assert config.seed == 123456789
     assert config.environment_path == _ROOT / "examples" / "environment.v1.json"
     assert config.quality_profile_path == _ROOT / "examples" / "quality-profile.v1.json"
-    assert config.scenario.inlet_positions_xy_m == ((2.0, 2.0), (6.0, 4.0))
+    assert config.scenario.inlet_positions_xy_m == ((1.5, 1.9), (2.588, 2.593))
     assert config.measurement.sample_rate_hz == 32_000.0
     assert config.measurement.rotation_rate_hz == 10.0
     assert config.measurement.min_distance_m == 0.05

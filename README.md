@@ -1,31 +1,35 @@
 # Scrap Monitoring LiDAR Generator
 
 스크랩 적재 모니터링 개발을 위한 LiDAR(Light Detection and Ranging) 스캔 데이터 생성 프로그램이다.
+Raspberry Pi 5의 엣지 컨테이너에서 센서 2대의 합성 scan을 높이 계산 프로세스로 보내고, 별도 시각화 프로그램에 적재 모델 관찰 stream을 제공한다.
 
-## 문서
+## 주요 기능
 
-| 문서 | 내용 |
-| --- | --- |
-| [`docs/project-spec.md`](docs/project-spec.md) | 제품 범위, 외부 계약과 완료 조건 |
-| [`docs/architecture.md`](docs/architecture.md) | 구현 경계, 의존 방향과 검증 구조 |
-| [`docs/development-plan.md`](docs/development-plan.md) | 구현 순서, 산출물과 단계별 완료 조건 |
-| [`docs/dependencies.md`](docs/dependencies.md) | 직접 의존성, 버전, 사용 목적과 라이선스 |
-| [`docs/configuration.md`](docs/configuration.md) | 공개 설정 정본, 기본값 출처와 합성값 분류 |
-| [`docs/deployment.md`](docs/deployment.md) | OCI 이미지, 컨테이너 실행과 Release 절차 |
-| [`docs/performance.md`](docs/performance.md) | 생성 구간별 부하 측정과 결과 해석 |
-| [`docs/height-calculation-integration.md`](docs/height-calculation-integration.md) | 한 회전 scan의 높이 계산 프로세스 인계 계약 |
-| [`docs/observation.md`](docs/observation.md) | 적재 모델 관찰 stream과 외부 시각화 경계 |
-| [`docs/visualizer-requirements.md`](docs/visualizer-requirements.md) | 별도 시각화 Repository 구현 요구사항 |
-| [`contracts/v1/`](contracts/v1/) | 환경, 생성 실행, 품질 분포와 스캔 및 응답 계약 버전 1 |
-| [`contracts/observation/v1/`](contracts/observation/v1/) | 적재 모델 관찰 출력 계약 버전 1 |
-| [Organization 개발 운영 규칙](https://github.com/ajin-scrap-monitoring/.github/blob/main/GOVERNANCE.md) | Issue, 브랜치, Pull Request, CI(Continuous Integration)와 Release 기준 |
+- LiDAR 2대의 독립 회전 및 scan 생성
+- 적재와 수거에 따른 결정론적 합성 표면 및 측정 왜곡
+- 센서별 독립 TCP(Transmission Control Protocol) 전송과 ACK(Acknowledgement) 재시도
+- 별도 시각화 프로그램용 적재 모델 관찰 stream
 
-## 개발 환경
+## 빠른 시작
 
-개발 및 검증에는 Python 3.14.4와 uv 0.12.12가 필요하다. 다음 명령으로 잠금 파일에 맞는 개발 환경을 구성하고 전체 검증을 실행한다.
+Python 3.14.4와 uv 0.12.12가 필요하다. 다음 명령은 잠금된 개발 환경을 구성하고 공개 합성 설정으로 센서별 scan 1개를 생성하여 JSON(JavaScript Object Notation) 성능 결과를 출력한다.
 
 ```bash
 uv sync --locked --all-groups
+uv run --locked python -m tests.performance.generation \
+  --config examples/generator.v1.json \
+  --scans-per-sensor 1
+```
+
+## 설정
+
+공개 합성 입력 3개와 각 값의 출처 및 분류는 [`docs/configuration.md`](docs/configuration.md)가 정본이다. 실제 배포에서는 이 설정을 외부 directory에 복사하고 scan 및 관찰 수신 endpoint를 실행 환경에 맞게 제공한다.
+
+## 개발 및 검증
+
+빠른 시작에서 구성한 개발 환경으로 전체 검증을 실행한다.
+
+```bash
 uv run --locked rumdl check .
 uv run --locked ruff format --check .
 uv run --locked ruff check .
@@ -35,7 +39,7 @@ uv run --locked scrap-monitoring-lidar-generator --help
 uv build --no-sources
 ```
 
-## 엣지 배포
+## 배포
 
 엣지 배포에는 build 도구가 필요하지 않다. GitHub Release의 `oci-image.txt`에 기록된
 불변 digest의 ARM64 OCI(Open Container Initiative) image와 실행 설정 3개를 전달한다.
@@ -67,12 +71,30 @@ uv run --locked scrap-monitoring-lidar-generator \
   --observation-port 9100
 ```
 
-프로그램은 센서 회전 완료 시각에 맞춰 스캔을 생성하고 센서별 전송 lane으로 TCP 수신 프로그램에 전달한다. 실행마다 UUID(Universally Unique Identifier) 형식의 새로운 `run_id`를 만들며 SIGINT 또는 SIGTERM을 받으면 생성과 송신을 정상 종료하고 집계를 출력한다. 환경, version 또는 응답 규격 오류로 전체 scan 전송이 중단되면 원인 센서와 오류를 즉시 표준 오류에 기록하고 시나리오 계산과 bounded buffer 만료는 계속한다.
+프로그램은 고정된 LiDAR 2대의 회전 완료 시각에 맞춰 스캔을 생성하고 센서별 전송 lane으로 TCP 수신 프로그램에 전달한다. 실행마다 UUID(Universally Unique Identifier) 형식의 새로운 `run_id`를 만들며 SIGINT 또는 SIGTERM을 받으면 생성과 송신을 정상 종료하고 전체 전송 집계를 출력한다. 환경, version 또는 응답 규격 오류로 전체 scan 전송이 중단되면 원인 센서와 오류를 즉시 표준 오류에 기록하고 시나리오 계산과 bounded buffer 만료는 계속한다.
 
 OCI(Open Container Initiative) 이미지 선택, 설정 준비, container 실행과 ARM64 Release
 절차는 [`docs/deployment.md`](docs/deployment.md)를 따른다.
 
 엣지 생성기의 상시 적재 모델 관찰 stream과 별도 장비의 3D 시각화는 [`docs/observation.md`](docs/observation.md)를 따른다.
+
+## 문서
+
+| 문서 | 내용 |
+| --- | --- |
+| [`docs/project-spec.md`](docs/project-spec.md) | 제품 범위, 외부 계약과 완료 조건 |
+| [`docs/architecture.md`](docs/architecture.md) | 구현 경계, 의존 방향과 검증 구조 |
+| [`docs/development-plan.md`](docs/development-plan.md) | 구현 순서, 산출물과 단계별 완료 조건 |
+| [`docs/dependencies.md`](docs/dependencies.md) | 직접 의존성, 버전, 사용 목적과 라이선스 |
+| [`docs/configuration.md`](docs/configuration.md) | 공개 설정 정본, 기본값 출처와 합성값 분류 |
+| [`docs/deployment.md`](docs/deployment.md) | OCI 이미지, 컨테이너 실행과 Release 절차 |
+| [`docs/performance.md`](docs/performance.md) | 생성 구간별 부하 측정과 결과 해석 |
+| [`docs/height-calculation-integration.md`](docs/height-calculation-integration.md) | 한 회전 scan의 높이 계산 프로세스 인계 계약 |
+| [`docs/observation.md`](docs/observation.md) | 적재 모델 관찰 stream과 외부 시각화 경계 |
+| [`docs/visualizer-requirements.md`](docs/visualizer-requirements.md) | 별도 시각화 Repository 구현 요구사항 |
+| [`contracts/v1/`](contracts/v1/) | 환경, 생성 실행, 품질 분포와 스캔 및 응답 계약 버전 1 |
+| [`contracts/observation/v1/`](contracts/observation/v1/) | 적재 모델 관찰 출력 계약 버전 1 |
+| [Organization 개발 운영 규칙](https://github.com/ajin-scrap-monitoring/.github/blob/main/GOVERNANCE.md) | Issue, 브랜치, Pull Request, CI(Continuous Integration)와 Release 기준 |
 
 ## 이용 조건
 

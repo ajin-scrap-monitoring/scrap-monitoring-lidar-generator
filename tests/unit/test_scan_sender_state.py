@@ -96,12 +96,12 @@ def test_runtime_builder_applies_validated_transport_limits() -> None:
         inputs,
         generator=replace(
             inputs.generator,
-            transport=replace(inputs.generator.transport, buffer_max_bytes=1),
+            transport=replace(inputs.generator.transport, buffer_max_bytes=2),
         ),
     )
 
     sender = build_scan_sender(limited)
-    result = sender.enqueue_scan(_message(1))
+    result = sender.enqueue_scan(_message(1, sensor_id="lidar_1"))
 
     assert result.accepted is False
     assert sender.stats.oversized_frames == 1

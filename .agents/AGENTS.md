@@ -30,6 +30,8 @@ Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로�
 
 공개 합성 환경의 정본은 `examples/environment.v1.json`과 이를 참조하는 `examples/generator.v1.json`의 조합이다. 전자는 적재 공간 치수, 경계 형상, 바닥 및 상단 높이와 센서 위치 및 방향을 정의하고, 후자는 투입구 위치와 시나리오 설정을 정의한다.
 
+환경과 품질 설정은 `lidar_1`, `lidar_2`의 LiDAR 2대를 정확히 포함한다. 생성기와 엣지 검증은 두 센서별 독립 scan 전송 lane을 기준으로 한다.
+
 이 정본의 공간 및 센서 규격은 실제 현장 정보에서 파생되지 않은 프로젝트용 합성 규격이다. 공개 설정, 테스트 fixture, 기술 문서, 그림과 영상에 사용할 수 있다. 다른 공개 자산은 값을 별도로 복제하지 않고 이 정본을 입력으로 사용하거나 참조한다.
 
 공개 실행 설정의 출처와 분류는 [`docs/configuration.md`](../docs/configuration.md)가 정본이다. `measurement.sample_rate_hz`, `measurement.rotation_rate_hz`와 측정 거리 범위는 RPLIDAR S2E 기준을 반영하고, 시나리오, 측정 noise 및 distortion, 품질 분포, 전송과 진단 값은 프로젝트 합성 또는 개발 정책값으로 구분한다. 실제 센서 출력의 배열 길이는 고정하지 않으며 공개 예시의 측정점 수를 하드웨어 계약으로 해석하지 않는다.

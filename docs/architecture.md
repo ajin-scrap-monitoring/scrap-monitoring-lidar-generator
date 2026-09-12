@@ -103,6 +103,8 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 
 `runtime.run_scan_generation`은 실행 시작 단조 시각에 회전 완료 경과 시각을 더한 절대 deadline으로 생성 속도를 조절한다. `runtime.run_generator_application`은 실행별 UUID(Universally Unique Identifier)와 UTC 기준 시각을 만들고 측정, 진단 및 비동기 송신의 수명주기를 함께 관리한다. CLI는 `--config`로 실행 설정을 받고 SIGINT와 SIGTERM에서 생성과 송신을 정상 종료한다.
 
+종료 집계는 생성, 적재, 전송, ACK, 거부, 시간 만료, 용량 폐기, 크기 초과, 연결 실패와 미응답 frame 및 byte를 구분한다. 첫 집계 줄은 기존 필드를 유지하고 두 번째 `transport` 줄이 전체 전송 상태를 제공한다.
+
 `runtime.PerformanceRecorder`는 명시적으로 주입한 benchmark 실행에서만 장면 갱신과 스캔 생성 시간을 누적한다. recorder를 주입하지 않은 생성 실행은 성능 시계를 읽지 않는다. 직렬화와 전송 대기는 외부 adapter 경계를 사용하는 benchmark가 같은 recorder에 기록한다.
 
 관찰 stream의 형식, bounded latest-only 정책과 별도 장비 경계는 [`docs/observation.md`](observation.md)에서 관리한다. 관찰 레코드는 생성기의 현재 적재물 표면 모양을 보존하며 일반 scan으로 재구성하지 않는다.
@@ -117,6 +119,7 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 | `tests/integration/` | 장면에서 스캔 생성까지의 연결과 전송 장애 복구 |
 | `tests/contract/` | JSON 및 MessagePack schema, 수신 프로그램과 공유하는 합성 fixture |
 | `tests/performance/` | 지속 생성량, 지연, 메모리와 Linux ARM64(64-bit Arm architecture) 실행 부하 |
+| `tests/edge/` | Docker Engine만 사용하는 digest image의 scan 및 관찰 TCP 검증 |
 
 단위 및 통합 검증은 외부 네트워크와 UTC 시각에 의존하지 않는다. 전송 검증은 local loopback과 event loop의 단조 시각을 사용한다. 계약 fixture는 사람이 검토할 수 있는 원본과 인코딩 결과를 함께 관리한다. 성능 검증은 기능 회귀 검사와 분리하고 측정 환경 및 명령을 결과와 함께 기록한다.
 
@@ -162,6 +165,10 @@ tests/
   unit/
   integration/
   contract/
+  edge/
+    receiver.py
+    check_result.py
+    run.sh
   performance/
     generation.py
 uv.lock
