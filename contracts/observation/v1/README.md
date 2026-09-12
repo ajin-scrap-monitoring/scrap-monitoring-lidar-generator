@@ -11,9 +11,10 @@ port에서 server로 대기한다.
 레코드를 조립해야 하며, 연결 종료 시 남은 불완전 레코드를 폐기해야 한다. receiver는
 생성기에 어떤 byte도 보내지 않는다.
 
-`observation.schema.json`이 레코드 형식의 정본이다. version 1 레코드는 서로 독립적이며
-각 레코드만으로 장면과 현재 적재물 표면을 렌더링할 수 있다. version 1 파일은 호환성을
-깨는 방식으로 변경하지 않으며, field 의미나 framing이 달라지면 새 version을 추가한다.
+`header.schema.json`과 `observation.schema.json`이 레코드 형식의 정본이다. TCP 연결의
+첫 레코드는 `load_model_stream_header`이고 이후 레코드는 `load_model_observation`이다.
+연결이 바뀌면 생성기는 header를 다시 전송한다. version 1 파일은 호환성을 깨는 방식으로
+변경하지 않으며 field 의미나 framing이 달라지면 새 version을 추가한다.
 
 ## 전달 의미
 
@@ -22,14 +23,14 @@ port에서 server로 대기한다.
 `run_id`에서 sequence의 증가 폭이 1보다 큰 레코드를 받으면 중간 상태가 producer에서
 폐기되었거나 연결 중 유실된 것으로 처리한다.
 
-전송은 ACK(Acknowledgement)가 없는 best-effort 방식이다. producer는 최신 대기 레코드
+전송은 ACK(Acknowledgement)가 없는 best-effort 방식이다. producer는 최신 대기 observation
 1개만 유지하고 이전 대기 레코드를 재전송하지 않는다. receiver는 중복 없는 전달이나 모든
 중간 상태의 전달을 가정하지 않는다. TCP 연결 안의 완전한 레코드 순서는 sequence 순서와
 같다.
 
 ## 좌표와 장면
 
-`scene.coordinate_system`은 오른손 좌표계이며 z축이 위쪽이다. 모든 거리와 좌표의
+header의 `scene.coordinate_system`은 오른손 좌표계이며 z축이 위쪽이다. 모든 거리와 좌표의
 단위는 meter이고 각도 단위는 degree다. `boundary_xy_m`은 적재 공간의 수평 경계
 polygon이고 `floor_z_m`과 `top_z_m`은 바닥과 외벽 상단의 절대 z 좌표다.
 
@@ -56,10 +57,11 @@ bounding box를 덮으므로 polygon 밖의 node가 포함될 수 있다. render
 
 ## 실행 식별
 
-`run_id`는 생성기 process 실행을 구분한다. `environment_id`는 사용한 환경 설정을
-식별한다. `seed`와 `input_fingerprint_sha256`은 기록 묶음의 입력 동일성을 확인하는 값이며,
-receiver는 fingerprint를 opaque lowercase SHA-256(Secure Hash Algorithm 256-bit) 값으로
-취급한다. 같은 `run_id`의 레코드는 이 4개 값을 동일하게 유지해야 한다.
+`run_id`는 생성기 process 실행을 구분하며 header와 모든 observation에 들어간다.
+`environment_id`는 사용한 환경 설정을 식별한다. `seed`와 `input_fingerprint_sha256`은
+기록 묶음의 입력 동일성을 확인하는 값이며 receiver는 fingerprint를 opaque lowercase
+SHA-256(Secure Hash Algorithm 256-bit) 값으로 취급한다.
 
-`fixtures/observation.v1.jsonl`은 공개 합성 환경을 축약한 유효 레코드다. 실제 장비 주소,
-운영 로그와 실제 sensor 측정값은 계약 fixture에 포함하지 않는다.
+`fixtures/observation.v1.jsonl`은 header 1개와 observation 1개로 구성한 공개 합성
+fixture다. 실제 장비 주소, 운영 로그와 실제 sensor 측정값은 계약 fixture에 포함하지
+않는다.

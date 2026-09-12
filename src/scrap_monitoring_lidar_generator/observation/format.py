@@ -64,13 +64,20 @@ _RECORD_FIELDS = frozenset(
         "observation_version",
         "type",
         "sequence",
+        "run_id",
+        "scenario",
+        "surface",
+    }
+)
+_HEADER_FIELDS = frozenset(
+    {
+        "observation_version",
+        "type",
         "environment_id",
         "run_id",
         "input_fingerprint_sha256",
         "seed",
         "scene",
-        "scenario",
-        "surface",
     }
 )
 
@@ -97,7 +104,7 @@ class ObservationSensor:
 
 @dataclass(frozen=True, slots=True)
 class ObservationScene:
-    """Static scene values required to render any observation independently."""
+    """Static scene values required to render an observation stream."""
 
     boundary_xy_m: tuple[tuple[float, float], ...]
     floor_z_m: float
@@ -145,24 +152,16 @@ class ObservationScene:
 
 
 @dataclass(frozen=True, slots=True)
-class ObservationRecord:
-    """One immutable observation record with its model snapshot."""
+class ObservationStreamHeader:
+    """Static run and scene context sent once for each TCP connection."""
 
-    sequence: int
     environment_id: str
     run_id: str
     input_fingerprint_sha256: str
     seed: int
     scene: ObservationScene
-    snapshot: ScenarioModelSnapshot
 
     def __post_init__(self) -> None:
-        if (
-            isinstance(self.sequence, bool)
-            or not isinstance(self.sequence, int)
-            or not 1 <= self.sequence <= _MAX_SEQUENCE
-        ):
-            raise ValueError("observation sequence must be a positive JSON-safe integer")
         _require_non_empty_string(self.environment_id, "environment_id")
         _require_non_empty_string(self.run_id, "run_id")
         _require_fingerprint(self.input_fingerprint_sha256)
@@ -172,10 +171,65 @@ class ObservationRecord:
             or not 0 <= self.seed <= _MAX_SEED
         ):
             raise ValueError("observation seed must be an unsigned 64-bit integer")
-        if not isinstance(self.snapshot, ScenarioModelSnapshot):
-            raise ValueError("observation snapshot must be a ScenarioModelSnapshot")
         if not isinstance(self.scene, ObservationScene):
             raise ValueError("observation scene must be an ObservationScene")
+
+    def to_document(self) -> dict[str, object]:
+        """Return the JSON-compatible version 1 header representation."""
+        return {
+            "observation_version": OBSERVATION_VERSION,
+            "type": "load_model_stream_header",
+            "environment_id": self.environment_id,
+            "run_id": self.run_id,
+            "input_fingerprint_sha256": self.input_fingerprint_sha256,
+            "seed": self.seed,
+            "scene": _scene_document(self.scene),
+        }
+
+    @classmethod
+    def from_document(cls, value: Mapping[str, Any]) -> ObservationStreamHeader:
+        """Parse one strict version 1 stream header object."""
+        _require_exact_fields(value, _HEADER_FIELDS, "observation header")
+        _require_version_and_type(value, "load_model_stream_header", "observation header")
+        fingerprint = _require_string(
+            value["input_fingerprint_sha256"],
+            "observation header.input_fingerprint_sha256",
+        )
+        try:
+            _require_fingerprint(fingerprint)
+            return cls(
+                environment_id=_require_string(
+                    value["environment_id"], "observation header.environment_id"
+                ),
+                run_id=_require_string(value["run_id"], "observation header.run_id"),
+                input_fingerprint_sha256=fingerprint,
+                seed=_require_integer(
+                    value["seed"], "observation header.seed", minimum=0, maximum=_MAX_SEED
+                ),
+                scene=_parse_scene(value["scene"]),
+            )
+        except ValueError as error:
+            raise ObservationFormatError(str(error)) from error
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationRecord:
+    """One immutable observation record with its model snapshot."""
+
+    sequence: int
+    run_id: str
+    snapshot: ScenarioModelSnapshot
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.sequence, bool)
+            or not isinstance(self.sequence, int)
+            or not 1 <= self.sequence <= _MAX_SEQUENCE
+        ):
+            raise ValueError("observation sequence must be a positive JSON-safe integer")
+        _require_non_empty_string(self.run_id, "run_id")
+        if not isinstance(self.snapshot, ScenarioModelSnapshot):
+            raise ValueError("observation snapshot must be a ScenarioModelSnapshot")
 
     @classmethod
     def from_snapshot(
@@ -183,20 +237,12 @@ class ObservationRecord:
         snapshot: ScenarioModelSnapshot,
         *,
         sequence: int,
-        environment_id: str,
         run_id: str,
-        input_fingerprint_sha256: str,
-        seed: int,
-        scene: ObservationScene,
     ) -> ObservationRecord:
         """Attach run metadata to an immutable model snapshot."""
         return cls(
             sequence=sequence,
-            environment_id=environment_id,
             run_id=run_id,
-            input_fingerprint_sha256=input_fingerprint_sha256,
-            seed=seed,
-            scene=scene,
             snapshot=snapshot,
         )
 
@@ -208,30 +254,7 @@ class ObservationRecord:
             "observation_version": OBSERVATION_VERSION,
             "type": "load_model_observation",
             "sequence": self.sequence,
-            "environment_id": self.environment_id,
             "run_id": self.run_id,
-            "input_fingerprint_sha256": self.input_fingerprint_sha256,
-            "seed": self.seed,
-            "scene": {
-                "coordinate_system": "right-handed-z-up",
-                "length_unit": "m",
-                "angle_unit": "deg",
-                "boundary_xy_m": [list(coordinate) for coordinate in self.scene.boundary_xy_m],
-                "floor_z_m": self.scene.floor_z_m,
-                "top_z_m": self.scene.top_z_m,
-                "inlet_positions_xy_m": [
-                    list(coordinate) for coordinate in self.scene.inlet_positions_xy_m
-                ],
-                "sensors": [
-                    {
-                        "sensor_id": sensor.sensor_id,
-                        "p0_m": list(sensor.p0_m),
-                        "u0": list(sensor.u0),
-                        "u90": list(sensor.u90),
-                    }
-                    for sensor in self.scene.sensors
-                ],
-            },
             "scenario": {
                 "elapsed_s": state.elapsed_s,
                 "surface_updated_at_s": state.surface_updated_at_s,
@@ -258,48 +281,7 @@ class ObservationRecord:
     def from_document(cls, value: Mapping[str, Any]) -> ObservationRecord:
         """Parse one strict version 1 JSON object."""
         _require_exact_fields(value, _RECORD_FIELDS, "observation")
-        if (
-            isinstance(value["observation_version"], bool)
-            or value["observation_version"] != OBSERVATION_VERSION
-        ):
-            raise ObservationFormatError("observation_version must be 1")
-        if value["type"] != "load_model_observation":
-            raise ObservationFormatError("observation type is not load_model_observation")
-
-        scene_value = _require_mapping(value["scene"], "observation.scene")
-        _require_exact_fields(scene_value, _SCENE_FIELDS, "observation.scene")
-        if scene_value["coordinate_system"] != "right-handed-z-up":
-            raise ObservationFormatError(
-                "observation.scene.coordinate_system must be right-handed-z-up"
-            )
-        if scene_value["length_unit"] != "m":
-            raise ObservationFormatError("observation.scene.length_unit must be m")
-        if scene_value["angle_unit"] != "deg":
-            raise ObservationFormatError("observation.scene.angle_unit must be deg")
-        sensor_values = _require_list(scene_value["sensors"], "observation.scene.sensors")
-        if not sensor_values:
-            raise ObservationFormatError("observation.scene.sensors must not be empty")
-        try:
-            scene = ObservationScene(
-                boundary_xy_m=_require_coordinate2_list(
-                    scene_value["boundary_xy_m"],
-                    "observation.scene.boundary_xy_m",
-                    minimum_items=3,
-                ),
-                floor_z_m=_require_number(scene_value["floor_z_m"], "observation.scene.floor_z_m"),
-                top_z_m=_require_number(scene_value["top_z_m"], "observation.scene.top_z_m"),
-                inlet_positions_xy_m=_require_coordinate2_list(
-                    scene_value["inlet_positions_xy_m"],
-                    "observation.scene.inlet_positions_xy_m",
-                    minimum_items=1,
-                ),
-                sensors=tuple(
-                    _parse_observation_sensor(sensor, index)
-                    for index, sensor in enumerate(sensor_values)
-                ),
-            )
-        except ValueError as error:
-            raise ObservationFormatError(str(error)) from error
+        _require_version_and_type(value, "load_model_observation", "observation")
 
         scenario_value = _require_mapping(value["scenario"], "observation.scenario")
         _require_exact_fields(scenario_value, _SCENARIO_FIELDS, "observation.scenario")
@@ -388,14 +370,6 @@ class ObservationRecord:
         except ValueError as error:
             raise ObservationFormatError(str(error)) from error
 
-        fingerprint = _require_string(
-            value["input_fingerprint_sha256"],
-            "observation.input_fingerprint_sha256",
-        )
-        try:
-            _require_fingerprint(fingerprint)
-        except ValueError as error:
-            raise ObservationFormatError(str(error)) from error
         return cls(
             sequence=_require_integer(
                 value["sequence"],
@@ -403,11 +377,7 @@ class ObservationRecord:
                 minimum=1,
                 maximum=_MAX_SEQUENCE,
             ),
-            environment_id=_require_string(value["environment_id"], "observation.environment_id"),
             run_id=_require_string(value["run_id"], "observation.run_id"),
-            input_fingerprint_sha256=fingerprint,
-            seed=_require_integer(value["seed"], "observation.seed", minimum=0, maximum=_MAX_SEED),
-            scene=scene,
             snapshot=ScenarioModelSnapshot(state=state, surface=surface),
         )
 
@@ -419,8 +389,15 @@ def encode_observation_line(record: ObservationRecord) -> str:
     )
 
 
+def encode_observation_header_line(header: ObservationStreamHeader) -> str:
+    """Encode one stream header as a compact JSON line."""
+    return json.dumps(
+        header.to_document(), ensure_ascii=False, allow_nan=False, separators=(",", ":")
+    )
+
+
 def encode_observation_frame(
-    record: ObservationRecord,
+    record: ObservationRecord | ObservationStreamHeader,
     *,
     max_line_bytes: int = MAX_OBSERVATION_LINE_BYTES,
 ) -> bytes:
@@ -431,7 +408,12 @@ def encode_observation_frame(
         raise ValueError(
             f"observation line bound must be between 1 and {MAX_OBSERVATION_LINE_BYTES} bytes"
         )
-    frame = encode_observation_line(record).encode("utf-8") + b"\n"
+    frame = (
+        json.dumps(
+            record.to_document(), ensure_ascii=False, allow_nan=False, separators=(",", ":")
+        ).encode("utf-8")
+        + b"\n"
+    )
     if len(frame) > max_line_bytes:
         raise ObservationFormatError(
             f"observation line exceeds {max_line_bytes} bytes: {len(frame)}"
@@ -452,6 +434,85 @@ def decode_observation_line(line: str) -> ObservationRecord:
     if not isinstance(value, dict):
         raise ObservationFormatError("observation line must contain an object")
     return ObservationRecord.from_document(value)
+
+
+def decode_observation_header_line(line: str) -> ObservationStreamHeader:
+    """Decode one JSON Lines stream header with strict object and number checks."""
+    try:
+        value = json.loads(
+            line,
+            object_pairs_hook=_unique_object,
+            parse_constant=_reject_non_finite_constant,
+        )
+    except (json.JSONDecodeError, ObservationFormatError) as error:
+        raise ObservationFormatError(f"invalid observation header JSON: {error}") from error
+    if not isinstance(value, dict):
+        raise ObservationFormatError("observation header line must contain an object")
+    return ObservationStreamHeader.from_document(value)
+
+
+def _scene_document(scene: ObservationScene) -> dict[str, object]:
+    return {
+        "coordinate_system": "right-handed-z-up",
+        "length_unit": "m",
+        "angle_unit": "deg",
+        "boundary_xy_m": [list(coordinate) for coordinate in scene.boundary_xy_m],
+        "floor_z_m": scene.floor_z_m,
+        "top_z_m": scene.top_z_m,
+        "inlet_positions_xy_m": [list(coordinate) for coordinate in scene.inlet_positions_xy_m],
+        "sensors": [
+            {
+                "sensor_id": sensor.sensor_id,
+                "p0_m": list(sensor.p0_m),
+                "u0": list(sensor.u0),
+                "u90": list(sensor.u90),
+            }
+            for sensor in scene.sensors
+        ],
+    }
+
+
+def _parse_scene(value: Any) -> ObservationScene:
+    scene = _require_mapping(value, "observation header.scene")
+    _require_exact_fields(scene, _SCENE_FIELDS, "observation header.scene")
+    if scene["coordinate_system"] != "right-handed-z-up":
+        raise ObservationFormatError(
+            "observation header.scene.coordinate_system must be right-handed-z-up"
+        )
+    if scene["length_unit"] != "m":
+        raise ObservationFormatError("observation header.scene.length_unit must be m")
+    if scene["angle_unit"] != "deg":
+        raise ObservationFormatError("observation header.scene.angle_unit must be deg")
+    sensor_values = _require_list(scene["sensors"], "observation header.scene.sensors")
+    if not sensor_values:
+        raise ObservationFormatError("observation header.scene.sensors must not be empty")
+    return ObservationScene(
+        boundary_xy_m=_require_coordinate2_list(
+            scene["boundary_xy_m"],
+            "observation header.scene.boundary_xy_m",
+            minimum_items=3,
+        ),
+        floor_z_m=_require_number(scene["floor_z_m"], "observation header.scene.floor_z_m"),
+        top_z_m=_require_number(scene["top_z_m"], "observation header.scene.top_z_m"),
+        inlet_positions_xy_m=_require_coordinate2_list(
+            scene["inlet_positions_xy_m"],
+            "observation header.scene.inlet_positions_xy_m",
+            minimum_items=1,
+        ),
+        sensors=tuple(
+            _parse_observation_sensor(sensor, index) for index, sensor in enumerate(sensor_values)
+        ),
+    )
+
+
+def _require_version_and_type(value: Mapping[str, Any], expected_type: str, path: str) -> None:
+    if (
+        isinstance(value["observation_version"], bool)
+        or value["observation_version"] != OBSERVATION_VERSION
+    ):
+        raise ObservationFormatError(f"{path}.observation_version must be 1")
+    if value["type"] != expected_type:
+        raise ObservationFormatError(f"{path}.type must be {expected_type}")
 
 
 def _require_exact_fields(value: Mapping[str, Any], expected: frozenset[str], path: str) -> None:
@@ -572,7 +633,7 @@ def _require_coordinate2_list(
 
 
 def _parse_observation_sensor(value: Any, index: int) -> ObservationSensor:
-    path = f"observation.scene.sensors[{index}]"
+    path = f"observation header.scene.sensors[{index}]"
     sensor = _require_mapping(value, path)
     _require_exact_fields(sensor, _SENSOR_FIELDS, path)
     return ObservationSensor(

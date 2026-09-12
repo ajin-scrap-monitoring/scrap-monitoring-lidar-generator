@@ -22,12 +22,12 @@ FFmpeg와 3D rendering 코드 및 의존성은 포함하지 않는다.
 
 ## 전송 계약
 
-관찰 stream은 1개 형식의 독립 레코드를 사용한다. 레코드는 다음 정보를 모두 포함한다.
+관찰 stream은 2개 레코드 형식을 순서대로 사용한다.
 
-1. version, sequence, 실행과 입력 식별 정보.
-2. 경계, 바닥, 외벽 상단, 투입구와 sensor 위치 및 방향.
-3. 시뮬레이션 시각, 적재율, 부피와 filling 또는 collecting 상태.
-4. 현재 적재물 표면의 x, y 좌표와 절대 z 높이 격자.
+1. `load_model_stream_header`: 연결 직후 1회 전송하는 실행 식별 정보, 경계, 바닥, 외벽
+   상단, 투입구와 sensor 위치 및 방향.
+2. `load_model_observation`: 기본 1초마다 전송하는 sequence, 시뮬레이션 시각, 적재율,
+   부피, filling 또는 collecting 상태와 현재 적재물 표면 격자.
 
 wire 형식, 전달 의미와 field 의미는
 [`contracts/observation/v1/`](../contracts/observation/v1/)이 정본이다. 기존 scan 계약과
@@ -54,7 +54,7 @@ uv run --locked scrap-monitoring-lidar-generator \
 현재 상태이며 이후 설정 간격을 지난 첫 scan 완료 시점의 상태를 전송한다. 시간 사이의
 표면을 보간하지 않는다.
 
-종료 집계의 `sent`는 TCP writer가 운영체제에 전달한 레코드 수이며 receiver 처리를
+종료 집계의 `sent`는 TCP writer가 운영체제에 전달한 observation 수이며 receiver 처리를
 보장하지 않는다. `dropped`는 latest-only 교체, 전송 실패, 크기 상한 또는 종료 때문에
 폐기한 레코드 수다. `connection_failures`는 연결 또는 연결 사용 실패 횟수다.
 

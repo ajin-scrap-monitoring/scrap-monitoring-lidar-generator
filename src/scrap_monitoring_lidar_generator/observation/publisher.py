@@ -10,6 +10,7 @@ from scrap_monitoring_lidar_generator.observation.format import (
     ObservationFormatError,
     ObservationRecord,
     ObservationScene,
+    ObservationStreamHeader,
     encode_observation_frame,
 )
 from scrap_monitoring_lidar_generator.scenario import ScenarioModelSnapshot
@@ -60,8 +61,7 @@ class TcpObservationPublisher:
         "_connect_timeout_s",
         "_connection_failures",
         "_dropped_records",
-        "_environment_id",
-        "_fingerprint",
+        "_header",
         "_host",
         "_interval_s",
         "_last_elapsed_s",
@@ -69,8 +69,6 @@ class TcpObservationPublisher:
         "_next_sample_s",
         "_port",
         "_run_id",
-        "_scene",
-        "_seed",
         "_send_timeout_s",
         "_sent_records",
         "_sequence",
@@ -103,11 +101,14 @@ class TcpObservationPublisher:
             raise ValueError("observation interval must be finite and between 0 and 86400 seconds")
         self._host = host
         self._port = port
-        self._environment_id = environment_id
         self._run_id = run_id
-        self._fingerprint = input_fingerprint_sha256
-        self._seed = seed
-        self._scene = scene
+        self._header = ObservationStreamHeader(
+            environment_id=environment_id,
+            run_id=run_id,
+            input_fingerprint_sha256=input_fingerprint_sha256,
+            seed=seed,
+            scene=scene,
+        )
         self._sequence = 0
         self._interval_s = float(interval_s)
         self._connect_timeout_s = _require_positive_duration(
@@ -175,11 +176,7 @@ class TcpObservationPublisher:
         record = ObservationRecord.from_snapshot(
             snapshot,
             sequence=self._sequence + 1,
-            environment_id=self._environment_id,
             run_id=self._run_id,
-            input_fingerprint_sha256=self._fingerprint,
-            seed=self._seed,
-            scene=self._scene,
         )
         self._sequence += 1
         if self._latest is not None:
@@ -241,6 +238,9 @@ class TcpObservationPublisher:
                     await writer.wait_closed()
 
     async def _use_connection(self, writer: asyncio.StreamWriter) -> None:
+        writer.write(encode_observation_frame(self._header))
+        async with asyncio.timeout(self._send_timeout_s):
+            await writer.drain()
         while not self._closed:
             record = self._take_latest()
             if record is None:

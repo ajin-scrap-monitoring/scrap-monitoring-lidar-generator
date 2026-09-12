@@ -19,8 +19,9 @@ Repository의 구현 대상이 아니다.
 
 수신기는 [`contracts/observation/v1/`](../contracts/observation/v1/)의 version 1 계약을
 구현한다. 수신기는 TCP server이고 생성기가 client다. packet 분할과 여러 레코드의 packet
-병합을 허용하며 LF 단위로 JSON 레코드를 복원한다. 최대 line 크기 1,048,576 byte를
-넘는 입력과 알 수 없는 version, type 또는 field를 거부한다.
+병합을 허용하며 LF 단위로 JSON 레코드를 복원한다. 연결의 첫 레코드로
+`load_model_stream_header` 1개를 받고 이후 `load_model_observation`을 계속 받는다. 최대
+line 크기 1,048,576 byte를 넘는 입력과 알 수 없는 version 또는 type을 거부한다.
 
 수신기는 `run_id`, `environment_id`, `seed`와 `input_fingerprint_sha256`로 실행 묶음을
 구분한다. 같은 실행에서 sequence gap을 발견하면 누락 상태를 기록하되 연결과 live 표시를
@@ -28,8 +29,8 @@ Repository의 구현 대상이 아니다.
 거부한다. 새 `run_id`는 새 실행으로 전환한다.
 
 시각화 프로그램은 일반 scan stream을 입력으로 사용하거나 scan point로 적재 표면을
-추정하지 않는다. 각 관찰 레코드가 장면과 현재 적재물 표면을 모두 제공하므로 생성기
-설정 파일은 필수 입력이 아니다.
+추정하지 않는다. header가 장면을 제공하고 observation이 현재 적재물 표면을 제공하므로
+생성기 설정 파일은 필수 입력이 아니다.
 
 ## 실시간 동작
 
@@ -56,7 +57,7 @@ snapshot test는 사용하지 않는다.
 
 ## 기록과 재생
 
-기록 기능은 수신한 원본 JSON line을 sequence 순서로 보존한다. 기록은 명시적으로 켠
+기록 기능은 header부터 수신한 원본 JSON line을 순서대로 보존한다. 기록은 명시적으로 켠
 경우에만 수행하며 byte 또는 record 수 기준의 상한을 필수로 받는다. 상한에 도달하면
 기록을 정상 종료하고 live 표시는 계속한다. 불완전 line과 무효 레코드는 기록하지 않는다.
 
@@ -85,9 +86,8 @@ rendering 및 FFmpeg 의존성은 시각화 Repository에만 두며 엣지 생�
 receiver 또는 renderer 장애는 엣지 생성기의 scan 생성 및 기존 scan 전송 상태를
 변경하지 않는다.
 
-TCP version 1은 인증, 암호화와 원격 제어를 제공하지 않는다. receiver는 신뢰할 수 있는
-개발 network interface에만 bind하고 public network에 직접 노출하지 않는다. 저장한 관찰
-파일에는 장면 정보가 포함되므로 운영 로그와 같은 접근 정책을 적용한다.
+TCP version 1은 개발용 단일 producer 연결만 다루며 ACK, 인증, 압축, broker와 전달
+보장을 제공하지 않는다. 저장한 관찰 파일에는 장면 정보가 포함된다.
 
 ## 자동 검증
 

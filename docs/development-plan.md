@@ -29,7 +29,7 @@
 
 | 항목 | 현재 결정 |
 | --- | --- |
-| 관찰 출력 형식 | 별도 `contracts/observation/v1/` JSON Lines 계약 |
+| 관찰 출력 형식 | 연결별 정적 header와 기본 1초 주기 동적 observation의 JSON Lines 계약 |
 | 엣지 출력 경로 | 항상 실행하는 비동기 TCP publisher |
 | snapshot 주기와 보관량 | 기본 1초, 최신 대기 상태 1개 |
 | 장애 처리 | ACK 없는 best-effort 전송, bounded 재연결과 이전 상태 폐기 |

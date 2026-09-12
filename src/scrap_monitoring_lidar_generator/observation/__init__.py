@@ -7,8 +7,11 @@ from scrap_monitoring_lidar_generator.observation.format import (
     ObservationRecord,
     ObservationScene,
     ObservationSensor,
+    ObservationStreamHeader,
+    decode_observation_header_line,
     decode_observation_line,
     encode_observation_frame,
+    encode_observation_header_line,
     encode_observation_line,
 )
 from scrap_monitoring_lidar_generator.observation.publisher import (
@@ -34,8 +37,11 @@ __all__ = [
     "ObservationRecord",
     "ObservationScene",
     "ObservationSensor",
+    "ObservationStreamHeader",
     "TcpObservationPublisher",
+    "decode_observation_header_line",
     "decode_observation_line",
     "encode_observation_frame",
+    "encode_observation_header_line",
     "encode_observation_line",
 ]
