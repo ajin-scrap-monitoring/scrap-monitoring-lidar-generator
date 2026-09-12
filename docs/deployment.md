@@ -36,7 +36,7 @@ GitHub Container Registry(GHCR) image는 Public이므로 pull credential이 필�
 Release asset에서 불변 image 참조를 가져와 image를 준비한다.
 
 ```bash
-gh release download v0.2.1 \
+gh release download v0.3.0 \
   --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
   --pattern oci-image.txt \
   --dir /tmp/scrap-monitoring-lidar-generator-release
@@ -138,13 +138,12 @@ Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PA
 
 ## 현재 검증 기준
 
-현재 ARM64 배포 기준은 `v0.2.1` Release다. Release asset의 image는 `linux/arm64` 단일
-실행 platform과 Public package 상태를 확인했다. 센서별 독립 전송 lane, 전체 전송 중단
-오류의 즉시 보고와 진단 version 2를 포함한다.
+현재 ARM64 배포 기준은 `v0.3.0` Release다. Release asset의 image는 `linux/arm64` 단일
+실행 platform과 Public package 상태를 확인했다. 고정 LiDAR 2대 생성, 센서별 독립 전송
+lane, 전체 종료 전송 집계, 반복 가능한 엣지 검증과 적재 모델 관찰 stream을 포함한다.
 
 Raspberry Pi 5에서 scan ACK test double과 관찰 stream test double을 사용한 실행 검증을
-통과했다. 고정된 센서 2개 구성은 CPU 1 core 상한에서 지속 가능한 ACK 처리량을 확보하지
-못했으므로 반복 검증 도구로 더 큰 CPU 상한과 실제 수신 프로그램 조건을 확인해야 한다. source
-revision, 불변 image digest와 장비별 관측값은 [`performance.md`](performance.md)가 정본이다.
-실제 scan 수신 프로그램과 별도 시각화 장비의 endpoint가 확정되면 검증한 digest와 외부
-운영 설정으로 상시 container를 배치한다.
+통과했다. 고정된 센서 2개 구성은 CPU 2 core 상한의 30초 검증 3회에서 모든 scan과 관찰
+record를 손실 없이 전달했다. source revision, 불변 image digest와 장비별 관측값은
+[`performance.md`](performance.md)가 정본이다. 실제 scan 수신 프로그램과 별도 시각화
+장비의 endpoint가 확정되면 검증한 digest와 외부 운영 설정으로 상시 container를 배치한다.
