@@ -14,7 +14,7 @@
 | 1단계 | 완료 | 없음 |
 | 2단계 | 완료 | 없음 |
 | 3단계 | 고정 2센서 생성 프로그램과 test double 자동 검증 완료 | 실제 수신 프로그램과의 계약 검증 |
-| 4단계 | v0.3.0 ARM64 OCI image와 Raspberry Pi 5 고정 2센서 반복 검증 완료 | 실제 수신 프로그램 통합, 다른 edge process와의 공유 부하 검증 및 허용 기준 |
+| 4단계 | v0.3.1 ARM64 OCI image와 Raspberry Pi 5 고정 2센서 검증 완료 | 실제 수신 프로그램 통합, 다른 edge process와의 공유 부하 검증 및 허용 기준 |
 | 관찰 stream | 상시 TCP publisher, 외부 시각화 경계와 Raspberry Pi 5 송신 검증 완료 | 별도 시각화 장비의 연속 연결 및 rendering 검증 |
 
 ## 현재 작업 목표
@@ -29,9 +29,9 @@
 송신 구현은 센서별 독립 TCP lane과 ACK 대기, 전체 byte 상한 안의 분할 buffer, 전체
 전송 중단 오류의 즉시 보고를 제공한다. 로컬 기준 진단 version 2는 wire scan과 같은 실행
 식별자 및 대표 시각을 기록한다.
-두 번째 목표의 `v0.3.0` Release, digest 기반 실행과 test double 대상 장비 검증도
+두 번째 목표의 `v0.3.1` Release, digest 기반 실행과 test double 대상 장비 검증도
 완료됐다. 공개 합성 환경과 생성 실행 입력은 LiDAR 2대로 고정되어 있고, CPU 2 core 상한의
-30초 반복 검증 3회에서 scan과 관찰 record를 손실 없이 전달했다. 실제 수신 endpoint를
+30초 검증에서 scan과 관찰 record를 손실 없이 전달했다. 실제 수신 endpoint를
 사용하는 상시 배포는 높이 계산 프로세스가 준비된 뒤 진행한다. 세 번째 목표의 생성기 측
 interface는 구현되어 있으며 별도 시각화 프로그램의 수신 및 rendering은 이 Repository의
 범위가 아니다.

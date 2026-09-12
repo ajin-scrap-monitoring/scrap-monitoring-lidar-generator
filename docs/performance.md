@@ -136,3 +136,36 @@ test double을 같은 Docker network에서 실행했다. 생성 container에는 
 상한은 검증하지 못했다. Release image는 장비에 digest로 pull되어 있으며 검증 container와
 network는 매 실행 후 제거된다. 실제 scan 수신 프로그램, 별도 시각화 장비, 다른 edge
 process와 장기 동시 실행은 포함하지 않는다.
+
+## v0.3.1 엣지 검증
+
+검증 대상은 source revision `57dfa2469c8f641b326174bf6b61f302d7969eff`의 `v0.3.1`
+ARM64 image다. Release asset의 불변 image 참조는 다음과 같다.
+
+```text
+ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:b4d818ad6535eb0d624a98c31df9739607c61740033a9737196693fdcdf8ac77
+```
+
+Raspberry Pi 5 8GB에서 공개 합성 2센서 설정, scan ACK test double과 관찰 JSON Lines 수신
+test double을 같은 Docker network에서 실행했다. 생성 container에는 CPU 2 core 상한을
+적용하고 30초 wall-clock 구간을 검증했다.
+
+| 항목 | 관측값 |
+| --- | --- |
+| 시뮬레이션 시각 | 31.2초 |
+| 생성 및 ACK | 624 scan, 미응답 0 |
+| 센서별 수신 | 312 scan |
+| 생성 point | 1,996,800개 |
+| scan 중복 및 sequence 누락 | 0 |
+| scan 폐기 및 연결 실패 | 0 |
+| 관찰 송수신 | 32 record, 폐기 및 연결 실패 0 |
+| 생성 process CPU | 82.50퍼센트 |
+| 수신 test double CPU | 12.05퍼센트 |
+| 검증 후 장비 상태 | load average 0.89, MemAvailable 7,767,760 kB, 57.3 C, throttling `0x0` |
+
+두 container는 종료 코드 0이고 OOM(Out Of Memory) 종료가 없었다. 현재 장비 kernel은
+Docker memory cgroup 제한을 제공하지 않아 container memory 사용량과 상한은 검증하지
+못했다. Release image는 비 root 사용자로 실행됐으며 version `0.3.1`, source revision과
+ARM64 metadata를 장비에서 확인했다. 검증 container와 network 및 원격 임시 파일은 제거했고
+Release image는 장비에 digest로 pull된 상태다. 실제 scan 수신 프로그램, 별도 시각화 장비,
+다른 edge process와 장기 동시 실행은 포함하지 않는다.
