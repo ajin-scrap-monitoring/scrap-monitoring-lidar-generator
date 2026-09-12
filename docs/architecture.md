@@ -33,7 +33,7 @@ runtime -> observation -> scenario
 
 `geometry`는 다른 프로젝트 패키지를 참조하지 않는다. `configuration`은 공간 입력의 의미 검증에 `geometry`를 사용한다. `scenario`는 측정과 전송을 참조하지 않고, `measurement`는 전송을 참조하지 않는다. `transport`는 장면 상태를 변경하지 않는다. `runtime`과 `cli.py`만 장기 실행 객체를 조립하고 생명주기를 제어한다.
 
-`observation`은 `scenario`가 제공하는 읽기 전용 snapshot을 기존 scan 계약과 별도 TCP stream으로 계속 전송한다. publisher는 전송 시각을 먼저 검사한 뒤 snapshot을 복사하고 최신 레코드 1개만 보관한다. 연결 실패, 재연결과 느린 수신기는 scan 생성 및 전송 생명주기와 분리된다. 3D 표시, 기록과 MP4 생성은 별도 `scrap-monitoring-load-visualizer` Repository가 담당한다.
+`observation`은 `scenario`가 제공하는 읽기 전용 snapshot을 기존 scan 계약과 별도 TCP stream으로 계속 전송한다. publisher는 전송 시각을 먼저 검사한 뒤 snapshot을 복사하고 최신 레코드 1개만 보관한다. 연결 실패, 재연결과 느린 수신기는 scan 생성 및 전송 생명주기와 분리된다. 독립 레코드는 정적 장면과 동적 표면을 함께 제공하며 3D 표시, 기록과 MP4 생성은 별도 시각화 Repository가 담당한다.
 
 ## 시간과 재현성
 
@@ -138,6 +138,7 @@ docs/
   dependencies.md
   development-plan.md
   observation.md
+  visualizer-requirements.md
   performance.md
   project-spec.md
   internal/

@@ -12,8 +12,10 @@ from scrap_monitoring_lidar_generator.geometry import Vec2
 from scrap_monitoring_lidar_generator.observation import (
     ObservationFormatError,
     ObservationRecord,
+    ObservationScene,
     TcpObservationPublisher,
     decode_observation_line,
+    encode_observation_frame,
     encode_observation_line,
 )
 from scrap_monitoring_lidar_generator.runtime import build_scenario_simulator
@@ -25,6 +27,8 @@ from scrap_monitoring_lidar_generator.scenario import (
 )
 
 _ROOT = Path(__file__).parents[2]
+_INPUTS = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
+_SCENE = ObservationScene.from_inputs(_INPUTS)
 
 
 def _record(elapsed_s: float = 1.0) -> ObservationRecord:
@@ -50,10 +54,12 @@ def _record(elapsed_s: float = 1.0) -> ObservationRecord:
     )
     return ObservationRecord.from_snapshot(
         ScenarioModelSnapshot(state=state, surface=surface),
+        sequence=max(1, round(elapsed_s * 10)),
         environment_id="synthetic-room-v1",
         run_id="run-a",
         input_fingerprint_sha256="0" * 64,
         seed=42,
+        scene=_SCENE,
     )
 
 
@@ -81,10 +87,14 @@ def test_observation_line_round_trips_without_scan_fields() -> None:
     decoded = decode_observation_line(encoded)
 
     assert decoded.environment_id == "synthetic-room-v1"
+    assert decoded.sequence == 10
     assert decoded.snapshot.state.elapsed_s == pytest.approx(1.0)
     np.testing.assert_array_equal(decoded.snapshot.surface.heights_m, [[0.0, 0.1], [0.2, 0.3]])
     document = json.loads(encoded)
     assert document["type"] == "load_model_observation"
+    assert document["scene"]["coordinate_system"] == "right-handed-z-up"
+    assert document["scene"]["boundary_xy_m"] == [[0.0, 0.0], [8.0, 0.0], [8.0, 6.0], [0.0, 6.0]]
+    assert document["scene"]["sensors"][0]["sensor_id"] == "sensor-a"
     assert "points" not in document
 
 
@@ -104,6 +114,11 @@ def test_observation_decoder_rejects_duplicate_fields() -> None:
         decode_observation_line(duplicate)
 
 
+def test_observation_frame_enforces_the_wire_size_bound() -> None:
+    with pytest.raises(ObservationFormatError, match="exceeds 100 bytes"):
+        encode_observation_frame(_record(), max_line_bytes=100)
+
+
 def _publisher(port: int) -> TcpObservationPublisher:
     return TcpObservationPublisher(
         host="127.0.0.1",
@@ -112,6 +127,7 @@ def _publisher(port: int) -> TcpObservationPublisher:
         run_id="run-a",
         input_fingerprint_sha256="0" * 64,
         seed=42,
+        scene=_SCENE,
         interval_s=1.0,
         connect_timeout_s=0.2,
         send_timeout_s=0.2,
@@ -149,6 +165,7 @@ def test_publisher_streams_due_records_as_json_lines() -> None:
         await server.wait_closed()
 
         assert [json.loads(line)["scenario"]["elapsed_s"] for line in received] == [0.1, 1.0]
+        assert [json.loads(line)["sequence"] for line in received] == [1, 2]
         assert publisher.stats.accepted_records == 2
         assert publisher.stats.sent_records == 2
         assert publisher.stats.dropped_records == 0
@@ -177,6 +194,7 @@ def test_publisher_keeps_only_latest_pending_snapshot() -> None:
         await server.wait_closed()
 
         assert json.loads(line)["scenario"]["elapsed_s"] == 1.0
+        assert json.loads(line)["sequence"] == 2
         assert publisher.stats.dropped_records == 1
 
     asyncio.run(run())

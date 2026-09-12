@@ -1,10 +1,14 @@
 """Load-model observation stream contract and publisher."""
 
 from scrap_monitoring_lidar_generator.observation.format import (
+    MAX_OBSERVATION_LINE_BYTES,
     OBSERVATION_VERSION,
     ObservationFormatError,
     ObservationRecord,
+    ObservationScene,
+    ObservationSensor,
     decode_observation_line,
+    encode_observation_frame,
     encode_observation_line,
 )
 from scrap_monitoring_lidar_generator.observation.publisher import (
@@ -22,12 +26,16 @@ __all__ = [
     "DEFAULT_OBSERVATION_INTERVAL_S",
     "DEFAULT_OBSERVATION_PORT",
     "MAX_OBSERVATION_INTERVAL_S",
+    "MAX_OBSERVATION_LINE_BYTES",
     "OBSERVATION_VERSION",
     "ObservationFormatError",
     "ObservationPublisher",
     "ObservationPublisherStats",
     "ObservationRecord",
+    "ObservationScene",
+    "ObservationSensor",
     "TcpObservationPublisher",
     "decode_observation_line",
+    "encode_observation_frame",
     "encode_observation_line",
 ]

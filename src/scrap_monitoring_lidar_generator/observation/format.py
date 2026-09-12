@@ -1,10 +1,10 @@
-"""Versioned JSON Lines records for the optional load-model observer."""
+"""Versioned JSON Lines records for load-model observation."""
 
 import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -15,8 +15,13 @@ from scrap_monitoring_lidar_generator.scenario import (
     SurfaceModelSnapshot,
 )
 
+if TYPE_CHECKING:
+    from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
+
 OBSERVATION_VERSION = 1
+MAX_OBSERVATION_LINE_BYTES = 1_048_576
 _MAX_SEED = 18_446_744_073_709_551_615
+_MAX_SEQUENCE = 9_007_199_254_740_991
 _SCENARIO_FIELDS = frozenset(
     {
         "elapsed_s",
@@ -41,14 +46,29 @@ _SURFACE_FIELDS = frozenset(
         "heights_m",
     }
 )
+_SCENE_FIELDS = frozenset(
+    {
+        "coordinate_system",
+        "length_unit",
+        "angle_unit",
+        "boundary_xy_m",
+        "floor_z_m",
+        "top_z_m",
+        "inlet_positions_xy_m",
+        "sensors",
+    }
+)
+_SENSOR_FIELDS = frozenset({"sensor_id", "p0_m", "u0", "u90"})
 _RECORD_FIELDS = frozenset(
     {
         "observation_version",
         "type",
+        "sequence",
         "environment_id",
         "run_id",
         "input_fingerprint_sha256",
         "seed",
+        "scene",
         "scenario",
         "surface",
     }
@@ -60,16 +80,89 @@ class ObservationFormatError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class ObservationSensor:
+    """One sensor pose in the shared right-handed coordinate system."""
+
+    sensor_id: str
+    p0_m: tuple[float, float, float]
+    u0: tuple[float, float, float]
+    u90: tuple[float, float, float]
+
+    def __post_init__(self) -> None:
+        _require_non_empty_string(self.sensor_id, "sensor_id")
+        _validate_vector(self.p0_m, 3, "sensor p0_m")
+        _validate_vector(self.u0, 3, "sensor u0")
+        _validate_vector(self.u90, 3, "sensor u90")
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationScene:
+    """Static scene values required to render any observation independently."""
+
+    boundary_xy_m: tuple[tuple[float, float], ...]
+    floor_z_m: float
+    top_z_m: float
+    inlet_positions_xy_m: tuple[tuple[float, float], ...]
+    sensors: tuple[ObservationSensor, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.boundary_xy_m) < 3:
+            raise ValueError("observation boundary must contain at least 3 coordinates")
+        for coordinate in self.boundary_xy_m:
+            _validate_vector(coordinate, 2, "boundary coordinate")
+        if not math.isfinite(self.floor_z_m) or not math.isfinite(self.top_z_m):
+            raise ValueError("observation vertical bounds must be finite")
+        if self.top_z_m <= self.floor_z_m:
+            raise ValueError("observation top must be above floor")
+        if not self.inlet_positions_xy_m:
+            raise ValueError("observation scene must contain at least 1 inlet")
+        for coordinate in self.inlet_positions_xy_m:
+            _validate_vector(coordinate, 2, "inlet coordinate")
+        if not self.sensors:
+            raise ValueError("observation scene must contain at least 1 sensor")
+        sensor_ids = tuple(sensor.sensor_id for sensor in self.sensors)
+        if len(sensor_ids) != len(set(sensor_ids)):
+            raise ValueError("observation sensor identifiers must be unique")
+
+    @classmethod
+    def from_inputs(cls, inputs: GeneratorInputs) -> ObservationScene:
+        """Copy renderable static values from validated generator inputs."""
+        return cls(
+            boundary_xy_m=inputs.environment.boundary_xy_m,
+            floor_z_m=inputs.environment.floor_z_m,
+            top_z_m=inputs.environment.top_z_m,
+            inlet_positions_xy_m=inputs.generator.scenario.inlet_positions_xy_m,
+            sensors=tuple(
+                ObservationSensor(
+                    sensor_id=sensor.sensor_id,
+                    p0_m=sensor.p0_m,
+                    u0=sensor.u0,
+                    u90=sensor.u90,
+                )
+                for sensor in inputs.environment.sensors
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ObservationRecord:
     """One immutable observation record with its model snapshot."""
 
+    sequence: int
     environment_id: str
     run_id: str
     input_fingerprint_sha256: str
     seed: int
+    scene: ObservationScene
     snapshot: ScenarioModelSnapshot
 
     def __post_init__(self) -> None:
+        if (
+            isinstance(self.sequence, bool)
+            or not isinstance(self.sequence, int)
+            or not 1 <= self.sequence <= _MAX_SEQUENCE
+        ):
+            raise ValueError("observation sequence must be a positive JSON-safe integer")
         _require_non_empty_string(self.environment_id, "environment_id")
         _require_non_empty_string(self.run_id, "run_id")
         _require_fingerprint(self.input_fingerprint_sha256)
@@ -81,23 +174,29 @@ class ObservationRecord:
             raise ValueError("observation seed must be an unsigned 64-bit integer")
         if not isinstance(self.snapshot, ScenarioModelSnapshot):
             raise ValueError("observation snapshot must be a ScenarioModelSnapshot")
+        if not isinstance(self.scene, ObservationScene):
+            raise ValueError("observation scene must be an ObservationScene")
 
     @classmethod
     def from_snapshot(
         cls,
         snapshot: ScenarioModelSnapshot,
         *,
+        sequence: int,
         environment_id: str,
         run_id: str,
         input_fingerprint_sha256: str,
         seed: int,
+        scene: ObservationScene,
     ) -> ObservationRecord:
         """Attach run metadata to an immutable model snapshot."""
         return cls(
+            sequence=sequence,
             environment_id=environment_id,
             run_id=run_id,
             input_fingerprint_sha256=input_fingerprint_sha256,
             seed=seed,
+            scene=scene,
             snapshot=snapshot,
         )
 
@@ -108,10 +207,31 @@ class ObservationRecord:
         return {
             "observation_version": OBSERVATION_VERSION,
             "type": "load_model_observation",
+            "sequence": self.sequence,
             "environment_id": self.environment_id,
             "run_id": self.run_id,
             "input_fingerprint_sha256": self.input_fingerprint_sha256,
             "seed": self.seed,
+            "scene": {
+                "coordinate_system": "right-handed-z-up",
+                "length_unit": "m",
+                "angle_unit": "deg",
+                "boundary_xy_m": [list(coordinate) for coordinate in self.scene.boundary_xy_m],
+                "floor_z_m": self.scene.floor_z_m,
+                "top_z_m": self.scene.top_z_m,
+                "inlet_positions_xy_m": [
+                    list(coordinate) for coordinate in self.scene.inlet_positions_xy_m
+                ],
+                "sensors": [
+                    {
+                        "sensor_id": sensor.sensor_id,
+                        "p0_m": list(sensor.p0_m),
+                        "u0": list(sensor.u0),
+                        "u90": list(sensor.u90),
+                    }
+                    for sensor in self.scene.sensors
+                ],
+            },
             "scenario": {
                 "elapsed_s": state.elapsed_s,
                 "surface_updated_at_s": state.surface_updated_at_s,
@@ -145,6 +265,41 @@ class ObservationRecord:
             raise ObservationFormatError("observation_version must be 1")
         if value["type"] != "load_model_observation":
             raise ObservationFormatError("observation type is not load_model_observation")
+
+        scene_value = _require_mapping(value["scene"], "observation.scene")
+        _require_exact_fields(scene_value, _SCENE_FIELDS, "observation.scene")
+        if scene_value["coordinate_system"] != "right-handed-z-up":
+            raise ObservationFormatError(
+                "observation.scene.coordinate_system must be right-handed-z-up"
+            )
+        if scene_value["length_unit"] != "m":
+            raise ObservationFormatError("observation.scene.length_unit must be m")
+        if scene_value["angle_unit"] != "deg":
+            raise ObservationFormatError("observation.scene.angle_unit must be deg")
+        sensor_values = _require_list(scene_value["sensors"], "observation.scene.sensors")
+        if not sensor_values:
+            raise ObservationFormatError("observation.scene.sensors must not be empty")
+        try:
+            scene = ObservationScene(
+                boundary_xy_m=_require_coordinate2_list(
+                    scene_value["boundary_xy_m"],
+                    "observation.scene.boundary_xy_m",
+                    minimum_items=3,
+                ),
+                floor_z_m=_require_number(scene_value["floor_z_m"], "observation.scene.floor_z_m"),
+                top_z_m=_require_number(scene_value["top_z_m"], "observation.scene.top_z_m"),
+                inlet_positions_xy_m=_require_coordinate2_list(
+                    scene_value["inlet_positions_xy_m"],
+                    "observation.scene.inlet_positions_xy_m",
+                    minimum_items=1,
+                ),
+                sensors=tuple(
+                    _parse_observation_sensor(sensor, index)
+                    for index, sensor in enumerate(sensor_values)
+                ),
+            )
+        except ValueError as error:
+            raise ObservationFormatError(str(error)) from error
 
         scenario_value = _require_mapping(value["scenario"], "observation.scenario")
         _require_exact_fields(scenario_value, _SCENARIO_FIELDS, "observation.scenario")
@@ -242,10 +397,17 @@ class ObservationRecord:
         except ValueError as error:
             raise ObservationFormatError(str(error)) from error
         return cls(
+            sequence=_require_integer(
+                value["sequence"],
+                "observation.sequence",
+                minimum=1,
+                maximum=_MAX_SEQUENCE,
+            ),
             environment_id=_require_string(value["environment_id"], "observation.environment_id"),
             run_id=_require_string(value["run_id"], "observation.run_id"),
             input_fingerprint_sha256=fingerprint,
             seed=_require_integer(value["seed"], "observation.seed", minimum=0, maximum=_MAX_SEED),
+            scene=scene,
             snapshot=ScenarioModelSnapshot(state=state, surface=surface),
         )
 
@@ -255,6 +417,26 @@ def encode_observation_line(record: ObservationRecord) -> str:
     return json.dumps(
         record.to_document(), ensure_ascii=False, allow_nan=False, separators=(",", ":")
     )
+
+
+def encode_observation_frame(
+    record: ObservationRecord,
+    *,
+    max_line_bytes: int = MAX_OBSERVATION_LINE_BYTES,
+) -> bytes:
+    """Encode one LF-terminated record within the wire-size bound."""
+    if isinstance(max_line_bytes, bool) or not isinstance(max_line_bytes, int):
+        raise ValueError("observation line bound must be an integer")
+    if not 1 <= max_line_bytes <= MAX_OBSERVATION_LINE_BYTES:
+        raise ValueError(
+            f"observation line bound must be between 1 and {MAX_OBSERVATION_LINE_BYTES} bytes"
+        )
+    frame = encode_observation_line(record).encode("utf-8") + b"\n"
+    if len(frame) > max_line_bytes:
+        raise ObservationFormatError(
+            f"observation line exceeds {max_line_bytes} bytes: {len(frame)}"
+        )
+    return frame
 
 
 def decode_observation_line(line: str) -> ObservationRecord:
@@ -285,6 +467,12 @@ def _require_exact_fields(value: Mapping[str, Any], expected: frozenset[str], pa
 def _require_mapping(value: Any, path: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise ObservationFormatError(f"{path} must be an object")
+    return value
+
+
+def _require_list(value: Any, path: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise ObservationFormatError(f"{path} must be an array")
     return value
 
 
@@ -368,9 +556,62 @@ def _require_number_matrix(value: Any, path: str) -> np.ndarray:
     return np.asarray(rows, dtype=np.float64)
 
 
+def _require_coordinate2_list(
+    value: Any,
+    path: str,
+    *,
+    minimum_items: int,
+) -> tuple[tuple[float, float], ...]:
+    items = _require_list(value, path)
+    if len(items) < minimum_items:
+        raise ObservationFormatError(f"{path} must contain at least {minimum_items} coordinates")
+    coordinates: list[tuple[float, float]] = []
+    for index, item in enumerate(items):
+        coordinates.append(_require_coordinate2(item, f"{path}[{index}]"))
+    return tuple(coordinates)
+
+
+def _parse_observation_sensor(value: Any, index: int) -> ObservationSensor:
+    path = f"observation.scene.sensors[{index}]"
+    sensor = _require_mapping(value, path)
+    _require_exact_fields(sensor, _SENSOR_FIELDS, path)
+    return ObservationSensor(
+        sensor_id=_require_string(sensor["sensor_id"], f"{path}.sensor_id"),
+        p0_m=_require_coordinate3(sensor["p0_m"], f"{path}.p0_m"),
+        u0=_require_coordinate3(sensor["u0"], f"{path}.u0"),
+        u90=_require_coordinate3(sensor["u90"], f"{path}.u90"),
+    )
+
+
+def _require_coordinate2(value: Any, path: str) -> tuple[float, float]:
+    coordinate = _require_list(value, path)
+    if len(coordinate) != 2:
+        raise ObservationFormatError(f"{path} must contain exactly 2 numbers")
+    return (
+        _require_number(coordinate[0], f"{path}[0]"),
+        _require_number(coordinate[1], f"{path}[1]"),
+    )
+
+
+def _require_coordinate3(value: Any, path: str) -> tuple[float, float, float]:
+    coordinate = _require_list(value, path)
+    if len(coordinate) != 3:
+        raise ObservationFormatError(f"{path} must contain exactly 3 numbers")
+    return (
+        _require_number(coordinate[0], f"{path}[0]"),
+        _require_number(coordinate[1], f"{path}[1]"),
+        _require_number(coordinate[2], f"{path}[2]"),
+    )
+
+
 def _require_non_empty_string(value: str, path: str) -> None:
     if not isinstance(value, str) or not value:
         raise ValueError(f"observation {path} must be a non-empty string")
+
+
+def _validate_vector(value: tuple[float, ...], size: int, path: str) -> None:
+    if len(value) != size or any(not math.isfinite(component) for component in value):
+        raise ValueError(f"observation {path} must contain exactly {size} finite numbers")
 
 
 def _require_fingerprint(value: str) -> None:

@@ -15,6 +15,7 @@ from scrap_monitoring_lidar_generator.observation import (
     DEFAULT_OBSERVATION_PORT,
     ObservationPublisher,
     ObservationPublisherStats,
+    ObservationScene,
     TcpObservationPublisher,
 )
 from scrap_monitoring_lidar_generator.runtime.diagnostics import (
@@ -125,6 +126,7 @@ async def run_generator_application(
             run_id=effective_run_id,
             input_fingerprint_sha256=generator_input_fingerprint(inputs),
             seed=inputs.generator.seed,
+            scene=ObservationScene.from_inputs(inputs),
             interval_s=observation_interval_s,
             connect_timeout_s=inputs.generator.transport.connect_timeout_s,
             send_timeout_s=inputs.generator.transport.send_timeout_s,

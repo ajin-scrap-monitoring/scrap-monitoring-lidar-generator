@@ -8,6 +8,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
+from scrap_monitoring_lidar_generator.observation import decode_observation_line
 from scrap_monitoring_lidar_generator.transport import (
     AckMessage,
     ErrorMessage,
@@ -58,6 +59,9 @@ def test_observation_fixture_matches_contract() -> None:
 
     assert len(lines) == 1
     Draft202012Validator(schema).validate(json.loads(lines[0]))
+    record = decode_observation_line(lines[0])
+    assert record.sequence == 1
+    assert record.scene.sensors[0].sensor_id == "sensor-a"
 
 
 def test_synthetic_environment_matches_contract() -> None:

@@ -33,7 +33,7 @@
 | 엣지 출력 경로 | 항상 실행하는 비동기 TCP publisher |
 | snapshot 주기와 보관량 | 기본 1초, 최신 대기 상태 1개 |
 | 장애 처리 | ACK 없는 best-effort 전송, bounded 재연결과 이전 상태 폐기 |
-| 별도 장비 기능 | `scrap-monitoring-load-visualizer`의 실시간 3D 표시, bounded 기록과 MP4 생성 |
+| 별도 장비 기능 | 별도 시각화 Repository의 실시간 3D 표시, bounded 기록과 MP4 생성 |
 | 엣지 의존성 | JSON producer만 포함하며 렌더러와 FFmpeg 제외 |
 
 구현 상세와 실행 명령은 [`docs/observation.md`](observation.md)가 정본이다. 관찰 stream은 기존 scan 전송 계약을 변경하지 않는다.

@@ -7,8 +7,10 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from scrap_monitoring_lidar_generator.observation.format import (
+    ObservationFormatError,
     ObservationRecord,
-    encode_observation_line,
+    ObservationScene,
+    encode_observation_frame,
 )
 from scrap_monitoring_lidar_generator.scenario import ScenarioModelSnapshot
 from scrap_monitoring_lidar_generator.transport import ReconnectBackoff
@@ -67,9 +69,11 @@ class TcpObservationPublisher:
         "_next_sample_s",
         "_port",
         "_run_id",
+        "_scene",
         "_seed",
         "_send_timeout_s",
         "_sent_records",
+        "_sequence",
         "_stop_event",
         "_task",
         "_wakeup",
@@ -84,6 +88,7 @@ class TcpObservationPublisher:
         run_id: str,
         input_fingerprint_sha256: str,
         seed: int,
+        scene: ObservationScene,
         interval_s: float = DEFAULT_OBSERVATION_INTERVAL_S,
         connect_timeout_s: float,
         send_timeout_s: float,
@@ -102,6 +107,8 @@ class TcpObservationPublisher:
         self._run_id = run_id
         self._fingerprint = input_fingerprint_sha256
         self._seed = seed
+        self._scene = scene
+        self._sequence = 0
         self._interval_s = float(interval_s)
         self._connect_timeout_s = _require_positive_duration(
             connect_timeout_s, "observation connect timeout"
@@ -167,11 +174,14 @@ class TcpObservationPublisher:
             return False
         record = ObservationRecord.from_snapshot(
             snapshot,
+            sequence=self._sequence + 1,
             environment_id=self._environment_id,
             run_id=self._run_id,
             input_fingerprint_sha256=self._fingerprint,
             seed=self._seed,
+            scene=self._scene,
         )
+        self._sequence += 1
         if self._latest is not None:
             self._dropped_records += 1
         self._latest = record
@@ -239,9 +249,12 @@ class TcpObservationPublisher:
                     await self._wakeup.wait()
                 continue
             try:
-                writer.write(encode_observation_line(record).encode("utf-8") + b"\n")
+                writer.write(encode_observation_frame(record))
                 async with asyncio.timeout(self._send_timeout_s):
                     await writer.drain()
+            except ObservationFormatError:
+                self._dropped_records += 1
+                continue
             except Exception:
                 self._dropped_records += 1
                 raise

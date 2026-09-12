@@ -163,7 +163,7 @@ class ScenarioSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class ScenarioModelSnapshot:
-    """Immutable scenario state and load-surface grid for optional observation."""
+    """Immutable scenario state and load-surface grid for observation."""
 
     state: ScenarioSnapshot
     surface: SurfaceModelSnapshot
