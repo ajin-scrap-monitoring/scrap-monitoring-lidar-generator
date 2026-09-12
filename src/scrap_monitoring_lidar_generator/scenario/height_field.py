@@ -171,6 +171,16 @@ class HeightField:
         """Return an independent copy of the grid node heights."""
         return self._heights_m.copy()
 
+    @property
+    def x_coordinates_m(self) -> FloatArray:
+        """Return an independent copy of the grid x coordinates."""
+        return self._x_coordinates_m.copy()
+
+    @property
+    def y_coordinates_m(self) -> FloatArray:
+        """Return an independent copy of the grid y coordinates."""
+        return self._y_coordinates_m.copy()
+
     def height_at(self, point: Vec2) -> float:
         """Return the bilinearly interpolated height at a point in the boundary."""
         if not self._boundary.contains(point):

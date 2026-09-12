@@ -6,7 +6,7 @@
 
 ## 소스 구성 요소
 
-소스 패키지는 6개 구성 요소와 1개 조립 진입점으로 구성한다.
+소스 패키지는 7개 구성 요소와 1개 조립 진입점으로 구성한다.
 
 | 경로 | 책임 |
 | --- | --- |
@@ -15,6 +15,7 @@
 | `scenario/` | 적재 및 수거 상태, 표면 변화와 시간 기반 사건 전이 |
 | `measurement/` | 센서 회전, 측정점 시각, 기준 거리, 왜곡과 품질 생성 |
 | `transport/` | MessagePack 직렬화, 스캔 송신, ACK(Acknowledgement), 버퍼와 재시도 |
+| `observation/` | 읽기 전용 적재 모델 snapshot의 version 1 JSON Lines 기록과 bounded 비동기 출력 |
 | `runtime/` | 시뮬레이션 시각 진행, 센서 작업과 전송 작업의 생명주기 조정 |
 | `cli.py` | CLI(Command-Line Interface) 설정 로딩, 의존성 조립, 시작과 정상 종료 처리 |
 
@@ -27,9 +28,14 @@ runtime -> scenario -> geometry
 runtime -> measurement -> geometry
 runtime -> transport -> measurement
 measurement -> scenario
+runtime -> observation -> scenario
+tools/visualization -> observation
+tools/visualization -> configuration
 ```
 
 `geometry`는 다른 프로젝트 패키지를 참조하지 않는다. `configuration`은 공간 입력의 의미 검증에 `geometry`를 사용한다. `scenario`는 측정과 전송을 참조하지 않고, `measurement`는 전송을 참조하지 않는다. `transport`는 장면 상태를 변경하지 않는다. `runtime`과 `cli.py`만 장기 실행 객체를 조립하고 생명주기를 제어한다.
+
+`observation`은 `scenario`가 제공하는 읽기 전용 snapshot을 JSON Lines로 기록하며 `transport`의 scan 계약을 참조하지 않는다. 기록기는 기본 비활성화이고 비동기 bounded queue와 레코드 상한을 적용한다. `tools/visualization`은 production package 외부의 선택적 개발 도구로서 공개 합성 설정과 관찰 파일을 읽어 mesh, preview와 MP4를 만든다.
 
 ## 시간과 재현성
 
@@ -99,6 +105,8 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 
 `runtime.PerformanceRecorder`는 명시적으로 주입한 benchmark 실행에서만 장면 갱신과 스캔 생성 시간을 누적한다. recorder를 주입하지 않은 생성 실행은 성능 시계를 읽지 않는다. 직렬화와 전송 대기는 외부 adapter 경계를 사용하는 benchmark가 같은 recorder에 기록한다.
 
+관찰 출력의 형식, 기록 상한과 별도 장비 렌더링 절차는 [`docs/observation.md`](observation.md)에서 관리한다. 관찰 파일은 생성기의 현재 적재물 표면 모양을 보존하며 일반 scan으로 재구성하지 않는다.
+
 ## 검증 구조
 
 자동 검증은 4개 계층으로 구성한다.
@@ -124,11 +132,14 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 Dockerfile
 contracts/
   v1/
+  observation/
+    v1/
 docs/
   architecture.md
   deployment.md
   dependencies.md
   development-plan.md
+  observation.md
   performance.md
   project-spec.md
   internal/
@@ -141,6 +152,7 @@ src/
     scenario/
     measurement/
     transport/
+    observation/
     runtime/
       performance.py
     __main__.py
@@ -151,6 +163,8 @@ tests/
   contract/
   performance/
     generation.py
+tools/
+  visualization/
 uv.lock
 ```
 

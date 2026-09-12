@@ -15,6 +15,7 @@
 | 2단계 | 완료 | 없음 |
 | 3단계 | 생성 프로그램과 test double 검증 완료 | 실제 수신 프로그램과의 계약 검증 |
 | 4단계 | ARM64 OCI image, v0.1.0 Release와 Raspberry Pi 5 단일 컨테이너 loopback 성능 검증 완료 | 실제 수신 프로그램 통합, 다른 edge process와의 공유 부하 검증 및 허용 기준 |
+| 선택 관찰 기능 | 구현 완료 | 실제 장비에서 관찰 파일을 기록하는 운영 검증 |
 
 ## 다음 작업
 
@@ -22,6 +23,18 @@
 
 1. 실제 수신 프로그램에 version 1 계약과 합성 fixture를 적용하고 생성 프로그램과 통합 검증한다.
 2. Raspberry Pi 5 8GB에서 실제 실행 설정으로 생성 프로그램 단독 및 다른 edge process와의 동시 부하를 각각 측정하고 허용 CPU, 메모리, 지연 및 지속 실행 기준을 확정한다.
+
+선택 관찰 기능은 다음 기준이다.
+
+| 항목 | 현재 결정 |
+| --- | --- |
+| 관찰 출력 형식 | 별도 `contracts/observation/v1/` JSON Lines 계약 |
+| 엣지 출력 경로 | 기본 비활성인 비동기 bounded 로컬 파일 기록 |
+| snapshot 주기와 보관량 | 기본 1초, 실행당 300개, producer 최대 10,000개 |
+| 별도 장비 기능 | 같은 observation model로 mesh, interactive preview와 MP4 생성 |
+| 성능 및 메모리 상한 | queue 최대 32개, 렌더러 최대 3,000프레임과 3,840 x 2,160 해상도 |
+
+구현 상세와 실행 명령은 [`docs/observation.md`](observation.md)가 정본이다. 관찰 출력은 기존 scan 전송 계약과 운영 이미지에 영향을 주지 않는다.
 
 ## 착수 전 확정 항목
 

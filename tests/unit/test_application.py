@@ -1,6 +1,7 @@
 """Tests for paced generation and the application lifecycle."""
 
 import asyncio
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -142,5 +143,78 @@ def test_application_composes_one_generated_scan_and_closes_diagnostics(tmp_path
         diagnostic_files = list((tmp_path / "diagnostics").iterdir())
         assert len(diagnostic_files) == 1
         assert diagnostic_files[0].read_text(encoding="utf-8").endswith("\n")
+
+    asyncio.run(run())
+
+
+def test_application_records_optional_observation_without_changing_generation(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        inputs = _inputs_with_diagnostics_disabled()
+        stop_event = asyncio.Event()
+        waits = 0
+
+        async def wait_until(deadline_s: float, event: asyncio.Event) -> bool:
+            nonlocal waits
+            del deadline_s
+            waits += 1
+            if waits == 2:
+                event.set()
+                return True
+            return False
+
+        output_path = tmp_path / "observations.jsonl"
+        summary = await run_generator_application(
+            inputs,
+            stop_event=stop_event,
+            run_id="run-a",
+            run_started_at_utc_us=123,
+            wait_until=wait_until,
+            observation_path=str(output_path),
+            observation_interval_s=0.1,
+            observation_max_records=2,
+        )
+
+        assert summary.generated_scans == 1
+        assert summary.observation_path == str(output_path)
+        assert summary.observation_records == 1
+        assert summary.observation_error is None
+        document = json.loads(output_path.read_text(encoding="utf-8").splitlines()[0])
+        assert document["type"] == "load_model_observation"
+
+    asyncio.run(run())
+
+
+def test_observation_file_failure_does_not_stop_scan_generation(tmp_path: Path) -> None:
+    async def run() -> None:
+        inputs = _inputs_with_diagnostics_disabled()
+        output_path = tmp_path / "existing.jsonl"
+        output_path.write_text("reserved\n", encoding="utf-8")
+        stop_event = asyncio.Event()
+        waits = 0
+
+        async def wait_until(deadline_s: float, event: asyncio.Event) -> bool:
+            nonlocal waits
+            del deadline_s
+            waits += 1
+            if waits == 2:
+                event.set()
+                return True
+            return False
+
+        summary = await run_generator_application(
+            inputs,
+            stop_event=stop_event,
+            run_id="run-a",
+            run_started_at_utc_us=123,
+            wait_until=wait_until,
+            observation_path=str(output_path),
+            observation_interval_s=0.1,
+            observation_max_records=2,
+        )
+
+        assert summary.generated_scans == 1
+        assert summary.observation_error is not None
 
     asyncio.run(run())

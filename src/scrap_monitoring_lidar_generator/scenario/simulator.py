@@ -12,6 +12,7 @@ from scrap_monitoring_lidar_generator.scenario.rate_profile import (
     SmoothRateProfile,
     create_smooth_rate_profile,
 )
+from scrap_monitoring_lidar_generator.scenario.snapshot import SurfaceModelSnapshot
 
 type FloatRange = tuple[float, float]
 
@@ -160,6 +161,14 @@ class ScenarioSnapshot:
     current_inlet_index: int | None
 
 
+@dataclass(frozen=True, slots=True)
+class ScenarioModelSnapshot:
+    """Immutable scenario state and load-surface grid for optional observation."""
+
+    state: ScenarioSnapshot
+    surface: SurfaceModelSnapshot
+
+
 class ScenarioSimulator:
     """Advance one shared height field through deterministic scenario cycles."""
 
@@ -237,6 +246,13 @@ class ScenarioSimulator:
             current_inlet_index=(
                 self._current_inlet_index if self._phase is ScenarioPhase.FILLING else None
             ),
+        )
+
+    def observation_snapshot(self) -> ScenarioModelSnapshot:
+        """Return a read-only copy of the current scenario and load model."""
+        return ScenarioModelSnapshot(
+            state=self.snapshot,
+            surface=SurfaceModelSnapshot.from_height_field(self._surface),
         )
 
     def advance_to(self, elapsed_s: float) -> ScenarioSnapshot:

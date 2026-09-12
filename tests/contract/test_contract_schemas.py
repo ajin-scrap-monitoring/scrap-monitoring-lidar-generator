@@ -19,6 +19,7 @@ from scrap_monitoring_lidar_generator.transport import (
 
 _ROOT = Path(__file__).parents[2]
 _CONTRACTS = _ROOT / "contracts" / "v1"
+_OBSERVATION_CONTRACTS = _ROOT / "contracts" / "observation" / "v1"
 _FIXTURES = _CONTRACTS / "fixtures"
 
 
@@ -39,6 +40,24 @@ def _load_json(path: Path) -> Any:
 )
 def test_contract_schema_is_valid_draft_2020_12(name: str) -> None:
     Draft202012Validator.check_schema(_load_json(_CONTRACTS / name))
+
+
+def test_observation_contract_schema_is_valid_draft_2020_12() -> None:
+    Draft202012Validator.check_schema(
+        _load_json(_OBSERVATION_CONTRACTS / "observation.schema.json")
+    )
+
+
+def test_observation_fixture_matches_contract() -> None:
+    schema = _load_json(_OBSERVATION_CONTRACTS / "observation.schema.json")
+    lines = (
+        (_OBSERVATION_CONTRACTS / "fixtures" / "observation.v1.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
+
+    assert len(lines) == 1
+    Draft202012Validator(schema).validate(json.loads(lines[0]))
 
 
 def test_synthetic_environment_matches_contract() -> None:

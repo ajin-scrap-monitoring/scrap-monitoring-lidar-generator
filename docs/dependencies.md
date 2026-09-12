@@ -2,7 +2,7 @@
 
 ## 적용 범위
 
-현재 직접 사용하는 외부 의존성은 19개다. NumPy와 `msgpack`은 애플리케이션 runtime의 수치 연산과 직렬화에 사용하며 나머지 항목은 Python 실행, 빌드, 개발 검증, CI(Continuous Integration)와 Release에 사용한다.
+현재 직접 사용하는 외부 의존성은 20개다. NumPy와 `msgpack`은 애플리케이션 runtime의 수치 연산과 직렬화에 사용하며 `matplotlib`은 선택적 시각화 개발 group에서만 사용한다. 나머지 항목은 Python 실행, 빌드, 개발 검증, CI(Continuous Integration)와 Release에 사용한다.
 
 | 의존성 | 버전 | 사용 목적 | 출처 | 라이선스 |
 | --- | --- | --- | --- | --- |
@@ -25,5 +25,8 @@
 | `docker/build-push-action` | `v7.3.0` | OCI image build, attestation과 registry 게시 | [Docker](https://github.com/docker/build-push-action) | Apache-2.0 |
 | `softprops/action-gh-release` | `v3.0.3` | package asset을 포함한 GitHub Release 게시 | [GitHub](https://github.com/softprops/action-gh-release) | MIT |
 | rumdl | `>=0.2.70,<0.3` | Markdown 형식 검사 | [GitHub](https://github.com/rvben/rumdl) | MIT |
+| Matplotlib | `>=3.10,<4` | 별도 장비의 3D mesh preview와 MP4 frame 생성 | [Matplotlib](https://matplotlib.org/stable/project/license.html) | PSF 기반 BSD 호환 |
 
 애플리케이션 또는 개발 의존성을 추가하거나 버전을 변경하면 같은 Pull Request에서 이 표와 잠금 파일을 갱신한다.
+
+Matplotlib은 `visualization` 선택적 dependency group에만 포함하며 production package와 OCI image에는 설치하지 않는다. MP4 출력은 PATH의 외부 FFmpeg 실행 파일을 사용하고 Repository와 운영 image에 FFmpeg binary를 포함하지 않는다. FFmpeg 구성과 배포 시 LGPL 또는 GPL 적용 범위는 [FFmpeg 법적 안내](https://ffmpeg.org/legal.html)를 확인한다.
