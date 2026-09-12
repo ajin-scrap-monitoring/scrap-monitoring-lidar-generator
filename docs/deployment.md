@@ -103,3 +103,17 @@ Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PA
 
 배포할 version의 Release asset `oci-image.txt`를 불변 image 참조의 정본으로 사용한다.
 장비별 검증 결과와 적용한 digest는 [`performance.md`](performance.md)에 기록한다.
+
+## 현재 검증 기준
+
+현재 ARM64 배포 기준은 `v0.2.0` Release다. source revision은
+`3b29786c1d850ad14a41b94c3713de8ef6f0e92d`이고 불변 image 참조는 다음과 같다.
+
+```text
+ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:359681841a572ec37255a5db45baacd655d49d8cc5fa3529ca7cda181f0d1e68
+```
+
+이 image는 `linux/arm64` 단일 실행 platform과 Public package 상태를 확인했다. Raspberry
+Pi 5에서 공개 합성 설정, scan ACK test double과 관찰 stream test double을 사용한 실행
+검증을 통과했다. 실제 scan 수신 프로그램과 별도 시각화 장비의 endpoint가 확정되면 같은
+digest와 외부 운영 설정으로 상시 container를 배치한다.

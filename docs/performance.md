@@ -53,3 +53,30 @@ uv run --locked python -m tests.performance.generation \
 | throttling | `0x0` |
 
 이 결과는 변경된 공개 합성 실행 프로파일을 외부에서 bind mount하고, 이미지 내부의 loopback 수신 test double과 생성 process를 사용한 단일 컨테이너 검증이다. 장비 온도, load average와 MemAvailable은 4회 중 한 실행에서 함께 관측했다. 실제 수신 프로그램 처리 시간, 다른 edge process와의 동시 자원 경합, 운영 네트워크와 장기 지속 실행은 포함하지 않는다. 따라서 실제 수신 프로그램 통합과 공유 부하 기준 확정 전의 기술 검증 결과로 사용한다.
+
+## v0.2.0 관찰 stream 엣지 검증
+
+관찰 stream이 포함된 `v0.2.0` ARM64 image를 Raspberry Pi 5 8GB에서 공개 합성 설정으로
+실행했다. scan ACK와 관찰 JSON Lines 수신에는 같은 Docker network의 별도 test double
+container를 사용했다. 생성 container에는 CPU 1 core 상한을 적용했다.
+
+| 항목 | 관측값 |
+| --- | --- |
+| Image digest | `sha256:359681841a572ec37255a5db45baacd655d49d8cc5fa3529ca7cda181f0d1e68` |
+| 생성 및 ACK | 486 scan, 미응답 0 |
+| 관찰 전송 | 49 record, 폐기 0, 연결 실패 0 |
+| scan 구성 | 회전당 3,200 point, 초당 10회전 |
+| 관찰 구성 | 33 x 25 표면 격자, 시뮬레이션 시각 1초 주기 |
+| 관찰 line 크기 | 첫 record 약 4.1KB, 표면 갱신 이후 약 19KB |
+| 생성 process CPU | CPU 1 core 상한에서 48.9퍼센트 |
+| 생성 process RSS | 53,136KiB |
+| 장비 상태 | load average 0.56, MemAvailable 7,545MB, 58.7 C, throttling `0x0` |
+
+관찰 수신 test double은 렌더링을 수행하지 않고 version 1 header와 observation을 decode했다.
+관찰 수신은 scan ACK 처리와 독립적으로 진행됐으며 생성 종료 시 두 경로의 sequence가
+연속적이었다. 현재 장비 kernel은 Docker memory cgroup 제한을 제공하지 않아 container
+memory 상한은 적용할 수 없고 host process RSS로 관측했다.
+
+이 결과는 ARM64 image에서 scan과 관찰 stream을 동시에 제공하는 기능 및 단기 부하
+검증이다. 실제 scan 수신 프로그램, router를 지나는 별도 시각화 장비, 다른 edge process와
+장기 동시 실행은 포함하지 않는다.
