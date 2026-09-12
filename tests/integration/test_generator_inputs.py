@@ -59,9 +59,12 @@ def _write_inputs(
 def test_loads_generator_and_referenced_inputs() -> None:
     inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
 
-    assert inputs.environment.environment_id == "synthetic-room-v1"
+    assert inputs.environment.environment_id == "synthetic-scrap-pit-v1"
     assert inputs.generator.seed == 123456789
-    assert inputs.quality_profile.sensors[0].sensor_id == "sensor-a"
+    assert [sensor.sensor_id for sensor in inputs.quality_profile.sensors] == [
+        "lidar_1",
+        "lidar_2",
+    ]
 
 
 def test_rejects_buffer_limit_smaller_than_the_environment_sensor_count(
@@ -70,22 +73,34 @@ def test_rejects_buffer_limit_smaller_than_the_environment_sensor_count(
     generator = _load_example("generator.v1.json")
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
-    environment["sensors"].append(
-        {
-            **environment["sensors"][0],
-            "sensor_id": "sensor-b",
-        }
-    )
-    quality["sensors"].append(
-        {
-            **quality["sensors"][0],
-            "sensor_id": "sensor-b",
-        }
-    )
     generator["transport"]["buffer_max_bytes"] = 1
     path = _write_inputs(tmp_path, generator, environment, quality)
 
     with pytest.raises(ConfigurationError, match="at least the environment sensor count"):
+        load_generator_inputs(path)
+
+
+@pytest.mark.parametrize("sensor_count", [1, 3])
+def test_rejects_generator_inputs_without_exactly_two_sensors(
+    tmp_path: Path,
+    sensor_count: int,
+) -> None:
+    generator = _load_example("generator.v1.json")
+    environment = _load_example("environment.v1.json")
+    quality = _load_example("quality-profile.v1.json")
+    if sensor_count == 1:
+        environment["sensors"] = environment["sensors"][:1]
+        quality["sensors"] = quality["sensors"][:1]
+    else:
+        extra_environment_sensor = dict(environment["sensors"][-1])
+        extra_environment_sensor["sensor_id"] = "lidar_3"
+        environment["sensors"].append(extra_environment_sensor)
+        extra_quality_sensor = dict(quality["sensors"][-1])
+        extra_quality_sensor["sensor_id"] = "lidar_3"
+        quality["sensors"].append(extra_quality_sensor)
+    path = _write_inputs(tmp_path, generator, environment, quality)
+
+    with pytest.raises(ConfigurationError, match="exactly 2 environment sensors"):
         load_generator_inputs(path)
 
 
@@ -137,12 +152,12 @@ def test_generates_timed_reference_scan_from_generator_inputs() -> None:
     inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
     runtime = build_reference_generation_runtime(inputs)
 
-    (scan,) = runtime.next_completed_scans()
+    scans = runtime.next_completed_scans()
 
-    assert scan.sensor_id == inputs.environment.sensors[0].sensor_id
-    assert scan.scan_id == 1
-    assert scan.schedule.point_count == 3200
-    assert len(scan.scan.points) == scan.schedule.point_count
+    assert [scan.sensor_id for scan in scans] == ["lidar_1", "lidar_2"]
+    assert all(scan.scan_id == 1 for scan in scans)
+    assert all(scan.schedule.point_count == 3200 for scan in scans)
+    assert all(len(scan.scan.points) == scan.schedule.point_count for scan in scans)
     assert runtime.scenario.elapsed_s == pytest.approx(1.0 / 10.0)
 
 
@@ -257,7 +272,7 @@ def test_all_distortions_reproduce_across_fill_collection_and_next_cycle(
     for runtime in runtimes:
         sequence: list[tuple[MeasurementResult, ScenarioSnapshot, NDArray[np.float64]]] = []
         for _ in range(12):
-            (result,) = runtime.next_completed_scans()
+            result = runtime.next_completed_scans()[0]
             sequence.append((result, runtime.scenario.snapshot, runtime.scenario.surface.heights_m))
         sequences.append(sequence)
 
@@ -368,14 +383,14 @@ def test_generator_inputs_apply_collection_occlusion_events(tmp_path: Path) -> N
     generator["measurement"]["distortions"]["collection_occlusion"] = {
         "enabled": True,
         "event_interval_s_range": [8_640, 8_640],
-        "radius_m_range": [2, 2],
+        "radius_m_range": [1, 1],
         "duration_s_range": [17_280, 17_280],
         "distance_reduction_m_range": [0.2, 0.2],
     }
     path = _write_inputs(tmp_path, generator, environment, quality)
     runtime = build_measurement_generation_runtime(load_generator_inputs(path))
 
-    results = [runtime.next_completed_scans()[0] for _ in range(5)]
+    results = [result for _ in range(5) for result in runtime.next_completed_scans()]
     reductions_m: list[float] = []
     for result in results:
         for reference_point, measured_distance_m in zip(
@@ -397,7 +412,7 @@ def test_generator_inputs_apply_collection_occlusion_events(tmp_path: Path) -> N
 def test_rejects_invalid_measurement_runtime_sensor_sets() -> None:
     inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
     reference_runtime = build_reference_generation_runtime(inputs)
-    (generator,) = build_measurement_generators(inputs)
+    generator = build_measurement_generators(inputs)[0]
 
     with pytest.raises(ValueError, match="sensor sets"):
         MeasurementGenerationRuntime(reference_runtime=reference_runtime, generators=())

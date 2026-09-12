@@ -30,7 +30,7 @@ def test_loads_sparse_frequencies_into_256_values() -> None:
     profile = load_quality_profile(_EXAMPLE_PATH)
     sensor = profile.sensors[0]
 
-    assert sensor.sensor_id == "sensor-a"
+    assert [item.sensor_id for item in profile.sensors] == ["lidar_1", "lidar_2"]
     assert len(sensor.valid_distance_frequencies) == 256
     assert sensor.valid_distance_frequencies[48] == 1
     assert sensor.valid_distance_frequencies[80] == 3
@@ -39,7 +39,7 @@ def test_loads_sparse_frequencies_into_256_values() -> None:
 
 
 def test_rejects_duplicate_sensor_ids(valid_profile: dict[str, Any]) -> None:
-    valid_profile["sensors"].append(deepcopy(valid_profile["sensors"][0]))
+    valid_profile["sensors"][1] = deepcopy(valid_profile["sensors"][0])
 
     with pytest.raises(ConfigurationError, match="unique sensor_id"):
         _parse(valid_profile)

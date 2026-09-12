@@ -36,7 +36,7 @@ _SCENE = ObservationScene.from_inputs(_INPUTS)
 
 def _header() -> ObservationStreamHeader:
     return ObservationStreamHeader(
-        environment_id="synthetic-room-v1",
+        environment_id="synthetic-scrap-pit-v1",
         run_id="run-a",
         input_fingerprint_sha256="0" * 64,
         seed=42,
@@ -109,15 +109,17 @@ def test_observation_header_round_trips_with_static_scene() -> None:
     encoded = encode_observation_header_line(_header())
     decoded = decode_observation_header_line(encoded)
 
-    assert decoded.environment_id == "synthetic-room-v1"
+    assert decoded.environment_id == "synthetic-scrap-pit-v1"
     assert decoded.run_id == "run-a"
     assert decoded.scene.boundary_xy_m == (
         (0.0, 0.0),
-        (8.0, 0.0),
-        (8.0, 6.0),
-        (0.0, 6.0),
+        (4.0, 0.0),
+        (4.0, 5.3),
+        (2.7, 5.3),
+        (1.9, 2.5),
+        (0.0, 2.5),
     )
-    assert decoded.scene.sensors[0].sensor_id == "sensor-a"
+    assert [sensor.sensor_id for sensor in decoded.scene.sensors] == ["lidar_1", "lidar_2"]
 
 
 def test_observation_decoder_rejects_unknown_fields() -> None:
@@ -145,7 +147,7 @@ def _publisher(port: int) -> TcpObservationPublisher:
     return TcpObservationPublisher(
         host="127.0.0.1",
         port=port,
-        environment_id="synthetic-room-v1",
+        environment_id="synthetic-scrap-pit-v1",
         run_id="run-a",
         input_fingerprint_sha256="0" * 64,
         seed=42,

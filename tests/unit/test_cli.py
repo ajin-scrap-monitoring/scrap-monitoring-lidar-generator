@@ -26,6 +26,7 @@ def _summary(sender_halt: SenderHalt | None = None) -> GeneratorRunSummary:
         run_started_at_utc_us=123,
         generated_scans=2,
         pending_frames=1,
+        pending_bytes=1234,
         sender_stats=SenderStats(
             enqueued_frames=2,
             sent_frames=1,
@@ -198,7 +199,7 @@ def test_run_config_reports_final_delivery_state(
     async def run_application(
         inputs: GeneratorInputs, *, stop_event: asyncio.Event, **kwargs: object
     ) -> GeneratorRunSummary:
-        assert inputs.environment.environment_id == "synthetic-room-v1"
+        assert inputs.environment.environment_id == "synthetic-scrap-pit-v1"
         callback = cast(SenderHaltCallback | None, kwargs.get("on_sender_halt"))
         assert callback is None or callable(callback)
         if halt is not None and callback is not None:
@@ -213,6 +214,11 @@ def test_run_config_reports_final_delivery_state(
 
     assert code == expected_code
     assert "run_id=run-a generated=2 acknowledged=1 pending=1" in output.out
+    assert (
+        "transport enqueued=2 sent=1 acknowledged=1 rejected=0 expired=0 "
+        "capacity_discarded=0 oversized=0 connection_failures=0 "
+        "pending_frames=1 pending_bytes=1234"
+    ) in output.out
     assert "observation=127.0.0.1:9100 sent=1 dropped=1" in output.out
     assert ("transport halted" in output.err) is (halt is not None)
     assert output.err.count("transport halted") == int(halt is not None)

@@ -25,7 +25,7 @@ FFmpeg와 3D rendering 코드 및 의존성은 포함하지 않는다.
 관찰 stream은 2개 레코드 형식을 순서대로 사용한다.
 
 1. `load_model_stream_header`: 연결 직후 1회 전송하는 실행 식별 정보, 경계, 바닥, 외벽
-   상단, 투입구와 sensor 위치 및 방향.
+   상단, 투입구와 2개 sensor 위치 및 방향.
 2. `load_model_observation`: 기본 1초마다 전송하는 sequence, 시뮬레이션 시각, 적재율,
    부피, filling 또는 collecting 상태와 현재 적재물 표면 격자.
 

@@ -27,7 +27,9 @@ def test_synthetic_environment_produces_reference_scan() -> None:
 
     scan = scanner.generate(scene, [270.0, 0.0, 90.0, 180.0])
 
-    assert [point.distance_m for point in scan.points] == pytest.approx([4.0, 3.0, 4.0, 0.0])
+    assert [point.distance_m for point in scan.points] == pytest.approx(
+        [1.4, 10.261091559868277, 0.5, 0.0]
+    )
     assert [point.hit_kind for point in scan.points] == [
         HitKind.WALL,
         HitKind.FLOOR,

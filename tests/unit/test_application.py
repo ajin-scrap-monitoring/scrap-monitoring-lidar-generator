@@ -106,12 +106,13 @@ def test_generation_uses_absolute_rotation_deadlines_and_message_identity() -> N
             wait_until=wait_until,
         )
 
-        assert generated == 1
+        assert generated == 2
         assert deadlines == pytest.approx([100.0 + 1.0 / 10.0, 100.0 + 2.0 / 10.0])
-        assert len(sink.messages) == 1
-        assert sink.messages[0].run_id == "run-a"
-        assert sink.messages[0].scan_id == 1
-        assert sink.messages[0].captured_at == 1_800_000_000_000_000
+        assert len(sink.messages) == 2
+        assert [message.sensor_id for message in sink.messages] == ["lidar_1", "lidar_2"]
+        assert all(message.run_id == "run-a" for message in sink.messages)
+        assert all(message.scan_id == 1 for message in sink.messages)
+        assert all(message.captured_at == 1_800_000_000_000_000 for message in sink.messages)
 
     asyncio.run(run())
 
@@ -133,13 +134,14 @@ def test_application_returns_identity_and_empty_counters_when_already_stopped() 
         assert summary.run_started_at_utc_us == 123
         assert summary.generated_scans == 0
         assert summary.pending_frames == 0
+        assert summary.pending_bytes == 0
         assert summary.sender_stats.enqueued_frames == 0
         assert summary.sender_halt is None
 
     asyncio.run(run())
 
 
-def test_application_composes_one_generated_scan_and_closes_diagnostics(tmp_path: Path) -> None:
+def test_application_composes_two_generated_scans_and_closes_diagnostics(tmp_path: Path) -> None:
     async def run() -> None:
         inputs = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
         inputs = replace(
@@ -174,14 +176,15 @@ def test_application_composes_one_generated_scan_and_closes_diagnostics(tmp_path
             observation_publisher=_ObservationPublisher(),
         )
 
-        assert summary.generated_scans == 1
-        assert summary.pending_frames == 1
-        assert summary.sender_stats.enqueued_frames == 1
+        assert summary.generated_scans == 2
+        assert summary.pending_frames == 2
+        assert summary.pending_bytes > 0
+        assert summary.sender_stats.enqueued_frames == 2
         diagnostic_files = list((tmp_path / "diagnostics").iterdir())
         assert len(diagnostic_files) == 1
         diagnostic_text = diagnostic_files[0].read_text(encoding="utf-8")
         assert diagnostic_text.endswith("\n")
-        diagnostic = json.loads(diagnostic_text)
+        diagnostic = json.loads(diagnostic_text.splitlines()[0])
         assert diagnostic["run_id"] == "run-a"
         assert diagnostic["run_started_at_utc_us"] == 123
         assert diagnostic["captured_at"] == 123
@@ -214,7 +217,7 @@ def test_application_publishes_observation_without_changing_generation() -> None
             observation_publisher=publisher,
         )
 
-        assert summary.generated_scans == 1
+        assert summary.generated_scans == 2
         assert summary.observation_endpoint == publisher.endpoint
         assert len(publisher.snapshots) == 1
         assert publisher.started
@@ -247,6 +250,6 @@ def test_observation_failure_does_not_stop_scan_generation() -> None:
             observation_publisher=_ObservationPublisher(raises=True),
         )
 
-        assert summary.generated_scans == 1
+        assert summary.generated_scans == 2
 
     asyncio.run(run())

@@ -56,6 +56,7 @@ class GeneratorRunSummary:
     run_started_at_utc_us: int
     generated_scans: int
     pending_frames: int
+    pending_bytes: int
     sender_stats: SenderStats
     sender_halt: SenderHalt | None
     observation_endpoint: str
@@ -166,6 +167,7 @@ async def run_generator_application(
         run_started_at_utc_us=effective_utc_us,
         generated_scans=generated_scans,
         pending_frames=sender.pending_frames,
+        pending_bytes=sender.pending_bytes,
         sender_stats=sender.stats,
         sender_halt=sender.halt,
         observation_endpoint=publisher.endpoint,

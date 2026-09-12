@@ -31,7 +31,13 @@ def valid_environment() -> dict[str, Any]:
                 "p0_m": [2.5, 1.5, 3],
                 "u0": [0, 0, -1],
                 "u90": [1, 0, 0],
-            }
+            },
+            {
+                "sensor_id": "sensor-b",
+                "p0_m": [4.5, 1.5, 3],
+                "u0": [0, 0, -1],
+                "u90": [1, 0, 0],
+            },
         ],
     }
 
@@ -43,12 +49,11 @@ def _parse(value: dict[str, Any]) -> None:
 def test_loads_synthetic_environment() -> None:
     environment = load_environment(_ROOT / "examples" / "environment.v1.json")
 
-    assert environment.environment_id == "synthetic-room-v1"
-    assert environment.boundary_xy_m[2] == (8.0, 6.0)
+    assert environment.environment_id == "synthetic-scrap-pit-v1"
+    assert environment.boundary_xy_m[2] == (4.0, 5.3)
     assert environment.floor_z_m == 0.0
-    assert environment.top_z_m == 4.0
-    assert environment.sensors[0].sensor_id == "sensor-a"
-    assert environment.sensors[0].u0 == (0.0, 0.0, -1.0)
+    assert environment.top_z_m == 10.0
+    assert [sensor.sensor_id for sensor in environment.sensors] == ["lidar_1", "lidar_2"]
 
 
 def test_rejects_duplicate_json_fields() -> None:
@@ -96,8 +101,7 @@ def test_rejects_non_positive_height(valid_environment: dict[str, Any]) -> None:
 
 
 def test_rejects_duplicate_sensor_ids(valid_environment: dict[str, Any]) -> None:
-    duplicate = deepcopy(valid_environment["sensors"][0])
-    valid_environment["sensors"].append(duplicate)
+    valid_environment["sensors"][1] = deepcopy(valid_environment["sensors"][0])
 
     with pytest.raises(ConfigurationError, match="unique sensor_id"):
         _parse(valid_environment)

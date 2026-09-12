@@ -94,6 +94,18 @@ async def _run_config(
         f"pending={summary.pending_frames}"
     )
     print(
+        f"transport enqueued={summary.sender_stats.enqueued_frames} "
+        f"sent={summary.sender_stats.sent_frames} "
+        f"acknowledged={summary.sender_stats.acknowledged_frames} "
+        f"rejected={summary.sender_stats.rejected_frames} "
+        f"expired={summary.sender_stats.expired_frames} "
+        f"capacity_discarded={summary.sender_stats.capacity_discarded_frames} "
+        f"oversized={summary.sender_stats.oversized_frames} "
+        f"connection_failures={summary.sender_stats.connection_failures} "
+        f"pending_frames={summary.pending_frames} "
+        f"pending_bytes={summary.pending_bytes}"
+    )
+    print(
         f"observation={summary.observation_endpoint} "
         f"sent={summary.observation_stats.sent_records} "
         f"dropped={summary.observation_stats.dropped_records} "
