@@ -54,29 +54,54 @@ uv run --locked python -m tests.performance.generation \
 
 이 결과는 변경된 공개 합성 실행 프로파일을 외부에서 bind mount하고, 이미지 내부의 loopback 수신 test double과 생성 process를 사용한 단일 컨테이너 검증이다. 장비 온도, load average와 MemAvailable은 4회 중 한 실행에서 함께 관측했다. 실제 수신 프로그램 처리 시간, 다른 edge process와의 동시 자원 경합, 운영 네트워크와 장기 지속 실행은 포함하지 않는다. 따라서 실제 수신 프로그램 통합과 공유 부하 기준 확정 전의 기술 검증 결과로 사용한다.
 
-## v0.2.0 관찰 stream 엣지 검증
+## v0.2.1 엣지 검증
 
-관찰 stream이 포함된 `v0.2.0` ARM64 image를 Raspberry Pi 5 8GB에서 공개 합성 설정으로
-실행했다. scan ACK와 관찰 JSON Lines 수신에는 같은 Docker network의 별도 test double
-container를 사용했다. 생성 container에는 CPU 1 core 상한을 적용했다.
+검증 대상은 `v0.2.1` ARM64 image다. source revision과 불변 image 참조는 다음과 같다.
+
+```text
+29e6e340f94ff37b294d00c42aaa101b556ab2c9
+ghcr.io/ajin-scrap-monitoring/scrap-monitoring-lidar-generator@sha256:4bec6747d3ddb852b38d0f5dd190177d16cf815a35a53f3b6acc549ff434bd3b
+```
+
+Raspberry Pi 5 8GB에서 공개 합성 설정, scan ACK test double과 관찰 JSON Lines 수신 test
+double을 같은 Docker network에서 실행했다. 생성 container에는 CPU 1 core 상한을
+적용했다. 공개 합성 센서 1개 결과는 다음과 같다.
 
 | 항목 | 관측값 |
 | --- | --- |
-| Image digest | `sha256:359681841a572ec37255a5db45baacd655d49d8cc5fa3529ca7cda181f0d1e68` |
-| 생성 및 ACK | 486 scan, 미응답 0 |
-| 관찰 전송 | 49 record, 폐기 0, 연결 실패 0 |
-| scan 구성 | 회전당 3,200 point, 초당 10회전 |
-| 관찰 구성 | 33 x 25 표면 격자, 시뮬레이션 시각 1초 주기 |
-| 관찰 line 크기 | 첫 record 약 4.1KB, 표면 갱신 이후 약 19KB |
-| 생성 process CPU | CPU 1 core 상한에서 48.9퍼센트 |
-| 생성 process RSS | 53,136KiB |
-| 장비 상태 | load average 0.56, MemAvailable 7,545MB, 58.7 C, throttling `0x0` |
+| 검증 구간 | 시뮬레이션 시각 약 31.4초 |
+| 생성 및 ACK | 314 scan, 미응답 0 |
+| 생성 point | 1,004,800개 |
+| 관찰 전송 | 32 record, 폐기 0, 연결 실패 0 |
+| 관찰 수신 | header 1개, observation 32개, 마지막 시뮬레이션 시각 31초 |
+| 기준 진단 | version 2 record 2개, 실행 식별자와 UTC 대표 시각 기록 |
+| 생성 process CPU | CPU 1 core 상한에서 48.94퍼센트 |
+| 수신 test double CPU | 6.15퍼센트 |
+| 장비 상태 | load average 0.28, MemAvailable 7,737,168 kB, 59.0 C, throttling `0x0` |
 
-관찰 수신 test double은 렌더링을 수행하지 않고 version 1 header와 observation을 decode했다.
-관찰 수신은 scan ACK 처리와 독립적으로 진행됐으며 생성 종료 시 두 경로의 sequence가
-연속적이었다. 현재 장비 kernel은 Docker memory cgroup 제한을 제공하지 않아 container
-memory 상한은 적용할 수 없고 host process RSS로 관측했다.
+### 센서 2개 추가 검증
 
-이 결과는 ARM64 image에서 scan과 관찰 stream을 동시에 제공하는 기능 및 단기 부하
-검증이다. 실제 scan 수신 프로그램, router를 지나는 별도 시각화 장비, 다른 edge process와
-장기 동시 실행은 포함하지 않는다.
+공개 합성 환경을 센서 2개로 확장해 같은 image와 CPU 1 core 상한을 적용했다. 두 센서는
+각각 독립 TCP 연결을 만들고 같은 수의 scan을 전달했다.
+
+| 항목 | 관측값 |
+| --- | --- |
+| 검증 구간 | 시뮬레이션 시각 43초 |
+| 생성 및 ACK | 860 scan 생성, 812 ACK, 종료 시 미응답 48개 |
+| 수신 scan | 센서별 407개, 합계 814개 |
+| 수신 point | 센서별 1,302,400개, 합계 2,604,800개 |
+| 관찰 전송 | 42 record, 폐기 2, 연결 실패 0 |
+| 기준 진단 | version 2 record 센서별 2개, 실행 식별자와 UTC 대표 시각 기록 |
+| 생성 process CPU | CPU 1 core 상한에서 89.61퍼센트 |
+| 수신 test double CPU | 12.99퍼센트 |
+| 장비 상태 | load average 0.58, MemAvailable 7,781,104 kB, 59.5 C, throttling `0x0` |
+
+수신 수와 생성기 ACK 집계의 2개 차이는 종료 시 수신기가 처리한 전송을 생성기가 ACK로
+반영하기 전에 sender가 종료된 결과다. CPU 1 core 상한에서는 ACK 처리량이 초당 20 scan의
+생성률보다 낮아 backlog가 증가했다. 센서 2개 운영에는 더 큰 생성 process CPU 상한과 실제
+수신 프로그램을 포함한 지속 부하 검증이 필요하다.
+
+두 검증의 관찰 수신 test double은 렌더링을 수행하지 않고 version 1 header와 observation을
+decode했다. 현재 장비 kernel은 Docker memory cgroup 제한을 제공하지 않아 container memory
+사용량과 상한은 검증하지 못했다. 실제 scan 수신 프로그램, router를 지나는 별도 시각화
+장비, 다른 edge process와 장기 동시 실행은 포함하지 않는다.

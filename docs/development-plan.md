@@ -14,7 +14,7 @@
 | 1단계 | 완료 | 없음 |
 | 2단계 | 완료 | 없음 |
 | 3단계 | 생성 프로그램과 test double 검증 완료 | 실제 수신 프로그램과의 계약 검증 |
-| 4단계 | v0.2.0 ARM64 OCI image와 Raspberry Pi 5 scan 및 관찰 test double 검증 완료 | 실제 수신 프로그램 통합, 다른 edge process와의 공유 부하 검증 및 허용 기준 |
+| 4단계 | v0.2.1 ARM64 OCI image와 Raspberry Pi 5 scan 및 관찰 test double 검증 완료 | 실제 수신 프로그램 통합, 다른 edge process와의 공유 부하 검증 및 허용 기준 |
 | 관찰 stream | 상시 TCP publisher, 외부 시각화 경계와 Raspberry Pi 5 송신 검증 완료 | 별도 시각화 장비의 연속 연결 및 rendering 검증 |
 
 ## 현재 작업 목표
@@ -29,18 +29,18 @@
 송신 구현은 센서별 독립 TCP lane과 ACK 대기, 전체 byte 상한 안의 분할 buffer, 전체
 전송 중단 오류의 즉시 보고를 제공한다. 로컬 기준 진단 version 2는 wire scan과 같은 실행
 식별자 및 대표 시각을 기록한다.
-두 번째 목표의 Release, digest 기반 실행과 test double 대상 장비 검증도 완료됐다. 실제
-수신 endpoint를 사용하는 상시 배포는 높이 계산 프로세스가 준비된 뒤 진행한다. 세 번째
-목표의 생성기 측 interface는 구현되어 있으며 별도 시각화 프로그램의 수신 및 rendering은
-이 Repository의 범위가 아니다.
+두 번째 목표의 `v0.2.1` Release, digest 기반 실행과 test double 대상 장비 검증도
+완료됐다. 공개 합성 센서 1개는 CPU 1 core 상한에서 backlog 없이 동작했다. 센서 2개 추가
+검증은 같은 상한에서 ACK backlog가 발생했다. 실제 수신 endpoint를 사용하는 상시 배포는
+높이 계산 프로세스가 준비된 뒤 진행한다. 세 번째 목표의 생성기 측 interface는 구현되어
+있으며 별도 시각화 프로그램의 수신 및 rendering은 이 Repository의 범위가 아니다.
 
 ## 다음 작업
 
-남은 작업은 3개다.
+남은 작업은 2개다.
 
-1. 현재 source의 센서별 독립 전송 lane과 진단 version 2를 포함하는 ARM64 Release를 만들고 Raspberry Pi 5에서 scan 및 관찰 test double 검증을 반복한다.
-2. 실제 높이 계산 프로세스에 version 1 계약과 합성 fixture를 적용하고 생성 프로그램과 통합 검증한다.
-3. Raspberry Pi 5 8GB에서 실제 실행 설정으로 생성 프로그램 단독 및 다른 edge process와의 동시 부하를 각각 측정하고 허용 CPU, 메모리, 지연 및 지속 실행 기준을 확정한다.
+1. 실제 높이 계산 프로세스에 version 1 계약과 합성 fixture를 적용하고 생성 프로그램과 통합 검증한다.
+2. Raspberry Pi 5 8GB에서 실제 실행 설정으로 생성 프로그램 단독 및 다른 edge process와의 동시 부하를 각각 측정하고 허용 CPU, 메모리, 지연 및 지속 실행 기준을 확정한다.
 
 높이 계산 프로세스의 구현 책임과 통합 완료 조건은
 [`docs/height-calculation-integration.md`](height-calculation-integration.md)가 정본이다. 높이 계산
