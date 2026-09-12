@@ -6,15 +6,16 @@ import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
 from scrap_monitoring_lidar_generator.observation import (
+    DEFAULT_OBSERVATION_HOST,
     DEFAULT_OBSERVATION_INTERVAL_S,
-    DEFAULT_OBSERVATION_MAX_RECORDS,
-    JsonLinesObservationRecorder,
+    DEFAULT_OBSERVATION_PORT,
     ObservationPublisher,
+    ObservationPublisherStats,
+    TcpObservationPublisher,
 )
 from scrap_monitoring_lidar_generator.runtime.diagnostics import (
     JsonLinesDiagnosticsWriter,
@@ -55,10 +56,8 @@ class GeneratorRunSummary:
     pending_frames: int
     sender_stats: SenderStats
     sender_halt: SenderHalt | None
-    observation_path: str | None = None
-    observation_records: int = 0
-    observation_dropped: int = 0
-    observation_error: str | None = None
+    observation_endpoint: str
+    observation_stats: ObservationPublisherStats
 
 
 async def run_scan_generation(
@@ -83,7 +82,8 @@ async def run_scan_generation(
             sink.enqueue_scan(message_factory.build(result))
         if results and observation_publisher is not None:
             with suppress(Exception):
-                observation_publisher.publish(runtime.scenario.observation_snapshot())
+                if observation_publisher.is_due(runtime.scenario.elapsed_s):
+                    observation_publisher.publish(runtime.scenario.observation_snapshot())
         generated_scans += len(results)
     return generated_scans
 
@@ -95,15 +95,13 @@ async def run_generator_application(
     run_id: str | None = None,
     run_started_at_utc_us: int | None = None,
     wait_until: DeadlineWaiter | None = None,
-    observation_path: str | None = None,
+    observation_host: str = DEFAULT_OBSERVATION_HOST,
+    observation_port: int = DEFAULT_OBSERVATION_PORT,
     observation_interval_s: float = DEFAULT_OBSERVATION_INTERVAL_S,
-    observation_max_records: int = DEFAULT_OBSERVATION_MAX_RECORDS,
-    observation_recorder: JsonLinesObservationRecorder | None = None,
+    observation_publisher: ObservationPublisher | None = None,
 ) -> GeneratorRunSummary:
     """Build and run measurement, diagnostics and delivery until stopped."""
     effective_run_id = str(uuid.uuid4()) if run_id is None else run_id
-    if observation_path is not None and observation_recorder is not None:
-        raise ValueError("observation_path and observation_recorder are mutually exclusive")
     diagnostics: JsonLinesDiagnosticsWriter | None = None
     if inputs.generator.diagnostics.enabled:
         diagnostics = build_diagnostics_writer(inputs)
@@ -118,19 +116,22 @@ async def run_generator_application(
         run_id=effective_run_id,
         run_started_at_utc_us=effective_utc_us,
     )
-    recorder = observation_recorder
-    if observation_path is not None:
-        recorder = JsonLinesObservationRecorder(
-            output_path=Path(observation_path),
+    publisher = observation_publisher
+    if publisher is None:
+        publisher = TcpObservationPublisher(
+            host=observation_host,
+            port=observation_port,
             environment_id=inputs.environment.environment_id,
             run_id=effective_run_id,
             input_fingerprint_sha256=generator_input_fingerprint(inputs),
             seed=inputs.generator.seed,
             interval_s=observation_interval_s,
-            max_records=observation_max_records,
+            connect_timeout_s=inputs.generator.transport.connect_timeout_s,
+            send_timeout_s=inputs.generator.transport.send_timeout_s,
+            reconnect_initial_delay_s=inputs.generator.transport.reconnect_initial_delay_s,
+            reconnect_max_delay_s=inputs.generator.transport.reconnect_max_delay_s,
         )
-    if recorder is not None:
-        await recorder.start()
+    await publisher.start()
     generated_scans = 0
     try:
         async with asyncio.TaskGroup() as tasks:
@@ -143,7 +144,7 @@ async def run_generator_application(
                     stop_event=stop_event,
                     run_started_at_monotonic_s=run_started_at_monotonic_s,
                     wait_until=wait_until,
-                    observation_publisher=recorder,
+                    observation_publisher=publisher,
                 )
             finally:
                 sender.request_stop()
@@ -151,8 +152,7 @@ async def run_generator_application(
         sender.request_stop()
         if diagnostics is not None:
             diagnostics.close()
-        if recorder is not None:
-            await recorder.close()
+        await publisher.close()
     return GeneratorRunSummary(
         run_id=effective_run_id,
         run_started_at_utc_us=effective_utc_us,
@@ -160,10 +160,8 @@ async def run_generator_application(
         pending_frames=sender.pending_frames,
         sender_stats=sender.stats,
         sender_halt=sender.halt,
-        observation_path=(None if recorder is None else str(recorder.output_path)),
-        observation_records=(0 if recorder is None else recorder.recorded_count),
-        observation_dropped=(0 if recorder is None else recorder.dropped_count),
-        observation_error=(None if recorder is None else recorder.error),
+        observation_endpoint=publisher.endpoint,
+        observation_stats=publisher.stats,
     )
 
 

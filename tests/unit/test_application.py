@@ -1,13 +1,13 @@
 """Tests for paced generation and the application lifecycle."""
 
 import asyncio
-import json
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs, load_generator_inputs
+from scrap_monitoring_lidar_generator.observation import ObservationPublisherStats
 from scrap_monitoring_lidar_generator.runtime import (
     build_measurement_generation_runtime,
     run_generator_application,
@@ -29,6 +29,40 @@ class _RecordingSink:
     def enqueue_scan(self, message: ScanMessage) -> BufferEnqueueResult:
         self.messages.append(message)
         return BufferEnqueueResult(accepted=True, discarded=())
+
+
+class _ObservationPublisher:
+    endpoint = "127.0.0.1:9100"
+
+    def __init__(self, *, raises: bool = False) -> None:
+        self.snapshots: list[object] = []
+        self.started = False
+        self.closed = False
+        self.raises = raises
+
+    @property
+    def stats(self) -> ObservationPublisherStats:
+        return ObservationPublisherStats(
+            accepted_records=len(self.snapshots),
+            sent_records=0,
+            dropped_records=0,
+            connection_failures=0,
+        )
+
+    def is_due(self, elapsed_s: float) -> bool:
+        return elapsed_s >= 0.0
+
+    def publish(self, snapshot: object) -> bool:
+        if self.raises:
+            raise OSError("observation unavailable")
+        self.snapshots.append(snapshot)
+        return True
+
+    async def start(self) -> None:
+        self.started = True
+
+    async def close(self) -> None:
+        self.closed = True
 
 
 def _inputs_with_diagnostics_disabled() -> GeneratorInputs:
@@ -91,6 +125,7 @@ def test_application_returns_identity_and_empty_counters_when_already_stopped() 
             stop_event=stop_event,
             run_id="run-a",
             run_started_at_utc_us=123,
+            observation_publisher=_ObservationPublisher(),
         )
 
         assert summary.run_id == "run-a"
@@ -135,6 +170,7 @@ def test_application_composes_one_generated_scan_and_closes_diagnostics(tmp_path
             run_id="run-a",
             run_started_at_utc_us=123,
             wait_until=wait_until,
+            observation_publisher=_ObservationPublisher(),
         )
 
         assert summary.generated_scans == 1
@@ -147,9 +183,7 @@ def test_application_composes_one_generated_scan_and_closes_diagnostics(tmp_path
     asyncio.run(run())
 
 
-def test_application_records_optional_observation_without_changing_generation(
-    tmp_path: Path,
-) -> None:
+def test_application_publishes_observation_without_changing_generation() -> None:
     async def run() -> None:
         inputs = _inputs_with_diagnostics_disabled()
         stop_event = asyncio.Event()
@@ -164,33 +198,28 @@ def test_application_records_optional_observation_without_changing_generation(
                 return True
             return False
 
-        output_path = tmp_path / "observations.jsonl"
+        publisher = _ObservationPublisher()
         summary = await run_generator_application(
             inputs,
             stop_event=stop_event,
             run_id="run-a",
             run_started_at_utc_us=123,
             wait_until=wait_until,
-            observation_path=str(output_path),
-            observation_interval_s=0.1,
-            observation_max_records=2,
+            observation_publisher=publisher,
         )
 
         assert summary.generated_scans == 1
-        assert summary.observation_path == str(output_path)
-        assert summary.observation_records == 1
-        assert summary.observation_error is None
-        document = json.loads(output_path.read_text(encoding="utf-8").splitlines()[0])
-        assert document["type"] == "load_model_observation"
+        assert summary.observation_endpoint == publisher.endpoint
+        assert len(publisher.snapshots) == 1
+        assert publisher.started
+        assert publisher.closed
 
     asyncio.run(run())
 
 
-def test_observation_file_failure_does_not_stop_scan_generation(tmp_path: Path) -> None:
+def test_observation_failure_does_not_stop_scan_generation() -> None:
     async def run() -> None:
         inputs = _inputs_with_diagnostics_disabled()
-        output_path = tmp_path / "existing.jsonl"
-        output_path.write_text("reserved\n", encoding="utf-8")
         stop_event = asyncio.Event()
         waits = 0
 
@@ -209,12 +238,9 @@ def test_observation_file_failure_does_not_stop_scan_generation(tmp_path: Path) 
             run_id="run-a",
             run_started_at_utc_us=123,
             wait_until=wait_until,
-            observation_path=str(output_path),
-            observation_interval_s=0.1,
-            observation_max_records=2,
+            observation_publisher=_ObservationPublisher(raises=True),
         )
 
         assert summary.generated_scans == 1
-        assert summary.observation_error is not None
 
     asyncio.run(run())
