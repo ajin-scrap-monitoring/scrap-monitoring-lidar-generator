@@ -17,6 +17,19 @@
 | 4단계 | ARM64 OCI image, v0.1.0 Release와 Raspberry Pi 5 단일 컨테이너 loopback 성능 검증 완료 | 실제 수신 프로그램 통합, 다른 edge process와의 공유 부하 검증 및 허용 기준 |
 | 관찰 stream | 상시 TCP publisher와 외부 시각화 경계 구현 완료 | 실제 장비와 별도 시각화 장비의 연속 연결 검증 |
 
+## 현재 작업 목표
+
+현재 작업 흐름의 목표는 2개다.
+
+1. 관찰 stream이 포함된 ARM64 OCI image를 Raspberry Pi 5에 재현 가능하게 배포하고 scan
+   생성 및 두 송신 경로를 검증한다.
+2. 별도 시각화 Repository가 실시간 rendering을 구현할 수 있도록 version 1 관찰 계약과
+   구현 요구사항을 제공한다.
+
+첫 번째 목표는 Release, digest 기반 실행과 대상 장비 검증을 완료해야 충족된다. 두 번째
+목표의 생성기 측 interface는 구현되어 있으며 별도 시각화 프로그램의 수신 및 rendering은
+이 Repository의 범위가 아니다.
+
 ## 다음 작업
 
 남은 작업은 3개다.
