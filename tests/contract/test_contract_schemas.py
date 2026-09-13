@@ -8,6 +8,10 @@ import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
+from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import (
+    HQ_ANGLE_STEP_DEG,
+    HQ_DISTANCE_STEP_M,
+)
 from scrap_monitoring_lidar_generator.observation import (
     decode_observation_header_line,
     decode_observation_line,
@@ -23,12 +27,49 @@ from scrap_monitoring_lidar_generator.transport import (
 
 _ROOT = Path(__file__).parents[2]
 _CONTRACTS = _ROOT / "contracts" / "v1"
+_HANDOFF = _ROOT / "height-calculation-contract-proposal"
+_SHARED_CONTRACTS = _HANDOFF / "v1"
 _OBSERVATION_CONTRACTS = _ROOT / "contracts" / "observation" / "v1"
-_FIXTURES = _CONTRACTS / "fixtures"
+_FIXTURES = _SHARED_CONTRACTS / "fixtures"
 
 
 def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_handoff_bundle_is_self_contained() -> None:
+    expected = {
+        "ENVIRONMENT.md",
+        "README.md",
+        "v1/ack.schema.json",
+        "v1/environment.schema.json",
+        "v1/error.schema.json",
+        "v1/fixtures/ack.v1.json",
+        "v1/fixtures/ack.v1.msgpack.hex",
+        "v1/fixtures/environment.v1.json",
+        "v1/fixtures/error.v1.json",
+        "v1/fixtures/error.v1.msgpack.hex",
+        "v1/fixtures/scan.v1.json",
+        "v1/fixtures/scan.v1.msgpack.hex",
+        "v1/scan.schema.json",
+    }
+    actual = {
+        path.relative_to(_HANDOFF).as_posix() for path in _HANDOFF.rglob("*") if path.is_file()
+    }
+
+    assert actual == expected
+    assert not any(path.is_symlink() for path in _HANDOFF.rglob("*"))
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "generator.schema.json",
+        "quality-profile.schema.json",
+    ],
+)
+def test_contract_schema_is_valid_draft_2020_12(name: str) -> None:
+    Draft202012Validator.check_schema(_load_json(_CONTRACTS / name))
 
 
 @pytest.mark.parametrize(
@@ -37,13 +78,30 @@ def _load_json(path: Path) -> Any:
         "environment.schema.json",
         "ack.schema.json",
         "error.schema.json",
-        "generator.schema.json",
-        "quality-profile.schema.json",
         "scan.schema.json",
     ],
 )
-def test_contract_schema_is_valid_draft_2020_12(name: str) -> None:
-    Draft202012Validator.check_schema(_load_json(_CONTRACTS / name))
+def test_shared_contract_schema_is_valid_draft_2020_12(name: str) -> None:
+    Draft202012Validator.check_schema(_load_json(_SHARED_CONTRACTS / name))
+
+
+def test_legacy_shared_contract_paths_resolve_to_proposal() -> None:
+    names = ("environment.schema.json", "ack.schema.json", "error.schema.json", "scan.schema.json")
+    assert all(
+        (_CONTRACTS / name).resolve() == (_SHARED_CONTRACTS / name).resolve() for name in names
+    )
+    assert all(
+        (_CONTRACTS / "fixtures" / name).resolve() == (_FIXTURES / name).resolve()
+        for name in (
+            "environment.v1.json",
+            "ack.v1.json",
+            "ack.v1.msgpack.hex",
+            "error.v1.json",
+            "error.v1.msgpack.hex",
+            "scan.v1.json",
+            "scan.v1.msgpack.hex",
+        )
+    )
 
 
 def test_observation_contract_schema_is_valid_draft_2020_12() -> None:
@@ -71,10 +129,42 @@ def test_observation_fixture_matches_contract() -> None:
 
 
 def test_synthetic_environment_matches_contract() -> None:
-    schema = _load_json(_CONTRACTS / "environment.schema.json")
+    schema = _load_json(_SHARED_CONTRACTS / "environment.schema.json")
     environment = _load_json(_ROOT / "examples" / "environment.v1.json")
 
     Draft202012Validator(schema).validate(environment)
+
+
+def test_handoff_environment_fixture_matches_contract_and_scan() -> None:
+    schema = _load_json(_SHARED_CONTRACTS / "environment.schema.json")
+    environment = _load_json(_FIXTURES / "environment.v1.json")
+    canonical_environment = _load_json(_ROOT / "examples" / "environment.v1.json")
+    scan = _load_json(_FIXTURES / "scan.v1.json")
+
+    Draft202012Validator(schema).validate(environment)
+    assert environment == canonical_environment
+    assert scan["environment_id"] == environment["environment_id"]
+    assert scan["sensor_id"] in {sensor["sensor_id"] for sensor in environment["sensors"]}
+    assert len(environment["sensors"]) == 2
+
+
+def test_handoff_environment_contract_requires_two_sensors() -> None:
+    schema = _load_json(_SHARED_CONTRACTS / "environment.schema.json")
+    environment = _load_json(_FIXTURES / "environment.v1.json")
+    environment["sensors"] = environment["sensors"][:1]
+
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(environment)
+
+
+def test_handoff_scan_fixture_uses_sdk_hq_units() -> None:
+    scan = _load_json(_FIXTURES / "scan.v1.json")
+
+    for angle_deg, distance_m, _quality in scan["points"]:
+        assert angle_deg / HQ_ANGLE_STEP_DEG == pytest.approx(round(angle_deg / HQ_ANGLE_STEP_DEG))
+        assert distance_m / HQ_DISTANCE_STEP_M == pytest.approx(
+            round(distance_m / HQ_DISTANCE_STEP_M)
+        )
 
 
 @pytest.mark.parametrize(
@@ -95,7 +185,7 @@ def test_synthetic_generator_inputs_match_contract(
 
 
 def test_scan_sequence_matches_contract() -> None:
-    schema = _load_json(_CONTRACTS / "scan.schema.json")
+    schema = _load_json(_SHARED_CONTRACTS / "scan.schema.json")
     scan = {
         "protocol_version": 1,
         "type": "scan",
@@ -111,7 +201,7 @@ def test_scan_sequence_matches_contract() -> None:
 
 
 def test_messagepack_scan_fixture_matches_human_readable_contract() -> None:
-    schema = _load_json(_CONTRACTS / "scan.schema.json")
+    schema = _load_json(_SHARED_CONTRACTS / "scan.schema.json")
     expected = _load_json(_FIXTURES / "scan.v1.json")
     payload = bytes.fromhex((_FIXTURES / "scan.v1.msgpack.hex").read_text(encoding="ascii").strip())
 
@@ -142,7 +232,7 @@ def test_messagepack_scan_fixture_matches_human_readable_contract() -> None:
 
 @pytest.mark.parametrize("name", ["ack", "error"])
 def test_messagepack_response_fixture_matches_human_readable_contract(name: str) -> None:
-    schema = _load_json(_CONTRACTS / f"{name}.schema.json")
+    schema = _load_json(_SHARED_CONTRACTS / f"{name}.schema.json")
     expected = _load_json(_FIXTURES / f"{name}.v1.json")
     payload = bytes.fromhex(
         (_FIXTURES / f"{name}.v1.msgpack.hex").read_text(encoding="ascii").strip()
@@ -197,7 +287,7 @@ def test_messagepack_response_fixture_matches_human_readable_contract(name: str)
     ],
 )
 def test_error_contract_rejects_missing_identity_fields(error: dict[str, object]) -> None:
-    schema = _load_json(_CONTRACTS / "error.schema.json")
+    schema = _load_json(_SHARED_CONTRACTS / "error.schema.json")
 
     with pytest.raises(ValidationError):
         Draft202012Validator(schema).validate(error)
@@ -216,7 +306,7 @@ def test_error_contract_rejects_missing_identity_fields(error: dict[str, object]
     ],
 )
 def test_scan_contract_rejects_out_of_range_values(field: str, value: Any) -> None:
-    schema = _load_json(_CONTRACTS / "scan.schema.json")
+    schema = _load_json(_SHARED_CONTRACTS / "scan.schema.json")
     scan = {
         "protocol_version": 1,
         "type": "scan",
@@ -234,7 +324,7 @@ def test_scan_contract_rejects_out_of_range_values(field: str, value: Any) -> No
 
 
 def test_scan_contract_rejects_empty_scan() -> None:
-    schema = _load_json(_CONTRACTS / "scan.schema.json")
+    schema = _load_json(_SHARED_CONTRACTS / "scan.schema.json")
     scan = {
         "protocol_version": 1,
         "type": "scan",
@@ -251,7 +341,7 @@ def test_scan_contract_rejects_empty_scan() -> None:
 
 
 def test_scan_contract_rejects_unknown_fields() -> None:
-    schema = _load_json(_CONTRACTS / "scan.schema.json")
+    schema = _load_json(_SHARED_CONTRACTS / "scan.schema.json")
     scan = {
         "protocol_version": 1,
         "type": "scan",

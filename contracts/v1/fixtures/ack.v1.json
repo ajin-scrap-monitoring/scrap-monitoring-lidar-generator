@@ -1,7 +1,1 @@
-{
-  "protocol_version": 1,
-  "type": "ack",
-  "run_id": "synthetic-run-a",
-  "sensor_id": "sensor-a",
-  "scan_id": 1
-}
+../../../height-calculation-contract-proposal/v1/fixtures/ack.v1.json
