@@ -7,6 +7,10 @@ from fractions import Fraction
 import numpy as np
 from numpy.typing import NDArray
 
+from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import (
+    quantize_hq_angles_deg,
+)
+
 type FloatArray = NDArray[np.float64]
 
 _MAX_SCAN_ID = 9_223_372_036_854_775_807
@@ -107,7 +111,9 @@ class SensorRotationScheduler:
         rotation_rate = _require_positive_rate(rotation_rate_hz, "rotation rate")
         if sample_rate < rotation_rate:
             raise ValueError("sample rate must be at least the rotation rate")
-        initial_angle = _require_angle(initial_angle_deg)
+        initial_angle = float(
+            quantize_hq_angles_deg(np.array((_require_angle(initial_angle_deg),)))[0]
+        )
 
         self._sensor_id = sensor_id
         self._sample_rate_hz = sample_rate
@@ -162,9 +168,11 @@ class SensorRotationScheduler:
         sample_indices_float = sample_indices.astype(np.float64)
         point_elapsed_times_s = sample_indices_float / self._sample_rate_hz
         rotation_progress = point_elapsed_times_s * self._rotation_rate_hz - rotation_index
-        angles_deg = np.remainder(
-            self._initial_angle_deg + 360.0 * rotation_progress,
-            360.0,
+        angles_deg = quantize_hq_angles_deg(
+            np.remainder(
+                self._initial_angle_deg + 360.0 * rotation_progress,
+                360.0,
+            )
         )
         result = ScheduledScan(
             sensor_id=self._sensor_id,

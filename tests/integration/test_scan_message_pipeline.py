@@ -5,6 +5,10 @@ from pathlib import Path
 import numpy as np
 
 from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import (
+    HQ_ANGLE_STEP_DEG,
+    HQ_DISTANCE_STEP_M,
+)
 from scrap_monitoring_lidar_generator.runtime import build_measurement_generation_runtime
 from scrap_monitoring_lidar_generator.transport import (
     ScanMessageFactory,
@@ -37,6 +41,16 @@ def test_generated_scan_round_trips_with_run_identity_and_utc_timestamp() -> Non
     assert decoded.sensor_id == second_result.sensor_id
     assert decoded.scan_id == 2
     assert decoded.captured_at == second_message.captured_at
+    np.testing.assert_allclose(
+        decoded.measured_scan.angles_deg / HQ_ANGLE_STEP_DEG,
+        np.rint(decoded.measured_scan.angles_deg / HQ_ANGLE_STEP_DEG),
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        decoded.measured_scan.distances_m / HQ_DISTANCE_STEP_M,
+        np.rint(decoded.measured_scan.distances_m / HQ_DISTANCE_STEP_M),
+        atol=1e-12,
+    )
     np.testing.assert_array_equal(
         decoded.measured_scan.angles_deg,
         second_result.measured.scan.angles_deg,
