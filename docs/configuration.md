@@ -27,13 +27,14 @@
 | 3 | version 1 JSON | 생성 모델과 환경변수가 없는 배포값 |
 | 4 | 코드 기본값 | 관찰 주기 1초 |
 
-앞선 계층의 값이 있으면 뒤의 계층 값은 사용하지 않는다. 환경변수 계층은 다음 9개 값만
+앞선 계층의 값이 있으면 뒤의 계층 값은 사용하지 않는다. 환경변수 계층은 다음 10개 값만
 처리한다.
 
 | 환경변수 | CLI 인자 | JSON 또는 기본 fallback |
 | --- | --- | --- |
 | `SCRAP_LIDAR_GENERATOR_CONFIG` | `--config` | 없음 |
 | `SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S` | `--mean-fill-duration-s` | `scenario.mean_fill_duration_s` |
+| `SCRAP_LIDAR_GENERATOR_COLLECTION_THRESHOLD_CENTER_RATIO` | `--collection-threshold-center-ratio` | `scenario.collection_threshold_range` |
 | `SCRAP_LIDAR_GENERATOR_SCAN_HOST` | `--scan-host` | `transport.host` |
 | `SCRAP_LIDAR_GENERATOR_SCAN_PORT` | `--scan-port` | `transport.port` |
 | `SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST` | `--observation-host` | 없음 |
@@ -42,11 +43,14 @@
 | `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED` | `--diagnostics-enabled` | `diagnostics.enabled` |
 | `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH` | `--diagnostics-output-path` | `diagnostics.output_path` |
 
-환경변수는 평균 적재 주기, 설정 경로, endpoint와 진단 출력처럼 배포 환경에 종속되는 값만
-덮어쓴다. 나머지 시나리오, 센서, 측정, 품질, seed와 전송 제한 및 복구 정책은 구조 검증과
-결정론적 재현을 위해 JSON에서만 관리한다. 평균 적재 주기는 0초보다 큰 유한한 값이며 공개
-기본값은 86,400초다. `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED`는 소문자 `true`와
-`false`만 허용한다. 상대 진단 출력 경로는 생성 설정 파일의 directory를 기준으로 해석한다.
+환경변수는 평균 적재 주기, 수거 기준 임계치, 설정 경로, endpoint와 진단 출력처럼 배포
+환경에 종속되는 값만 덮어쓴다. 나머지 시나리오, 센서, 측정, 품질, seed와 전송 제한 및
+복구 정책은 구조 검증과 결정론적 재현을 위해 JSON에서만 관리한다. 평균 적재 주기는
+0초보다 큰 유한한 값이며 공개 기본값은 86,400초다. 수거 기준 임계치는 0.05 초과, 0.95
+이하의 적재율이며 회차별 실제 임계치 범위는 기준값의 `+-0.05`다. 공개 기본값 0.90은
+JSON의 0.85부터 0.95 범위와 동일하다. `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED`는
+소문자 `true`와 `false`만 허용한다. 상대 진단 출력 경로는 생성 설정 파일의 directory를
+기준으로 해석한다.
 
 ## 출처 분류
 

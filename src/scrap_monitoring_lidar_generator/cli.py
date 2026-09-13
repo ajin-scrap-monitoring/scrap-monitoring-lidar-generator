@@ -11,10 +11,14 @@ from dataclasses import replace
 from pathlib import Path
 
 from scrap_monitoring_lidar_generator._cli_settings import (
+    COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE,
+    COLLECTION_THRESHOLD_HALF_RANGE,
     CONFIG_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE,
+    MAX_COLLECTION_THRESHOLD_CENTER_RATIO,
     MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
+    MIN_COLLECTION_THRESHOLD_CENTER_RATIO,
     OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
     OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE,
     OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
@@ -55,6 +59,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "override the mean fill duration in seconds; "
             f"env: {MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE}"
+        ),
+    )
+    parser.add_argument(
+        "--collection-threshold-center-ratio",
+        type=_collection_threshold_center_ratio,
+        help=(
+            "override the center of the collection threshold range; "
+            f"env: {COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE}"
         ),
     )
     parser.add_argument(
@@ -178,14 +190,23 @@ def _apply_runtime_overrides(
     settings: RuntimeSettings,
 ) -> GeneratorInputs:
     generator = inputs.generator
+    scenario = generator.scenario
     if settings.mean_fill_duration_s is not None:
-        generator = replace(
-            generator,
-            scenario=replace(
-                generator.scenario,
-                mean_fill_duration_s=settings.mean_fill_duration_s,
+        scenario = replace(
+            scenario,
+            mean_fill_duration_s=settings.mean_fill_duration_s,
+        )
+    if settings.collection_threshold_center_ratio is not None:
+        center = settings.collection_threshold_center_ratio
+        scenario = replace(
+            scenario,
+            collection_threshold_range=(
+                center - COLLECTION_THRESHOLD_HALF_RANGE,
+                center + COLLECTION_THRESHOLD_HALF_RANGE,
             ),
         )
+    if scenario is not generator.scenario:
+        generator = replace(generator, scenario=scenario)
     if settings.scan_host is not None or settings.scan_port is not None:
         transport = replace(
             generator.transport,
@@ -233,6 +254,7 @@ def main(
                 diagnostics_enabled=arguments.diagnostics_enabled,
                 diagnostics_output_path=arguments.diagnostics_output_path,
                 mean_fill_duration_s=arguments.mean_fill_duration_s,
+                collection_threshold_center_ratio=(arguments.collection_threshold_center_ratio),
             ),
         )
         return asyncio.run(_run_config(settings))
@@ -250,6 +272,19 @@ def _positive_float(value: str) -> float:
         raise argparse.ArgumentTypeError("must be a number") from error
     if not math.isfinite(result) or result <= 0.0:
         raise argparse.ArgumentTypeError("must be a finite positive number")
+    return result
+
+
+def _collection_threshold_center_ratio(value: str) -> float:
+    result = _positive_float(value)
+    if (
+        result <= MIN_COLLECTION_THRESHOLD_CENTER_RATIO
+        or result > MAX_COLLECTION_THRESHOLD_CENTER_RATIO
+    ):
+        raise argparse.ArgumentTypeError(
+            f"must be greater than {MIN_COLLECTION_THRESHOLD_CENTER_RATIO:g} "
+            f"and at most {MAX_COLLECTION_THRESHOLD_CENTER_RATIO:g}"
+        )
     return result
 
 
