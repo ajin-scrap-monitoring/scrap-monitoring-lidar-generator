@@ -84,20 +84,38 @@ resource_prefix="lidar-validation-$(date +%s)-$$"
 network_name="$resource_prefix"
 receiver_name="$resource_prefix-receiver"
 generator_name="$resource_prefix-generator"
+environment_file=""
 
 cleanup() {
   docker container rm --force "$generator_name" >/dev/null 2>&1 || true
   docker container rm --force "$receiver_name" >/dev/null 2>&1 || true
   docker network rm "$network_name" >/dev/null 2>&1 || true
+  if [[ -n "$environment_file" ]]; then
+    rm -f "$environment_file"
+  fi
 }
 trap cleanup EXIT
+
+environment_file="$(mktemp -t lidar-generator-validation.XXXXXX.env)"
+chmod 600 "$environment_file"
+printf '%s\n' \
+  'SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v1.json' \
+  'SCRAP_LIDAR_GENERATOR_SCAN_HOST=scan-receiver' \
+  'SCRAP_LIDAR_GENERATOR_SCAN_PORT=9000' \
+  'SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST=observation-receiver' \
+  'SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT=9100' \
+  'SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S=1' \
+  'SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=true' \
+  'SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics' \
+  > "$environment_file"
 
 docker image pull "$image_ref"
 docker network create "$network_name" >/dev/null
 docker run --detach \
   --name "$receiver_name" \
   --network "$network_name" \
-  --network-alias receiver \
+  --network-alias scan-receiver \
+  --network-alias observation-receiver \
   --mount "type=bind,src=$config_dir,dst=/config,readonly" \
   --mount "type=bind,src=$script_dir,dst=/validation,readonly" \
   --entrypoint /app/.venv/bin/python \
@@ -128,11 +146,9 @@ docker run --detach \
   --mount "type=bind,src=$config_dir/environment.v1.json,dst=/config/environment.v1.json,readonly" \
   --mount "type=bind,src=$config_dir/generator.v1.json,dst=/config/generator.v1.json,readonly" \
   --mount "type=bind,src=$config_dir/quality-profile.v1.json,dst=/config/quality-profile.v1.json,readonly" \
-  --tmpfs /config/diagnostics:uid=10001,gid=10001,mode=0700 \
-  "$image_ref" \
-  --config /config/generator.v1.json \
-  --observation-host receiver \
-  --observation-port 9100 >/dev/null
+  --tmpfs /data/diagnostics:uid=10001,gid=10001,mode=0700 \
+  --env-file "$environment_file" \
+  "$image_ref" >/dev/null
 
 sleep "$duration_s"
 docker stats --no-stream --format '{{json .}}' "$generator_name" "$receiver_name" \

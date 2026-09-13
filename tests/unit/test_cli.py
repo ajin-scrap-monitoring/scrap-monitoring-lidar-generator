@@ -7,9 +7,12 @@ from typing import cast
 import pytest
 
 import scrap_monitoring_lidar_generator.cli as cli
-from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
+from scrap_monitoring_lidar_generator.configuration import GeneratorInputs, load_generator_inputs
 from scrap_monitoring_lidar_generator.observation import ObservationPublisherStats
-from scrap_monitoring_lidar_generator.runtime import GeneratorRunSummary
+from scrap_monitoring_lidar_generator.runtime import (
+    GeneratorRunSummary,
+    generator_input_fingerprint,
+)
 from scrap_monitoring_lidar_generator.transport import (
     SenderHalt,
     SenderHaltCallback,
@@ -67,37 +70,96 @@ def test_main_runs_requested_configuration(monkeypatch: pytest.MonkeyPatch) -> N
                 "127.0.0.1",
                 "--observation-port",
                 "9100",
-            ]
+            ],
+            environment={},
         )
         == 0
     )
     assert received == {
         "path": Path("generator.json"),
+        "scan_host": None,
+        "scan_port": None,
         "observation_host": "127.0.0.1",
         "observation_port": 9100,
         "observation_interval_s": 1.0,
+        "diagnostics_enabled": None,
+        "diagnostics_output_path": None,
     }
 
 
-def test_main_requires_configuration() -> None:
-    with pytest.raises(SystemExit) as exit_info:
-        cli.main([])
+def test_main_reads_environment_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    received: dict[str, object] = {}
 
-    assert exit_info.value.code == 2
+    async def run_config(path: Path, **kwargs: object) -> int:
+        received["path"] = path
+        received.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "_run_config", run_config)
+
+    assert (
+        cli.main(
+            [],
+            environment={
+                "SCRAP_LIDAR_GENERATOR_CONFIG": "generator.json",
+                "SCRAP_LIDAR_GENERATOR_SCAN_HOST": "height-calculation",
+                "SCRAP_LIDAR_GENERATOR_SCAN_PORT": "9001",
+                "SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST": "visualizer",
+                "SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT": "9101",
+                "SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S": "2",
+                "SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED": "true",
+                "SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH": "/data/diagnostics",
+            },
+        )
+        == 0
+    )
+    assert received == {
+        "path": Path("generator.json"),
+        "scan_host": "height-calculation",
+        "scan_port": 9001,
+        "observation_host": "visualizer",
+        "observation_port": 9101,
+        "observation_interval_s": 2.0,
+        "diagnostics_enabled": True,
+        "diagnostics_output_path": Path("/data/diagnostics"),
+    }
+
+
+def test_main_reports_missing_configuration(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main([], environment={}) == 2
+
+    assert "SCRAP_LIDAR_GENERATOR_CONFIG" in capsys.readouterr().err
+
+
+def test_main_reports_invalid_environment_setting(capsys: pytest.CaptureFixture[str]) -> None:
+    assert (
+        cli.main(
+            [],
+            environment={
+                "SCRAP_LIDAR_GENERATOR_CONFIG": "generator.json",
+                "SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST": "visualizer",
+                "SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT": "invalid",
+            },
+        )
+        == 2
+    )
+
+    assert "SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("missing", ["host", "port"])
-def test_main_requires_observation_endpoint(missing: str) -> None:
+def test_main_requires_observation_endpoint(
+    missing: str, capsys: pytest.CaptureFixture[str]
+) -> None:
     arguments = ["--config", "generator.json"]
     if missing != "host":
         arguments.extend(("--observation-host", "127.0.0.1"))
     if missing != "port":
         arguments.extend(("--observation-port", "9100"))
 
-    with pytest.raises(SystemExit) as exit_info:
-        cli.main(arguments)
+    assert cli.main(arguments, environment={}) == 2
 
-    assert exit_info.value.code == 2
+    assert "configuration error:" in capsys.readouterr().err
 
 
 def test_main_passes_observation_stream_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,27 +183,37 @@ def test_main_passes_observation_stream_arguments(monkeypatch: pytest.MonkeyPatc
                 "9200",
                 "--observation-interval-s",
                 "2",
-            ]
+            ],
+            environment={},
         )
         == 0
     )
     assert received == {
         "path": Path("generator.json"),
+        "scan_host": None,
+        "scan_port": None,
         "observation_host": "visualizer",
         "observation_port": 9200,
         "observation_interval_s": 2.0,
+        "diagnostics_enabled": None,
+        "diagnostics_output_path": None,
     }
 
 
 @pytest.mark.parametrize(
     ("argument", "value"),
     [
+        ("--scan-host", ""),
+        ("--scan-port", "0"),
+        ("--scan-port", "65536"),
         ("--observation-port", "0"),
         ("--observation-port", "65536"),
         ("--observation-interval-s", "86400.1"),
+        ("--diagnostics-enabled", "yes"),
+        ("--diagnostics-output-path", ""),
     ],
 )
-def test_main_rejects_invalid_observation_arguments(argument: str, value: str) -> None:
+def test_main_rejects_invalid_runtime_arguments(argument: str, value: str) -> None:
     with pytest.raises(SystemExit) as exit_info:
         cli.main(
             [
@@ -153,7 +225,8 @@ def test_main_rejects_invalid_observation_arguments(argument: str, value: str) -
                 "9100",
                 argument,
                 value,
-            ]
+            ],
+            environment={},
         )
 
     assert exit_info.value.code == 2
@@ -169,7 +242,8 @@ def test_main_reports_configuration_error(capsys: pytest.CaptureFixture[str]) ->
                 "127.0.0.1",
                 "--observation-port",
                 "9100",
-            ]
+            ],
+            environment={},
         )
         == 2
     )
@@ -200,6 +274,8 @@ def test_run_config_reports_final_delivery_state(
         inputs: GeneratorInputs, *, stop_event: asyncio.Event, **kwargs: object
     ) -> GeneratorRunSummary:
         assert inputs.environment.environment_id == "synthetic-scrap-pit-v1"
+        assert inputs.generator.transport.host == "receiver"
+        assert inputs.generator.transport.port == 9000
         callback = cast(SenderHaltCallback | None, kwargs.get("on_sender_halt"))
         assert callback is None or callable(callback)
         if halt is not None and callback is not None:
@@ -219,15 +295,118 @@ def test_run_config_reports_final_delivery_state(
         "capacity_discarded=0 oversized=0 connection_failures=0 "
         "pending_frames=1 pending_bytes=1234"
     ) in output.out
-    assert "observation=127.0.0.1:9100 sent=1 dropped=1" in output.out
+    assert "observation=active sent=1 dropped=1" in output.out
+    assert "127.0.0.1:9100" not in output.out
     assert ("transport halted" in output.err) is (halt is not None)
     assert output.err.count("transport halted") == int(halt is not None)
     assert ("sensor_id=sensor-b" in output.err) is (halt is not None)
 
 
+def test_run_config_applies_scan_endpoint_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run_application(
+        inputs: GeneratorInputs, *, stop_event: asyncio.Event, **kwargs: object
+    ) -> GeneratorRunSummary:
+        assert inputs.generator.transport.host == "height-calculation"
+        assert inputs.generator.transport.port == 9200
+        assert inputs.generator.diagnostics.enabled is False
+        assert inputs.generator.diagnostics.output_path == _ROOT / "examples" / "runtime-output"
+        stop_event.set()
+        return _summary()
+
+    monkeypatch.setattr(cli, "run_generator_application", run_application)
+
+    code = asyncio.run(
+        cli._run_config(
+            _ROOT / "examples" / "generator.v1.json",
+            scan_host="height-calculation",
+            scan_port=9200,
+            diagnostics_enabled=False,
+            diagnostics_output_path=Path("runtime-output"),
+        )
+    )
+
+    assert code == 0
+
+
+def test_runtime_scan_overrides_preserve_each_json_fallback() -> None:
+    inputs = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
+
+    host_override = cli._apply_runtime_overrides(
+        inputs,
+        config_path=_ROOT / "examples" / "generator.v1.json",
+        scan_host="height-calculation",
+        scan_port=None,
+        diagnostics_enabled=None,
+        diagnostics_output_path=None,
+    )
+    port_override = cli._apply_runtime_overrides(
+        inputs,
+        config_path=_ROOT / "examples" / "generator.v1.json",
+        scan_host=None,
+        scan_port=9200,
+        diagnostics_enabled=None,
+        diagnostics_output_path=None,
+    )
+
+    assert host_override.generator.transport.host == "height-calculation"
+    assert host_override.generator.transport.port == 9000
+    assert port_override.generator.transport.host == "receiver"
+    assert port_override.generator.transport.port == 9200
+    assert inputs.generator.transport.host == "receiver"
+    assert inputs.generator.transport.port == 9000
+
+
+def test_runtime_diagnostics_overrides_preserve_each_json_fallback() -> None:
+    config_path = _ROOT / "examples" / "generator.v1.json"
+    inputs = load_generator_inputs(config_path)
+
+    enabled_override = cli._apply_runtime_overrides(
+        inputs,
+        config_path=config_path,
+        scan_host=None,
+        scan_port=None,
+        diagnostics_enabled=False,
+        diagnostics_output_path=None,
+    )
+    path_override = cli._apply_runtime_overrides(
+        inputs,
+        config_path=config_path,
+        scan_host=None,
+        scan_port=None,
+        diagnostics_enabled=None,
+        diagnostics_output_path=Path("runtime-output"),
+    )
+
+    assert enabled_override.generator.diagnostics.enabled is False
+    assert enabled_override.generator.diagnostics.output_path == _ROOT / "examples" / "diagnostics"
+    assert path_override.generator.diagnostics.enabled is True
+    assert path_override.generator.diagnostics.output_path == _ROOT / "examples" / "runtime-output"
+    assert inputs.generator.diagnostics.enabled is True
+    assert inputs.generator.diagnostics.output_path == _ROOT / "examples" / "diagnostics"
+
+
+def test_runtime_overrides_do_not_change_generation_fingerprint() -> None:
+    config_path = _ROOT / "examples" / "generator.v1.json"
+    inputs = load_generator_inputs(config_path)
+
+    overridden = cli._apply_runtime_overrides(
+        inputs,
+        config_path=config_path,
+        scan_host="height-calculation",
+        scan_port=9200,
+        diagnostics_enabled=False,
+        diagnostics_output_path=Path("runtime-output"),
+    )
+
+    assert generator_input_fingerprint(overridden) == generator_input_fingerprint(inputs)
+
+
 def test_help_exits_successfully(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exit_info:
-        cli.main(["--help"])
+        cli.main(["--help"], environment={})
 
     assert exit_info.value.code == 0
-    assert "usage: scrap-monitoring-lidar-generator" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "usage: scrap-monitoring-lidar-generator" in output
+    assert "SCRAP_LIDAR_GENERATOR_CONFIG" in output
+    assert "SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH" in output

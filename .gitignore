@@ -11,6 +11,12 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Deployment environment files can contain private endpoints.
+.env
+.env.*
+*.env
+
 # Local diagnostics can contain reference data that Git must not track.
 diagnostics/
 

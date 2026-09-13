@@ -3,12 +3,30 @@
 import argparse
 import asyncio
 import math
+import os
 import signal
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 
-from scrap_monitoring_lidar_generator.configuration import ConfigurationError, load_generator_inputs
+from scrap_monitoring_lidar_generator._cli_settings import (
+    CONFIG_ENVIRONMENT_VARIABLE,
+    DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE,
+    DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE,
+    OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
+    OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE,
+    OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
+    SCAN_HOST_ENVIRONMENT_VARIABLE,
+    SCAN_PORT_ENVIRONMENT_VARIABLE,
+    RuntimeSettingsError,
+    resolve_runtime_settings,
+)
+from scrap_monitoring_lidar_generator.configuration import (
+    ConfigurationError,
+    GeneratorInputs,
+    load_generator_inputs,
+)
 from scrap_monitoring_lidar_generator.observation import (
     DEFAULT_OBSERVATION_HOST,
     DEFAULT_OBSERVATION_INTERVAL_S,
@@ -27,26 +45,59 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--config",
-        required=True,
-        type=Path,
-        help="path to the generator v1 JSON configuration",
+        type=_path,
+        help=f"path to the generator v1 JSON configuration; env: {CONFIG_ENVIRONMENT_VARIABLE}",
+    )
+    parser.add_argument(
+        "--scan-host",
+        type=_host,
+        help=f"override the scan receiver TCP host; env: {SCAN_HOST_ENVIRONMENT_VARIABLE}",
+    )
+    parser.add_argument(
+        "--scan-port",
+        type=_port,
+        help=f"override the scan receiver TCP port; env: {SCAN_PORT_ENVIRONMENT_VARIABLE}",
     )
     parser.add_argument(
         "--observation-host",
-        required=True,
-        help="TCP host that receives the continuous observation stream",
+        type=_host,
+        help=(
+            "TCP host that receives the continuous observation stream; "
+            f"env: {OBSERVATION_HOST_ENVIRONMENT_VARIABLE}"
+        ),
     )
     parser.add_argument(
         "--observation-port",
         type=_port,
-        required=True,
-        help="TCP port that receives the continuous observation stream",
+        help=(
+            "TCP port that receives the continuous observation stream; "
+            f"env: {OBSERVATION_PORT_ENVIRONMENT_VARIABLE}"
+        ),
     )
     parser.add_argument(
         "--observation-interval-s",
         type=_bounded_observation_interval,
-        default=DEFAULT_OBSERVATION_INTERVAL_S,
-        help="simulation seconds between observation stream records",
+        help=(
+            "simulation seconds between observation stream records; "
+            f"env: {OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE}; "
+            f"default: {DEFAULT_OBSERVATION_INTERVAL_S:g}"
+        ),
+    )
+    parser.add_argument(
+        "--diagnostics-enabled",
+        type=_boolean,
+        help=(
+            "override diagnostic recording with true or false; "
+            f"env: {DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE}"
+        ),
+    )
+    parser.add_argument(
+        "--diagnostics-output-path",
+        type=_path,
+        help=(
+            "override the diagnostic output path; "
+            f"env: {DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE}"
+        ),
     )
     return parser
 
@@ -54,11 +105,23 @@ def build_parser() -> argparse.ArgumentParser:
 async def _run_config(
     path: Path,
     *,
+    scan_host: str | None = None,
+    scan_port: int | None = None,
     observation_host: str = DEFAULT_OBSERVATION_HOST,
     observation_port: int = DEFAULT_OBSERVATION_PORT,
     observation_interval_s: float = DEFAULT_OBSERVATION_INTERVAL_S,
+    diagnostics_enabled: bool | None = None,
+    diagnostics_output_path: Path | None = None,
 ) -> int:
     inputs = load_generator_inputs(path)
+    inputs = _apply_runtime_overrides(
+        inputs,
+        config_path=path,
+        scan_host=scan_host,
+        scan_port=scan_port,
+        diagnostics_enabled=diagnostics_enabled,
+        diagnostics_output_path=diagnostics_output_path,
+    )
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     handled_signals = (signal.SIGINT, signal.SIGTERM)
@@ -106,7 +169,7 @@ async def _run_config(
         f"pending_bytes={summary.pending_bytes}"
     )
     print(
-        f"observation={summary.observation_endpoint} "
+        "observation=active "
         f"sent={summary.observation_stats.sent_records} "
         f"dropped={summary.observation_stats.dropped_records} "
         f"connection_failures={summary.observation_stats.connection_failures}"
@@ -118,20 +181,75 @@ async def _run_config(
     return 0
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def _apply_runtime_overrides(
+    inputs: GeneratorInputs,
+    *,
+    config_path: Path,
+    scan_host: str | None,
+    scan_port: int | None,
+    diagnostics_enabled: bool | None,
+    diagnostics_output_path: Path | None,
+) -> GeneratorInputs:
+    generator = inputs.generator
+    if scan_host is not None or scan_port is not None:
+        transport = replace(
+            generator.transport,
+            host=generator.transport.host if scan_host is None else scan_host,
+            port=generator.transport.port if scan_port is None else scan_port,
+        )
+        generator = replace(generator, transport=transport)
+    if diagnostics_enabled is not None or diagnostics_output_path is not None:
+        output_path = diagnostics_output_path
+        if output_path is not None and not output_path.is_absolute():
+            output_path = config_path.parent / output_path
+        diagnostics = replace(
+            generator.diagnostics,
+            enabled=(
+                generator.diagnostics.enabled
+                if diagnostics_enabled is None
+                else diagnostics_enabled
+            ),
+            output_path=(generator.diagnostics.output_path if output_path is None else output_path),
+        )
+        generator = replace(generator, diagnostics=diagnostics)
+    if generator is not inputs.generator:
+        return replace(inputs, generator=generator)
+    return inputs
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> int:
     """Run the command-line application."""
     parser = build_parser()
     arguments = parser.parse_args(argv)
     try:
+        settings = resolve_runtime_settings(
+            environment=os.environ if environment is None else environment,
+            config_path=arguments.config,
+            scan_host=arguments.scan_host,
+            scan_port=arguments.scan_port,
+            observation_host=arguments.observation_host,
+            observation_port=arguments.observation_port,
+            observation_interval_s=arguments.observation_interval_s,
+            diagnostics_enabled=arguments.diagnostics_enabled,
+            diagnostics_output_path=arguments.diagnostics_output_path,
+        )
         return asyncio.run(
             _run_config(
-                arguments.config,
-                observation_host=arguments.observation_host,
-                observation_port=arguments.observation_port,
-                observation_interval_s=arguments.observation_interval_s,
+                settings.config_path,
+                scan_host=settings.scan_host,
+                scan_port=settings.scan_port,
+                observation_host=settings.observation_host,
+                observation_port=settings.observation_port,
+                observation_interval_s=settings.observation_interval_s,
+                diagnostics_enabled=settings.diagnostics_enabled,
+                diagnostics_output_path=settings.diagnostics_output_path,
             )
         )
-    except (ConfigurationError, OSError, ValueError) as error:
+    except (ConfigurationError, OSError, RuntimeSettingsError, ValueError) as error:
         print(f"configuration error: {error}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
@@ -146,6 +264,26 @@ def _positive_float(value: str) -> float:
     if not math.isfinite(result) or result <= 0.0:
         raise argparse.ArgumentTypeError("must be a finite positive number")
     return result
+
+
+def _path(value: str) -> Path:
+    if not value:
+        raise argparse.ArgumentTypeError("must be a non-empty path")
+    return Path(value)
+
+
+def _host(value: str) -> str:
+    if not value:
+        raise argparse.ArgumentTypeError("must be a non-empty host")
+    return value
+
+
+def _boolean(value: str) -> bool:
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise argparse.ArgumentTypeError("must be true or false")
 
 
 def _port(value: str) -> int:
