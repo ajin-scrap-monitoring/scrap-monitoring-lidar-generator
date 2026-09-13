@@ -20,6 +20,8 @@ from scrap_monitoring_lidar_generator._cli_settings import (
     OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
     SCAN_HOST_ENVIRONMENT_VARIABLE,
     SCAN_PORT_ENVIRONMENT_VARIABLE,
+    RuntimeSettingOverrides,
+    RuntimeSettings,
     RuntimeSettingsError,
     resolve_runtime_settings,
 )
@@ -29,9 +31,7 @@ from scrap_monitoring_lidar_generator.configuration import (
     load_generator_inputs,
 )
 from scrap_monitoring_lidar_generator.observation import (
-    DEFAULT_OBSERVATION_HOST,
     DEFAULT_OBSERVATION_INTERVAL_S,
-    DEFAULT_OBSERVATION_PORT,
     MAX_OBSERVATION_INTERVAL_S,
 )
 from scrap_monitoring_lidar_generator.runtime import run_generator_application
@@ -111,28 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def _run_config(
-    path: Path,
-    *,
-    scan_host: str | None = None,
-    scan_port: int | None = None,
-    observation_host: str = DEFAULT_OBSERVATION_HOST,
-    observation_port: int = DEFAULT_OBSERVATION_PORT,
-    observation_interval_s: float = DEFAULT_OBSERVATION_INTERVAL_S,
-    diagnostics_enabled: bool | None = None,
-    diagnostics_output_path: Path | None = None,
-    mean_fill_duration_s: float | None = None,
-) -> int:
-    inputs = load_generator_inputs(path)
-    inputs = _apply_runtime_overrides(
-        inputs,
-        config_path=path,
-        scan_host=scan_host,
-        scan_port=scan_port,
-        diagnostics_enabled=diagnostics_enabled,
-        diagnostics_output_path=diagnostics_output_path,
-        mean_fill_duration_s=mean_fill_duration_s,
-    )
+async def _run_config(settings: RuntimeSettings) -> int:
+    inputs = load_generator_inputs(settings.config_path)
+    inputs = _apply_runtime_overrides(inputs, settings)
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     handled_signals = (signal.SIGINT, signal.SIGTERM)
@@ -153,9 +134,9 @@ async def _run_config(
         summary = await run_generator_application(
             inputs,
             stop_event=stop_event,
-            observation_host=observation_host,
-            observation_port=observation_port,
-            observation_interval_s=observation_interval_s,
+            observation_host=settings.observation_host,
+            observation_port=settings.observation_port,
+            observation_interval_s=settings.observation_interval_s,
             on_sender_halt=report_sender_halt,
         )
     finally:
@@ -194,40 +175,34 @@ async def _run_config(
 
 def _apply_runtime_overrides(
     inputs: GeneratorInputs,
-    *,
-    config_path: Path,
-    scan_host: str | None,
-    scan_port: int | None,
-    diagnostics_enabled: bool | None,
-    diagnostics_output_path: Path | None,
-    mean_fill_duration_s: float | None = None,
+    settings: RuntimeSettings,
 ) -> GeneratorInputs:
     generator = inputs.generator
-    if mean_fill_duration_s is not None:
+    if settings.mean_fill_duration_s is not None:
         generator = replace(
             generator,
             scenario=replace(
                 generator.scenario,
-                mean_fill_duration_s=mean_fill_duration_s,
+                mean_fill_duration_s=settings.mean_fill_duration_s,
             ),
         )
-    if scan_host is not None or scan_port is not None:
+    if settings.scan_host is not None or settings.scan_port is not None:
         transport = replace(
             generator.transport,
-            host=generator.transport.host if scan_host is None else scan_host,
-            port=generator.transport.port if scan_port is None else scan_port,
+            host=(generator.transport.host if settings.scan_host is None else settings.scan_host),
+            port=(generator.transport.port if settings.scan_port is None else settings.scan_port),
         )
         generator = replace(generator, transport=transport)
-    if diagnostics_enabled is not None or diagnostics_output_path is not None:
-        output_path = diagnostics_output_path
+    if settings.diagnostics_enabled is not None or settings.diagnostics_output_path is not None:
+        output_path = settings.diagnostics_output_path
         if output_path is not None and not output_path.is_absolute():
-            output_path = config_path.parent / output_path
+            output_path = settings.config_path.parent / output_path
         diagnostics = replace(
             generator.diagnostics,
             enabled=(
                 generator.diagnostics.enabled
-                if diagnostics_enabled is None
-                else diagnostics_enabled
+                if settings.diagnostics_enabled is None
+                else settings.diagnostics_enabled
             ),
             output_path=(generator.diagnostics.output_path if output_path is None else output_path),
         )
@@ -248,29 +223,19 @@ def main(
     try:
         settings = resolve_runtime_settings(
             environment=os.environ if environment is None else environment,
-            config_path=arguments.config,
-            scan_host=arguments.scan_host,
-            scan_port=arguments.scan_port,
-            observation_host=arguments.observation_host,
-            observation_port=arguments.observation_port,
-            observation_interval_s=arguments.observation_interval_s,
-            diagnostics_enabled=arguments.diagnostics_enabled,
-            diagnostics_output_path=arguments.diagnostics_output_path,
-            mean_fill_duration_s=arguments.mean_fill_duration_s,
+            overrides=RuntimeSettingOverrides(
+                config_path=arguments.config,
+                scan_host=arguments.scan_host,
+                scan_port=arguments.scan_port,
+                observation_host=arguments.observation_host,
+                observation_port=arguments.observation_port,
+                observation_interval_s=arguments.observation_interval_s,
+                diagnostics_enabled=arguments.diagnostics_enabled,
+                diagnostics_output_path=arguments.diagnostics_output_path,
+                mean_fill_duration_s=arguments.mean_fill_duration_s,
+            ),
         )
-        return asyncio.run(
-            _run_config(
-                settings.config_path,
-                scan_host=settings.scan_host,
-                scan_port=settings.scan_port,
-                observation_host=settings.observation_host,
-                observation_port=settings.observation_port,
-                observation_interval_s=settings.observation_interval_s,
-                diagnostics_enabled=settings.diagnostics_enabled,
-                diagnostics_output_path=settings.diagnostics_output_path,
-                mean_fill_duration_s=settings.mean_fill_duration_s,
-            )
-        )
+        return asyncio.run(_run_config(settings))
     except (ConfigurationError, OSError, RuntimeSettingsError, ValueError) as error:
         print(f"configuration error: {error}", file=sys.stderr)
         return 2

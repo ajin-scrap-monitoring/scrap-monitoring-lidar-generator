@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 
 import scrap_monitoring_lidar_generator.cli as cli
+from scrap_monitoring_lidar_generator._cli_settings import RuntimeSettings
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs, load_generator_inputs
 from scrap_monitoring_lidar_generator.observation import ObservationPublisherStats
 from scrap_monitoring_lidar_generator.runtime import (
@@ -21,6 +22,31 @@ from scrap_monitoring_lidar_generator.transport import (
 )
 
 _ROOT = Path(__file__).parents[2]
+
+
+def _settings(
+    *,
+    config_path: Path | None = None,
+    scan_host: str | None = None,
+    scan_port: int | None = None,
+    observation_host: str = "127.0.0.1",
+    observation_port: int = 9100,
+    observation_interval_s: float = 1.0,
+    diagnostics_enabled: bool | None = None,
+    diagnostics_output_path: Path | None = None,
+    mean_fill_duration_s: float | None = None,
+) -> RuntimeSettings:
+    return RuntimeSettings(
+        config_path=config_path or _ROOT / "examples" / "generator.v1.json",
+        scan_host=scan_host,
+        scan_port=scan_port,
+        observation_host=observation_host,
+        observation_port=observation_port,
+        observation_interval_s=observation_interval_s,
+        diagnostics_enabled=diagnostics_enabled,
+        diagnostics_output_path=diagnostics_output_path,
+        mean_fill_duration_s=mean_fill_duration_s,
+    )
 
 
 def _summary(sender_halt: SenderHalt | None = None) -> GeneratorRunSummary:
@@ -52,11 +78,10 @@ def _summary(sender_halt: SenderHalt | None = None) -> GeneratorRunSummary:
 
 
 def test_main_runs_requested_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
-    received: dict[str, object] = {}
+    received: list[RuntimeSettings] = []
 
-    async def run_config(path: Path, **kwargs: object) -> int:
-        received["path"] = path
-        received.update(kwargs)
+    async def run_config(settings: RuntimeSettings) -> int:
+        received.append(settings)
         return 0
 
     monkeypatch.setattr(cli, "_run_config", run_config)
@@ -75,25 +100,14 @@ def test_main_runs_requested_configuration(monkeypatch: pytest.MonkeyPatch) -> N
         )
         == 0
     )
-    assert received == {
-        "path": Path("generator.json"),
-        "scan_host": None,
-        "scan_port": None,
-        "mean_fill_duration_s": None,
-        "observation_host": "127.0.0.1",
-        "observation_port": 9100,
-        "observation_interval_s": 1.0,
-        "diagnostics_enabled": None,
-        "diagnostics_output_path": None,
-    }
+    assert received == [_settings(config_path=Path("generator.json"))]
 
 
 def test_main_reads_environment_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    received: dict[str, object] = {}
+    received: list[RuntimeSettings] = []
 
-    async def run_config(path: Path, **kwargs: object) -> int:
-        received["path"] = path
-        received.update(kwargs)
+    async def run_config(settings: RuntimeSettings) -> int:
+        received.append(settings)
         return 0
 
     monkeypatch.setattr(cli, "_run_config", run_config)
@@ -115,17 +129,19 @@ def test_main_reads_environment_settings(monkeypatch: pytest.MonkeyPatch) -> Non
         )
         == 0
     )
-    assert received == {
-        "path": Path("generator.json"),
-        "scan_host": "height-calculation",
-        "scan_port": 9001,
-        "mean_fill_duration_s": 43_200.0,
-        "observation_host": "visualizer",
-        "observation_port": 9101,
-        "observation_interval_s": 2.0,
-        "diagnostics_enabled": True,
-        "diagnostics_output_path": Path("/data/diagnostics"),
-    }
+    assert received == [
+        _settings(
+            config_path=Path("generator.json"),
+            scan_host="height-calculation",
+            scan_port=9001,
+            mean_fill_duration_s=43_200.0,
+            observation_host="visualizer",
+            observation_port=9101,
+            observation_interval_s=2.0,
+            diagnostics_enabled=True,
+            diagnostics_output_path=Path("/data/diagnostics"),
+        )
+    ]
 
 
 def test_main_reports_missing_configuration(capsys: pytest.CaptureFixture[str]) -> None:
@@ -166,11 +182,10 @@ def test_main_requires_observation_endpoint(
 
 
 def test_main_passes_observation_stream_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
-    received: dict[str, object] = {}
+    received: list[RuntimeSettings] = []
 
-    async def run_config(path: Path, **kwargs: object) -> int:
-        received["path"] = path
-        received.update(kwargs)
+    async def run_config(settings: RuntimeSettings) -> int:
+        received.append(settings)
         return 0
 
     monkeypatch.setattr(cli, "_run_config", run_config)
@@ -191,17 +206,14 @@ def test_main_passes_observation_stream_arguments(monkeypatch: pytest.MonkeyPatc
         )
         == 0
     )
-    assert received == {
-        "path": Path("generator.json"),
-        "scan_host": None,
-        "scan_port": None,
-        "mean_fill_duration_s": None,
-        "observation_host": "visualizer",
-        "observation_port": 9200,
-        "observation_interval_s": 2.0,
-        "diagnostics_enabled": None,
-        "diagnostics_output_path": None,
-    }
+    assert received == [
+        _settings(
+            config_path=Path("generator.json"),
+            observation_host="visualizer",
+            observation_port=9200,
+            observation_interval_s=2.0,
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -290,7 +302,7 @@ def test_run_config_reports_final_delivery_state(
 
     monkeypatch.setattr(cli, "run_generator_application", run_application)
 
-    code = asyncio.run(cli._run_config(_ROOT / "examples" / "generator.v1.json"))
+    code = asyncio.run(cli._run_config(_settings()))
     output = capsys.readouterr()
 
     assert code == expected_code
@@ -323,12 +335,13 @@ def test_run_config_applies_scan_endpoint_overrides(monkeypatch: pytest.MonkeyPa
 
     code = asyncio.run(
         cli._run_config(
-            _ROOT / "examples" / "generator.v1.json",
-            scan_host="height-calculation",
-            scan_port=9200,
-            diagnostics_enabled=False,
-            diagnostics_output_path=Path("runtime-output"),
-            mean_fill_duration_s=43_200.0,
+            _settings(
+                scan_host="height-calculation",
+                scan_port=9200,
+                diagnostics_enabled=False,
+                diagnostics_output_path=Path("runtime-output"),
+                mean_fill_duration_s=43_200.0,
+            )
         )
     )
 
@@ -338,22 +351,8 @@ def test_run_config_applies_scan_endpoint_overrides(monkeypatch: pytest.MonkeyPa
 def test_runtime_scan_overrides_preserve_each_json_fallback() -> None:
     inputs = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
 
-    host_override = cli._apply_runtime_overrides(
-        inputs,
-        config_path=_ROOT / "examples" / "generator.v1.json",
-        scan_host="height-calculation",
-        scan_port=None,
-        diagnostics_enabled=None,
-        diagnostics_output_path=None,
-    )
-    port_override = cli._apply_runtime_overrides(
-        inputs,
-        config_path=_ROOT / "examples" / "generator.v1.json",
-        scan_host=None,
-        scan_port=9200,
-        diagnostics_enabled=None,
-        diagnostics_output_path=None,
-    )
+    host_override = cli._apply_runtime_overrides(inputs, _settings(scan_host="height-calculation"))
+    port_override = cli._apply_runtime_overrides(inputs, _settings(scan_port=9200))
 
     assert host_override.generator.transport.host == "height-calculation"
     assert host_override.generator.transport.port == 9000
@@ -368,20 +367,14 @@ def test_runtime_diagnostics_overrides_preserve_each_json_fallback() -> None:
     inputs = load_generator_inputs(config_path)
 
     enabled_override = cli._apply_runtime_overrides(
-        inputs,
-        config_path=config_path,
-        scan_host=None,
-        scan_port=None,
-        diagnostics_enabled=False,
-        diagnostics_output_path=None,
+        inputs, _settings(config_path=config_path, diagnostics_enabled=False)
     )
     path_override = cli._apply_runtime_overrides(
         inputs,
-        config_path=config_path,
-        scan_host=None,
-        scan_port=None,
-        diagnostics_enabled=None,
-        diagnostics_output_path=Path("runtime-output"),
+        _settings(
+            config_path=config_path,
+            diagnostics_output_path=Path("runtime-output"),
+        ),
     )
 
     assert enabled_override.generator.diagnostics.enabled is False
@@ -398,12 +391,7 @@ def test_runtime_mean_fill_duration_override_changes_generation_fingerprint() ->
 
     overridden = cli._apply_runtime_overrides(
         inputs,
-        config_path=config_path,
-        scan_host=None,
-        scan_port=None,
-        diagnostics_enabled=None,
-        diagnostics_output_path=None,
-        mean_fill_duration_s=43_200.0,
+        _settings(config_path=config_path, mean_fill_duration_s=43_200.0),
     )
 
     assert overridden.generator.scenario.mean_fill_duration_s == 43_200.0
@@ -416,11 +404,13 @@ def test_runtime_overrides_do_not_change_generation_fingerprint() -> None:
 
     overridden = cli._apply_runtime_overrides(
         inputs,
-        config_path=config_path,
-        scan_host="height-calculation",
-        scan_port=9200,
-        diagnostics_enabled=False,
-        diagnostics_output_path=Path("runtime-output"),
+        _settings(
+            config_path=config_path,
+            scan_host="height-calculation",
+            scan_port=9200,
+            diagnostics_enabled=False,
+            diagnostics_output_path=Path("runtime-output"),
+        ),
     )
 
     assert generator_input_fingerprint(overridden) == generator_input_fingerprint(inputs)
