@@ -1,8 +1,11 @@
 """Scene state and scenario transitions."""
 
 from scrap_monitoring_lidar_generator.scenario.height_field import (
+    DEFAULT_ANGLE_OF_REPOSE_DEG,
+    DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS,
     HeightField,
     RoughnessChange,
+    SlopeRelaxation,
     VolumeChange,
 )
 from scrap_monitoring_lidar_generator.scenario.rate_profile import (
@@ -28,6 +31,8 @@ from scrap_monitoring_lidar_generator.scenario.time_scale import (
 )
 
 __all__ = [
+    "DEFAULT_ANGLE_OF_REPOSE_DEG",
+    "DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS",
     "REFERENCE_MEAN_FILL_DURATION_S",
     "CollectionPlan",
     "FillPlan",
@@ -38,6 +43,7 @@ __all__ = [
     "ScenarioSettings",
     "ScenarioSimulator",
     "ScenarioSnapshot",
+    "SlopeRelaxation",
     "SmoothRateProfile",
     "SmoothRateSegment",
     "SurfaceModelSnapshot",

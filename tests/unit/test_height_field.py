@@ -1,7 +1,10 @@
 """Tests for the regular-grid surface state."""
 
+import math
+
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
 from scrap_monitoring_lidar_generator.scenario import HeightField
@@ -100,11 +103,14 @@ def test_add_and_remove_preserve_volume_in_concave_boundary() -> None:
     surface = HeightField(boundary, floor_z_m=-2.0, top_z_m=2.0, cell_size_m=0.3)
 
     added = surface.add_volume(4.5, center=Vec2(0.5, 0.5), spread_radius_m=0.4)
+    volume_before_relaxation_m3 = surface.volume_m3
+    surface.relax_slopes()
     removed = surface.remove_volume(1.75, center=Vec2(0.5, 1.5), spread_radius_m=0.5)
 
     assert surface.surface_area_m2 == pytest.approx(3.0)
     assert surface.capacity_m3 == pytest.approx(12.0)
     assert added.applied_m3 == pytest.approx(4.5)
+    assert volume_before_relaxation_m3 == pytest.approx(4.5)
     assert removed.applied_m3 == pytest.approx(1.75)
     assert surface.volume_m3 == pytest.approx(2.75)
 
@@ -259,6 +265,119 @@ def test_local_roughness_returns_zero_when_grid_cannot_represent_feature(
     assert surface.volume_m3 == 0.0
 
 
+def test_slope_relaxation_spreads_a_steep_deposit_and_preserves_volume(
+    square_boundary: Polygon2,
+) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=5.0,
+        cell_size_m=0.1,
+    )
+    surface.add_volume(0.25, center=Vec2(1.0, 0.5), spread_radius_m=0.1)
+    heights_before_m = surface.heights_m
+    volume_before_m3 = surface.volume_m3
+
+    relaxation = surface.relax_slopes()
+
+    heights_after_m = surface.heights_m
+    assert relaxation.moved_volume_m3 > 0.0
+    assert relaxation.remaining_excess_height_m < 0.001
+    assert surface.volume_m3 == pytest.approx(volume_before_m3, abs=1e-12)
+    assert np.max(heights_after_m) < np.max(heights_before_m)
+    assert np.count_nonzero(heights_after_m > 0.01) > np.count_nonzero(heights_before_m > 0.01)
+    assert np.min(heights_after_m) >= surface.floor_z_m
+    assert np.max(heights_after_m) <= surface.top_z_m
+
+
+def test_slope_relaxation_converges_to_angle_of_repose(
+    square_boundary: Polygon2,
+) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=5.0,
+        cell_size_m=0.1,
+    )
+    surface.add_volume(0.5, center=Vec2(1.0, 0.5), spread_radius_m=0.1)
+
+    relaxation = surface.relax_slopes(angle_of_repose_deg=35.0, max_iterations=256)
+
+    assert relaxation.iterations < 256
+    assert relaxation.remaining_excess_height_m < 1e-8
+    assert _maximum_neighbor_slope(surface.heights_m, cell_size_m=0.1) == pytest.approx(
+        math.tan(math.radians(35.0)),
+        abs=1e-8,
+    )
+
+
+def test_slope_relaxation_is_bounded_and_deterministic(
+    square_boundary: Polygon2,
+) -> None:
+    surfaces = [
+        HeightField(square_boundary, floor_z_m=0.0, top_z_m=5.0, cell_size_m=0.1) for _ in range(2)
+    ]
+    relaxations = []
+    for surface in surfaces:
+        surface.add_volume(0.5, center=Vec2(1.0, 0.5), spread_radius_m=0.1)
+        relaxations.append(surface.relax_slopes(max_iterations=1))
+
+    assert relaxations[0] == relaxations[1]
+    assert relaxations[0].iterations == 1
+    assert relaxations[0].remaining_excess_height_m > 0.0
+    np.testing.assert_array_equal(surfaces[0].heights_m, surfaces[1].heights_m)
+
+
+def test_slope_relaxation_preserves_a_symmetric_deposit(
+    square_boundary: Polygon2,
+) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=5.0,
+        cell_size_m=0.1,
+    )
+    surface.add_volume(0.25, center=Vec2(1.0, 0.5), spread_radius_m=0.1)
+
+    surface.relax_slopes()
+
+    heights_m = surface.heights_m
+    np.testing.assert_allclose(heights_m, np.flip(heights_m, axis=0), atol=1e-12, rtol=0.0)
+    np.testing.assert_allclose(heights_m, np.flip(heights_m, axis=1), atol=1e-12, rtol=0.0)
+
+
+@pytest.mark.parametrize("angle_of_repose_deg", [0.0, 90.0, float("nan"), float("inf")])
+def test_slope_relaxation_rejects_invalid_angle(
+    square_boundary: Polygon2,
+    angle_of_repose_deg: float,
+) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=2.0,
+        cell_size_m=0.5,
+    )
+
+    with pytest.raises(ValueError, match="angle of repose"):
+        surface.relax_slopes(angle_of_repose_deg=angle_of_repose_deg)
+
+
+@pytest.mark.parametrize("max_iterations", [0, True, 1.5])
+def test_slope_relaxation_rejects_invalid_iteration_limit(
+    square_boundary: Polygon2,
+    max_iterations: object,
+) -> None:
+    surface = HeightField(
+        square_boundary,
+        floor_z_m=0.0,
+        top_z_m=2.0,
+        cell_size_m=0.5,
+    )
+
+    with pytest.raises(ValueError, match="iterations"):
+        surface.relax_slopes(max_iterations=max_iterations)  # type: ignore[arg-type]
+
+
 def test_same_operations_produce_same_height_field(square_boundary: Polygon2) -> None:
     surfaces = [
         HeightField(square_boundary, floor_z_m=0.0, top_z_m=3.0, cell_size_m=0.2) for _ in range(2)
@@ -360,3 +479,17 @@ def test_rejects_invalid_change_location(square_boundary: Polygon2) -> None:
             radius_m=0.5,
             peak_delta_m=float("nan"),
         )
+
+
+def _maximum_neighbor_slope(
+    heights_m: NDArray[np.float64],
+    *,
+    cell_size_m: float,
+) -> float:
+    slopes = (
+        np.abs(np.diff(heights_m, axis=0)) / cell_size_m,
+        np.abs(np.diff(heights_m, axis=1)) / cell_size_m,
+        np.abs(heights_m[1:, 1:] - heights_m[:-1, :-1]) / (cell_size_m * math.sqrt(2.0)),
+        np.abs(heights_m[1:, :-1] - heights_m[:-1, 1:]) / (cell_size_m * math.sqrt(2.0)),
+    )
+    return max(float(np.max(slope)) for slope in slopes)

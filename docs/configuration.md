@@ -103,11 +103,13 @@ JSON에서만 관리한다. `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED`는 소�
 
 ## 코드 내부 기본값 감사
 
-운영 loader가 읽는 공개 실행 설정은 모든 필드를 명시하므로 다음 코드 상수는 설정 파일을 대신하지 않는다.
+다음 코드 상수는 JSON schema가 요구하는 공개 입력 필드를 대신하는 암묵적 설정이 아니다. 시나리오 시간 기준과 표면 이완 값은 모든 실행에 적용하는 프로젝트 합성 모델 정책이고, 나머지는 직접 API 또는 개발 경계 기본값이다.
 
 | 코드 상수 | 값 | 성격 |
 | --- | --- | --- |
 | `scenario.time_scale.REFERENCE_MEAN_FILL_DURATION_S` | 86,400초 | 24시간 시나리오 기준 |
+| `scenario.height_field.DEFAULT_ANGLE_OF_REPOSE_DEG` | 35도 | 합성 적재물의 경사 안정 기준 |
+| `scenario.height_field.DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS` | 32회 | 표면 갱신당 경사 이완 계산 상한 |
 | `measurement.reference.DEFAULT_MIN_DISTANCE_M` | 0.05m | 직접 생성 API의 거리 기본값 |
 | `measurement.reference.DEFAULT_MAX_DISTANCE_M` | 30m | 직접 생성 API의 거리 기본값 |
 | `transport.framing.DEFAULT_MAX_MESSAGE_BODY_BYTES` | 1,048,576 byte | 직접 framing API의 개발용 frame 상한 |
