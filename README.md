@@ -23,7 +23,38 @@ uv run --locked python -m tests.performance.generation \
 
 ## 설정
 
-공개 합성 입력 3개와 각 값의 출처 및 분류는 [`docs/configuration.md`](docs/configuration.md)가 정본이다. 실제 배포에서는 이 설정을 외부 directory에 복사하고 scan 및 관찰 수신 endpoint를 실행 환경에 맞게 제공한다.
+실행 입력은 JSON(JavaScript Object Notation) 생성 모델과 배포 설정의 2개 범주로 구성한다.
+
+| 계층 | 책임 | 제공 방법 |
+| --- | --- | --- |
+| 생성 모델 | 환경, 센서, 시나리오, 측정, 품질과 전송 정책 | version 1 JSON 파일 3개 |
+| 배포 설정 | 설정 경로, 외부 endpoint와 진단 출력 위치 | CLI 인자 또는 환경변수 |
+
+CLI(Command-Line Interface) 인자, 환경변수, JSON, 코드 기본값 순서로 값을 선택한다. 앞선
+계층에 값이 있으면 뒤의 계층 값은 사용하지 않는다. scan endpoint와 진단 설정은 환경변수가
+없으면 JSON 값을 사용한다. 관찰 host와 port는 JSON에 포함되지 않으므로 CLI 또는
+환경변수로 반드시 제공한다.
+
+| 환경변수 | CLI 인자 | 필수 여부 및 fallback |
+| --- | --- | --- |
+| `SCRAP_LIDAR_GENERATOR_CONFIG` | `--config` | 둘 중 하나 필수 |
+| `SCRAP_LIDAR_GENERATOR_SCAN_HOST` | `--scan-host` | `transport.host` |
+| `SCRAP_LIDAR_GENERATOR_SCAN_PORT` | `--scan-port` | `transport.port` |
+| `SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST` | `--observation-host` | 둘 중 하나 필수 |
+| `SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT` | `--observation-port` | 둘 중 하나 필수 |
+| `SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S` | `--observation-interval-s` | 1초 |
+| `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED` | `--diagnostics-enabled` | `diagnostics.enabled` |
+| `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH` | `--diagnostics-output-path` | `diagnostics.output_path` |
+
+`SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED`는 `true` 또는 `false`만 허용한다. port는
+1부터 65,535까지이며 관찰 주기는 0초보다 크고 86,400초 이하여야 한다. 상대 진단 경로는
+생성 설정 파일의 directory를 기준으로 해석한다. 잘못된 값은 시작 전에 종료 코드 2와
+`configuration error`로 거부한다.
+
+센서 위치와 방향, 시나리오, 측정 사양과 품질 분포는 중첩 객체, 배열과 좌표를 포함하고 같은
+설정 및 seed로 재현돼야 하므로 JSON으로 관리한다. 환경변수는 장비마다 바뀌는 endpoint와
+경로만 덮어쓴다. 공개 합성 입력 3개와 각 값의 출처 및 분류는
+[`docs/configuration.md`](docs/configuration.md)가 정본이다.
 
 ## 개발 및 검증
 
@@ -41,40 +72,122 @@ uv build --no-sources
 
 ## 배포
 
-엣지 배포에는 build 도구가 필요하지 않다. GitHub Release의 `oci-image.txt`에 기록된
-불변 digest의 ARM64 OCI(Open Container Initiative) image와 실행 설정 3개를 전달한다.
-배포 담당자가 준비해야 하는 입력은 다음 4개다.
+엣지 장비에는 64-bit ARM Linux, Docker Engine과 외부 설정만 필요하다. Repository clone,
+Python, uv와 compiler는 운영 실행에 필요하지 않다. 검증 도구를 실행하는 장비에는 Git,
+GitHub CLI와 Bash도 필요하다.
 
-| 입력 | 설정 위치 | 의미 |
-| --- | --- | --- |
-| 생성 실행 설정 | `generator.v1.json` | 시나리오, 측정, scan 송신과 진단 정책 |
-| scan 수신 endpoint | `generator.v1.json`의 `transport.host`, `transport.port` | 높이 계산 process가 수신하는 기존 scan stream |
-| 관찰 수신 endpoint | `--observation-host`, `--observation-port` | 별도 시각화 프로그램이 수신하는 적재 모델 stream |
-| 불변 image | GitHub Release의 `oci-image.txt` | digest로 고정한 `linux/arm64` image |
+### 최신 Release 이미지 검증
 
-`examples/`의 3개 JSON 파일을 같은 directory에 복사하고
-`generator.v1.json`의 scan 수신 endpoint를 배포 환경 값으로 바꾼다. 진단을 사용하면
-`diagnostics.output_path`를 container 내부의 `/data/diagnostics`로 지정한다. 실제 사설
-주소와 자격 증명은 Repository에 commit하지 않는다.
-
-생성기는 scan 수신 server에 센서마다 독립된 outbound TCP(Transmission Control Protocol)
-connection을 만들고 관찰 수신 server에 별도 connection을 만든다. 두 host는 container
-network에서 해석되고 접근 가능해야 한다. 관찰 수신기가 연결되지 않아도 scan 생성과 기존
-scan 송신은 계속된다.
-
-개발 환경에서는 다음 명령으로 같은 실행 경로를 확인할 수 있다.
+다음 명령은 Repository를 새로 받고, 최신 게시 Release와 같은 source revision의 검증
+도구로 ARM64 이미지를 30초 동안 검사한다. Docker 사용 권한이 없는 계정은 `docker`
+명령과 `tests/edge/run.sh`를 권한이 있는 계정으로 실행한다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator \
-  --config /path/to/generator.v1.json \
-  --observation-host observation-receiver-host \
-  --observation-port 9100
+git clone https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-generator.git
+cd scrap-monitoring-lidar-generator
+
+RELEASE_TAG="$(gh release view \
+  --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
+  --json tagName --jq .tagName)"
+git switch --detach "$RELEASE_TAG"
+
+RELEASE_DIR="$(mktemp -d)"
+gh release download "$RELEASE_TAG" \
+  --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
+  --pattern oci-image.txt \
+  --dir "$RELEASE_DIR"
+IMAGE_REF="$(sed -n '1p' "$RELEASE_DIR/oci-image.txt")"
+docker image pull "$IMAGE_REF"
+
+VALIDATION_DIR="$(mktemp -d)"
+tests/edge/run.sh \
+  --image "$IMAGE_REF" \
+  --config-dir examples \
+  --duration-s 30 \
+  --cpus 2 \
+  --output-dir "$VALIDATION_DIR"
 ```
 
-프로그램은 고정된 LiDAR 2대의 회전 완료 시각에 맞춰 스캔을 생성하고 센서별 전송 lane으로 TCP 수신 프로그램에 전달한다. 실행마다 UUID(Universally Unique Identifier) 형식의 새로운 `run_id`를 만들며 SIGINT 또는 SIGTERM을 받으면 생성과 송신을 정상 종료하고 전체 전송 집계를 출력한다. 환경, version 또는 응답 규격 오류로 전체 scan 전송이 중단되면 원인 센서와 오류를 즉시 표준 오류에 기록하고 시나리오 계산과 bounded buffer 만료는 계속한다.
+성공하면 마지막에 `edge_validation=passed sensors=2`가 출력된다. 검증기는 임시 scan 및
+관찰 수신기를 실행하고 센서별 수신, ACK(Acknowledgement), 중복, sequence 누락, 폐기와
+연결 실패를 검사한다. 결과는 `VALIDATION_DIR`의 `generator.log`, `receiver.log`,
+`docker-stats.jsonl`과 `container-inspect.json`에 남는다. CPU 2 core는 검증 시작값이며
+운영 자원 기준이 아니다.
 
-OCI(Open Container Initiative) 이미지 선택, 설정 준비, container 실행과 ARM64 Release
-절차는 [`docs/deployment.md`](docs/deployment.md)를 따른다.
+### 운영 설정 준비
+
+검증한 Release checkout의 공개 JSON 3개를 배포 장비의 같은 directory에 배치한다.
+진단 directory는 이미지의 실행 사용자 UID(User Identifier)와 GID(Group Identifier)
+10001이 쓸 수 있어야 한다.
+
+```bash
+CONFIG_DIR=/opt/scrap-monitoring-lidar-generator/config
+DIAGNOSTICS_DIR=/var/lib/scrap-monitoring-lidar-generator/diagnostics
+
+sudo install -d -m 0755 "$CONFIG_DIR"
+sudo install -m 0644 \
+  examples/environment.v1.json \
+  examples/generator.v1.json \
+  examples/quality-profile.v1.json \
+  "$CONFIG_DIR/"
+sudo install -d -o 10001 -g 10001 -m 0700 "$DIAGNOSTICS_DIR"
+```
+
+배포 장비에서 `/etc/scrap-monitoring-lidar-generator.env`를 다음 형식으로 만들고 실제
+DNS(Domain Name System) 이름 또는 IP 주소를 입력한다. 이 파일은 Git에 추가하지 않는다.
+
+```bash
+sudo touch /etc/scrap-monitoring-lidar-generator.env
+sudo chmod 0600 /etc/scrap-monitoring-lidar-generator.env
+sudoedit /etc/scrap-monitoring-lidar-generator.env
+```
+
+```dotenv
+SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v1.json
+SCRAP_LIDAR_GENERATOR_SCAN_HOST=height-calculation.example
+SCRAP_LIDAR_GENERATOR_SCAN_PORT=9000
+SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST=visualizer.example
+SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT=9100
+SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S=1
+SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=true
+SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics
+```
+
+### 운영 container 실행
+
+`IMAGE_REF`는 앞에서 검증한 Release asset의 digest 참조를 사용한다. tag나 `latest`는
+사용하지 않는다.
+
+```bash
+sudo docker run --detach \
+  --name scrap-monitoring-lidar-generator \
+  --restart unless-stopped \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  --env-file /etc/scrap-monitoring-lidar-generator.env \
+  --mount type=bind,src="$CONFIG_DIR",dst=/config,readonly \
+  --mount type=bind,src="$DIAGNOSTICS_DIR",dst=/data/diagnostics \
+  "$IMAGE_REF"
+```
+
+생성기는 scan 수신 server에 센서별 outbound TCP(Transmission Control Protocol) 연결을
+만들고 관찰 수신 server에 별도 연결을 만든다. 두 endpoint는 container에서 이름을
+해석하고 router를 거쳐 접근할 수 있어야 한다. 관찰 연결 실패는 scan 생성과 기존 scan
+송신을 중단시키지 않는다.
+
+실행 상태, 적용 이미지와 종료 집계는 다음 명령으로 확인한다.
+
+```bash
+sudo docker container inspect scrap-monitoring-lidar-generator \
+  --format '{{.State.Status}} {{.State.ExitCode}} {{.Image}}'
+sudo docker logs --tail 20 scrap-monitoring-lidar-generator
+sudo docker image inspect "$IMAGE_REF" --format '{{index .RepoDigests 0}}'
+```
+
+프로그램은 실행마다 UUID(Universally Unique Identifier) 형식의 `run_id`를 만들고 SIGINT
+또는 SIGTERM에서 생성과 송신을 정상 종료한 뒤 전체 전송 집계를 출력한다. 이미지 선택,
+자원 상한, 결과 해석과 Release 절차의 상세 기준은
+[`docs/deployment.md`](docs/deployment.md)를 따른다.
 
 엣지 생성기의 상시 적재 모델 관찰 stream과 별도 장비의 3D 시각화는 [`docs/observation.md`](docs/observation.md)를 따른다.
 

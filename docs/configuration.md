@@ -16,6 +16,36 @@
 
 공개 환경과 품질 설정은 `lidar_1`, `lidar_2`의 센서 2대를 정확히 포함한다. 생성 실행의 조립 loader는 환경 센서 수가 2가 아니면 입력을 거부한다. 공간 치수, 센서 배치와 투입구 좌표는 위 정본 파일에서만 관리한다.
 
+## 실행 설정 계층
+
+실행값은 4개 계층을 다음 순서로 적용한다.
+
+| 우선순위 | 계층 | 범위 |
+| --- | --- | --- |
+| 1 | CLI(Command-Line Interface) 인자 | 실행 시 명시한 배포값 |
+| 2 | 환경변수 | container 또는 process에 주입한 배포값 |
+| 3 | version 1 JSON | 생성 모델과 환경변수가 없는 배포값 |
+| 4 | 코드 기본값 | 관찰 주기 1초 |
+
+앞선 계층의 값이 있으면 뒤의 계층 값은 사용하지 않는다. 환경변수 계층은 다음 8개 값만
+처리한다.
+
+| 환경변수 | CLI 인자 | JSON 또는 기본 fallback |
+| --- | --- | --- |
+| `SCRAP_LIDAR_GENERATOR_CONFIG` | `--config` | 없음 |
+| `SCRAP_LIDAR_GENERATOR_SCAN_HOST` | `--scan-host` | `transport.host` |
+| `SCRAP_LIDAR_GENERATOR_SCAN_PORT` | `--scan-port` | `transport.port` |
+| `SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST` | `--observation-host` | 없음 |
+| `SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT` | `--observation-port` | 없음 |
+| `SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S` | `--observation-interval-s` | 1초 |
+| `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED` | `--diagnostics-enabled` | `diagnostics.enabled` |
+| `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH` | `--diagnostics-output-path` | `diagnostics.output_path` |
+
+환경변수는 설정 경로, endpoint와 진단 출력처럼 배포 환경에 종속되는 값만 덮어쓴다. 센서,
+시나리오, 측정, 품질, seed와 전송 제한 및 복구 정책은 구조 검증과 결정론적 재현을 위해
+JSON에서만 관리한다. `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED`는 소문자 `true`와
+`false`만 허용한다. 상대 진단 출력 경로는 생성 설정 파일의 directory를 기준으로 해석한다.
+
 ## 출처 분류
 
 ### 센서 하드웨어 기준
@@ -67,9 +97,9 @@
 
 ### 전송과 진단 정책
 
-`transport`의 endpoint, frame 크기, buffer, timeout과 재접속 값은 센서 사양이 아닌 개발용 TCP 전송 정책이다. 전송 계약과 기본 frame 상한은 [`contracts/v1/README.md`](../contracts/v1/README.md)에서 정의한다. `diagnostics`와 `seed`는 검증 출력의 범위와 결정론을 제어하는 개발 정책이다. 관찰 수신 endpoint는 실제 주소를 공개 설정에 복제하지 않도록 필수 CLI 인자로 받고, 관찰 주기의 코드 기본값은 1초다.
+`transport`의 endpoint, frame 크기, buffer, timeout과 재접속 값은 센서 사양이 아닌 개발용 TCP 전송 정책이다. 전송 계약과 기본 frame 상한은 [`contracts/v1/README.md`](../contracts/v1/README.md)에서 정의한다. `diagnostics`와 `seed`는 검증 출력의 범위와 결정론을 제어하는 개발 정책이다. 실제 scan 및 관찰 수신 endpoint는 CLI 또는 환경변수로 주입하고, 관찰 주기의 코드 기본값은 1초다.
 
-운영 실행은 설정 파일에 명시한 전송 endpoint를 사용한다. 공개 예시의 `receiver` 주소는 합성 실행을 위한 container network 이름이며 실제 운영 주소를 나타내지 않는다.
+운영 실행은 scan endpoint override가 없으면 설정 파일에 명시한 전송 endpoint를 사용한다. 공개 예시의 `receiver` 주소는 합성 실행을 위한 container network 이름이며 실제 운영 주소를 나타내지 않는다.
 
 ## 코드 내부 기본값 감사
 

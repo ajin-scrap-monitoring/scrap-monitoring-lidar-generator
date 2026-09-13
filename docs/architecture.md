@@ -17,7 +17,7 @@
 | `transport/` | MessagePack 직렬화, 스캔 송신, ACK(Acknowledgement), 버퍼와 재시도 |
 | `observation/` | 읽기 전용 적재 모델 snapshot의 version 1 JSON Lines TCP stream과 latest-only 비동기 출력 |
 | `runtime/` | 시뮬레이션 시각 진행, 센서 작업과 전송 작업의 생명주기 조정 |
-| `cli.py` | CLI(Command-Line Interface) 설정 로딩, 의존성 조립, 시작과 정상 종료 처리 |
+| `_cli_settings.py`, `cli.py` | CLI(Command-Line Interface) 및 환경변수 설정 계층, 의존성 조립, 시작과 정상 종료 처리 |
 
 의존 방향은 다음과 같다.
 
@@ -31,7 +31,7 @@ measurement -> scenario
 runtime -> observation -> scenario
 ```
 
-`geometry`는 다른 프로젝트 패키지를 참조하지 않는다. `configuration`은 공간 입력의 의미 검증에 `geometry`를 사용한다. `scenario`는 측정과 전송을 참조하지 않고, `measurement`는 전송을 참조하지 않는다. `transport`는 장면 상태를 변경하지 않는다. `runtime`과 `cli.py`만 장기 실행 객체를 조립하고 생명주기를 제어한다.
+`geometry`는 다른 프로젝트 패키지를 참조하지 않는다. `configuration`은 공간 입력의 의미 검증에 `geometry`를 사용한다. `scenario`는 측정과 전송을 참조하지 않고, `measurement`는 전송을 참조하지 않는다. `transport`는 장면 상태를 변경하지 않는다. `_cli_settings.py`는 CLI 값과 환경변수의 우선순위 및 형식을 검증한다. `runtime`과 `cli.py`만 장기 실행 객체를 조립하고 생명주기를 제어한다.
 
 `observation`은 `scenario`가 제공하는 읽기 전용 snapshot을 기존 scan 계약과 별도 TCP stream으로 계속 전송한다. publisher는 연결마다 정적 장면 header를 1회 보내고 기본 1초마다 동적 표면을 보낸다. 전송 시각을 먼저 검사한 뒤 snapshot을 복사하고 최신 observation 1개만 보관한다. 연결 실패, 재연결과 느린 수신기는 scan 생성 및 전송 생명주기와 분리된다. 3D 표시, 기록과 MP4 생성은 별도 시각화 Repository가 담당한다.
 
@@ -101,7 +101,7 @@ scalar 광선 교차는 수치 정확성의 기준 구현이다. 스캔 생성 �
 
 `MeasurementResult`는 같은 회전 일정의 `TimedReferenceScan`과 `TimedMeasuredScan`을 별도 필드로 유지한다. `runtime.MeasurementGenerationRuntime`은 시각 순서로 완료된 기준 스캔에 센서별 측정 생성기를 적용한다.
 
-`runtime.run_scan_generation`은 실행 시작 단조 시각에 회전 완료 경과 시각을 더한 절대 deadline으로 생성 속도를 조절한다. `runtime.run_generator_application`은 실행별 UUID(Universally Unique Identifier)와 UTC 기준 시각을 만들고 측정, 진단 및 비동기 송신의 수명주기를 함께 관리한다. CLI는 `--config`로 실행 설정을 받고 SIGINT와 SIGTERM에서 생성과 송신을 정상 종료한다.
+`runtime.run_scan_generation`은 실행 시작 단조 시각에 회전 완료 경과 시각을 더한 절대 deadline으로 생성 속도를 조절한다. `runtime.run_generator_application`은 실행별 UUID(Universally Unique Identifier)와 UTC 기준 시각을 만들고 측정, 진단 및 비동기 송신의 수명주기를 함께 관리한다. CLI는 CLI 인자를 환경변수와 JSON보다 우선해 적용하고 SIGINT와 SIGTERM에서 생성과 송신을 정상 종료한다.
 
 종료 집계는 생성, 적재, 전송, ACK, 거부, 시간 만료, 용량 폐기, 크기 초과, 연결 실패와 미응답 frame 및 byte를 구분한다. 첫 집계 줄은 기존 필드를 유지하고 두 번째 `transport` 줄이 전체 전송 상태를 제공한다.
 
@@ -159,6 +159,7 @@ src/
     observation/
     runtime/
       performance.py
+    _cli_settings.py
     __main__.py
     cli.py
 tests/

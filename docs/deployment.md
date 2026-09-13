@@ -23,14 +23,15 @@ docker run --rm scrap-monitoring-lidar-generator:local --help
 
 ## 컨테이너 실행
 
-배포 입력은 4개다.
+배포 입력은 5개다.
 
 | 입력 | 제공 방법 | 필수 조건 |
 | --- | --- | --- |
 | ARM64 image | Release asset `oci-image.txt`의 불변 참조 | `linux/arm64`, Public GHCR package |
 | 생성 설정 directory | LiDAR 2대를 포함하는 `examples/`의 3개 JSON 파일을 기반으로 만든 외부 설정 | container의 `/config`에 읽기 전용 mount |
-| scan 수신 endpoint | `generator.v1.json`의 `transport.host`, `transport.port` | container에서 접근 가능한 높이 계산 process의 TCP server |
-| 관찰 수신 endpoint | `--observation-host`, `--observation-port` | container에서 접근 가능한 시각화 프로그램의 TCP server |
+| scan 수신 endpoint | 환경변수 또는 `generator.v1.json`의 `transport` | container에서 접근 가능한 높이 계산 process의 TCP server |
+| 관찰 수신 endpoint | 환경변수 또는 CLI 인자 | container에서 접근 가능한 시각화 프로그램의 TCP server |
+| 진단 출력 | 환경변수 또는 `generator.v1.json`의 `diagnostics` | host의 쓰기 가능한 별도 directory |
 
 GitHub Container Registry(GHCR) image는 Public이므로 pull credential이 필요하지 않다.
 Release asset에서 불변 image 참조를 가져와 image를 준비한다.
@@ -50,11 +51,24 @@ docker image pull "$IMAGE_REF"
 `environment_path`와 `quality_profile_path`는 `generator.v1.json`이 있는 directory를
 기준으로 해석된다.
 
-`generator.v1.json`의 `transport.host`와 `transport.port`를 실제 scan 수신 endpoint로
-바꾼다. 진단을 사용하면 `diagnostics.output_path`를 `/data/diagnostics`로 바꾸고 host의
-진단 directory를 UID(User Identifier)와 GID(Group Identifier) 10001이 쓸 수 있게
-준비한다. 진단을 사용하지 않으면 `diagnostics.enabled`를 `false`로 바꾸고 진단 mount를
-생략할 수 있다. 실제 사설 주소, 자격 증명과 운영 설정은 Git에 추가하지 않는다.
+배포값은 다음 형식의 장비 전용 환경변수 파일로 준비한다. 실제 사설 주소, 자격 증명과
+운영 설정은 Git에 추가하지 않는다.
+
+```dotenv
+SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v1.json
+SCRAP_LIDAR_GENERATOR_SCAN_HOST=height-calculation.example
+SCRAP_LIDAR_GENERATOR_SCAN_PORT=9000
+SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST=visualizer.example
+SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT=9100
+SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S=1
+SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=true
+SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics
+```
+
+환경변수 파일은 배포 계정만 읽을 수 있게 한다. 진단을 사용하면 host의 진단 directory를
+UID(User Identifier)와 GID(Group Identifier) 10001이 쓸 수 있게 준비한다. 진단을
+사용하지 않으면 `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=false`로 설정하고 진단 mount를
+생략할 수 있다.
 
 생성 설정은 이미지에 포함하지 않고 읽기 전용 bind mount로 전달한다. 다음 명령은 재부팅
 후에도 container를 다시 시작하며 Docker log file의 크기를 제한한다.
@@ -65,18 +79,18 @@ docker run --detach \
   --restart unless-stopped \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
+  --env-file /path/to/scrap-monitoring-lidar-generator.env \
   --mount type=bind,src=/path/to/config,dst=/config,readonly \
   --mount type=bind,src=/path/to/diagnostics,dst=/data/diagnostics \
-  "$IMAGE_REF" \
-  --config /config/generator.v1.json \
-  --observation-host <observation-receiver-host> \
-  --observation-port 9100
+  "$IMAGE_REF"
 ```
 
 scan 수신 endpoint와 관찰 수신 endpoint는 서로 다른 설정이다. 두 TCP server는 같은
 장비의 서로 다른 port일 수도 있고 서로 다른 장비일 수도 있다. 두 host에는 Docker
 container 안에서 이름을 해석하고 router를 거쳐 접근할 수 있는 DNS(Domain Name System)
 이름 또는 IP 주소를 사용한다. 공개 Repository에는 실제 사설 주소를 기록하지 않는다.
+전체 환경변수 목록, CLI 대응값과 우선순위는 [`configuration.md`](configuration.md)의
+실행 설정 계층이 정본이다.
 
 Docker Engine의 `--cpus`와 `--memory`로 생성 프로그램의 자원 상한을 지정할 수 있다.
 대상 Raspberry Pi 5에서 다른 edge process와 함께 측정한 결과가 확정되기 전에는
