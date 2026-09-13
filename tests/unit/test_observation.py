@@ -119,6 +119,7 @@ def test_observation_header_round_trips_with_static_scene() -> None:
         (1.9, 2.5),
         (0.0, 2.5),
     )
+    assert decoded.scene.inlet_positions_xy_m == ((1.5, 1.5), (2.85, 2.593))
     assert [sensor.sensor_id for sensor in decoded.scene.sensors] == ["lidar_1", "lidar_2"]
 
 
