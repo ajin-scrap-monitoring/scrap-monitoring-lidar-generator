@@ -18,6 +18,11 @@ wire 형식, field, 자료형, 허용 범위와 센서 좌표 변환의 정본�
 
 생성기는 `generator.v1.json`의 `transport.host`와 `transport.port`가 가리키는 높이 계산 프로세스에 LiDAR 2대의 outbound 연결을 하나씩 만든다. 높이 계산 프로세스는 해당 endpoint에서 2개의 동시 연결을 수락한다. 한 연결에는 해당 센서의 scan만 전송된다. 배포 담당자는 다음 설정을 두 프로세스에 일치시킨다.
 
+엣지 배포에서는 생성기와 높이 계산 프로세스를 별도 container로 실행하고 같은 사용자 정의
+Docker network에 연결한다. 생성기의 scan host에는 높이 계산 container 이름 또는 network
+alias를 사용하고, scan port에는 높이 계산 프로세스의 실제 TCP 수신 port를 사용한다.
+생성기 container의 `127.0.0.1`은 높이 계산 container를 가리키지 않는다.
+
 | 설정 | 생성기 입력 | 높이 계산 프로세스 입력 |
 | --- | --- | --- |
 | endpoint | `transport.host`, `transport.port` | listen host와 port |

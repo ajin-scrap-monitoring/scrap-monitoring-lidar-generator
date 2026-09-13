@@ -136,9 +136,13 @@ sudo install -d -o 10001 -g 10001 -m 0700 "$DIAGNOSTICS_DIR"
 ```
 
 배포 장비에서 [`.env.example`](.env.example)을 장비 전용 환경변수 파일로 복사한다. 파일의
-`height-calculation.example`과 `visualizer.example`을 container에서 접근 가능한 실제
-DNS(Domain Name System) 이름 또는 IP 주소로 바꾼다. port와 경로가 배포 환경에서 다르면
-같이 수정한다. 장비 전용 파일은 Git에 추가하지 않는다.
+`SCRAP_LIDAR_GENERATOR_SCAN_HOST=height-calculation`은 아래의 공용 Docker network에서
+높이 계산 container가 사용하는 이름 또는 network alias다.
+`<height-calculation-listen-port>`는 유효한 port가 아니므로 높이 계산 프로세스의 실제 TCP
+수신 port로 반드시 바꾼다. 이 프로젝트는 scan 전용 관례 port를 정하지 않는다.
+`visualizer.example`은 container에서 router를 거쳐 접근 가능한 시각화 프로그램의 실제
+DNS(Domain Name System) 이름 또는 IP 주소로 바꾼다. 경로와 나머지 값도 배포 환경에 맞게
+확인한다. 장비 전용 파일은 Git에 추가하지 않는다.
 
 ```bash
 sudo install -o root -g root -m 0600 \
@@ -154,11 +158,20 @@ sudoedit /etc/scrap-monitoring-lidar-generator.env
 ### 운영 container 실행
 
 `IMAGE_REF`는 앞에서 검증한 Release asset의 digest 참조를 사용한다. tag나 `latest`는
-사용하지 않는다.
+사용하지 않는다. 실행 구성 요소는 생성기 container, 높이 계산 container와 별도 장비의
+관찰 수신 프로그램 3개다. 생성기와 높이 계산 container는 같은 사용자 정의 Docker
+network에 연결한다. 높이 계산 container는 `height-calculation` 이름 또는 network alias로
+scan TCP server를 열어야 한다. 관찰 수신 프로그램은 이 Docker network에 참여할 필요가
+없다.
 
 ```bash
+EDGE_NETWORK=scrap-monitoring-edge
+sudo docker network inspect "$EDGE_NETWORK" >/dev/null 2>&1 || \
+  sudo docker network create "$EDGE_NETWORK"
+
 sudo docker run --detach \
   --name scrap-monitoring-lidar-generator \
+  --network "$EDGE_NETWORK" \
   --restart unless-stopped \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
@@ -169,9 +182,9 @@ sudo docker run --detach \
 ```
 
 생성기는 scan 수신 server에 센서별 outbound TCP(Transmission Control Protocol) 연결을
-만들고 관찰 수신 server에 별도 연결을 만든다. 두 endpoint는 container에서 이름을
-해석하고 router를 거쳐 접근할 수 있어야 한다. 관찰 연결 실패는 scan 생성과 기존 scan
-송신을 중단시키지 않는다.
+만들고 관찰 수신 server에 별도 연결을 만든다. scan endpoint는 공용 Docker network의
+내부 DNS로 해석한다. 관찰 endpoint는 container에서 router를 거쳐 접근할 수 있어야 한다.
+관찰 연결 실패는 scan 생성과 기존 scan 송신을 중단시키지 않는다.
 
 실행 상태, 적용 이미지와 종료 집계는 다음 명령으로 확인한다.
 

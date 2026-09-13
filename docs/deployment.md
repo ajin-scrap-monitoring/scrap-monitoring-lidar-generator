@@ -29,7 +29,7 @@ docker run --rm scrap-monitoring-lidar-generator:local --help
 | --- | --- | --- |
 | ARM64 image | Release asset `oci-image.txt`의 불변 참조 | `linux/arm64`, Public GHCR package |
 | 생성 설정 directory | LiDAR 2대를 포함하는 `examples/`의 3개 JSON 파일을 기반으로 만든 외부 설정 | container의 `/config`에 읽기 전용 mount |
-| scan 수신 endpoint | 환경변수 또는 `generator.v1.json`의 `transport` | container에서 접근 가능한 높이 계산 process의 TCP server |
+| scan 수신 endpoint | 환경변수 또는 `generator.v1.json`의 `transport` | 공용 Docker network에서 접근 가능한 높이 계산 process의 TCP server |
 | 관찰 수신 endpoint | 환경변수 또는 CLI 인자 | container에서 접근 가능한 시각화 프로그램의 TCP server |
 | 진단 출력 | 환경변수 또는 `generator.v1.json`의 `diagnostics` | host의 쓰기 가능한 별도 directory |
 
@@ -37,11 +37,15 @@ GitHub Container Registry(GHCR) image는 Public이므로 pull credential이 필�
 Release asset에서 불변 image 참조를 가져와 image를 준비한다.
 
 ```bash
-gh release download v0.4.0 \
+RELEASE_TAG="$(gh release view \
+  --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
+  --json tagName --jq .tagName)"
+RELEASE_DIR="$(mktemp -d)"
+gh release download "$RELEASE_TAG" \
   --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
   --pattern oci-image.txt \
-  --dir /tmp/scrap-monitoring-lidar-generator-release
-IMAGE_REF="$(sed -n '1p' /tmp/scrap-monitoring-lidar-generator-release/oci-image.txt)"
+  --dir "$RELEASE_DIR"
+IMAGE_REF="$(sed -n '1p' "$RELEASE_DIR/oci-image.txt")"
 docker image pull "$IMAGE_REF"
 ```
 
@@ -52,8 +56,12 @@ docker image pull "$IMAGE_REF"
 기준으로 해석된다.
 
 Repository의 [`.env.example`](../.env.example)을 장비 전용 환경변수 파일로 복사하고 실제
-scan 및 관찰 endpoint를 입력한다. 장비 전용 파일, 실제 사설 주소와 운영 설정은 Git에
-추가하지 않는다.
+scan 및 관찰 endpoint를 입력한다. `SCRAP_LIDAR_GENERATOR_SCAN_HOST`의 예시값
+`height-calculation`은 공용 Docker network의 높이 계산 container 이름 또는 network
+alias다. `SCRAP_LIDAR_GENERATOR_SCAN_PORT`의
+`<height-calculation-listen-port>`는 높이 계산 프로세스의 실제 TCP 수신 port로 반드시
+바꾼다. 이 프로젝트는 scan 전용 관례 port를 정하지 않는다. 장비 전용 파일, 실제 사설
+주소와 운영 설정은 Git에 추가하지 않는다.
 
 ```bash
 install -m 0600 \
@@ -68,12 +76,23 @@ UID(User Identifier)와 GID(Group Identifier) 10001이 쓸 수 있게 준비한�
 기본 예시는 24시간인 86,400초다. 환경변수 파일에는 크레덴셜을 넣지 않는다. 현재 scan 및
 관찰 계약에는 인증 입력이 없으며 환경변수는 비밀값을 처리하지 않는다.
 
-생성 설정은 이미지에 포함하지 않고 읽기 전용 bind mount로 전달한다. 다음 명령은 재부팅
-후에도 container를 다시 시작하며 Docker log file의 크기를 제한한다.
+운영 구성 요소는 생성기 container, 높이 계산 container와 별도 장비의 관찰 수신 프로그램
+3개다. 생성기와 높이 계산 container는 같은 사용자 정의 Docker network에 연결하고, 높이
+계산 container는 `height-calculation` 이름 또는 network alias로 TCP server를 연다. 관찰
+수신 프로그램은 이 network에 참여하지 않아도 된다.
+
+생성 설정은 이미지에 포함하지 않고 읽기 전용 bind mount로 전달한다. 다음 명령은 공용
+network를 준비하고, 재부팅 후에도 생성기 container를 다시 시작하며 Docker log file의
+크기를 제한한다.
 
 ```bash
+EDGE_NETWORK=scrap-monitoring-edge
+docker network inspect "$EDGE_NETWORK" >/dev/null 2>&1 || \
+  docker network create "$EDGE_NETWORK"
+
 docker run --detach \
   --name scrap-monitoring-lidar-generator \
+  --network "$EDGE_NETWORK" \
   --restart unless-stopped \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
@@ -83,10 +102,10 @@ docker run --detach \
   "$IMAGE_REF"
 ```
 
-scan 수신 endpoint와 관찰 수신 endpoint는 서로 다른 설정이다. 두 TCP server는 같은
-장비의 서로 다른 port일 수도 있고 서로 다른 장비일 수도 있다. 두 host에는 Docker
-container 안에서 이름을 해석하고 router를 거쳐 접근할 수 있는 DNS(Domain Name System)
-이름 또는 IP 주소를 사용한다. 공개 Repository에는 실제 사설 주소를 기록하지 않는다.
+scan 수신 endpoint와 관찰 수신 endpoint는 서로 다른 설정이다. scan endpoint는 공용
+Docker network의 내부 DNS로 해석한다. 관찰 endpoint에는 생성기 container에서 router를
+거쳐 접근할 수 있는 DNS(Domain Name System) 이름 또는 IP 주소를 사용한다. 공개
+Repository에는 실제 사설 주소를 기록하지 않는다.
 전체 환경변수 목록, CLI 대응값과 우선순위는 [`configuration.md`](configuration.md)의
 실행 설정 계층이 정본이다.
 
@@ -150,14 +169,14 @@ Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PA
 
 ## 현재 검증 기준
 
-현재 ARM64 배포 기준은 `v0.4.0` Release다. Release asset의 image는 `linux/arm64` 단일
-실행 platform과 Public package 상태를 확인했다. 고정 LiDAR 2대 생성, 센서별 독립 전송
-lane, 전체 종료 전송 집계, 환경변수 설정 계층, 반복 가능한 엣지 검증과 적재 모델 관찰
-stream을 포함한다.
+현재 게시된 ARM64 배포 산출물은 `v0.5.1` Release다. Release asset의 image는
+`linux/arm64` 단일 실행 platform과 Public package 상태를 확인했다. 고정 LiDAR 2대 생성,
+센서별 독립 전송 lane, 전체 종료 전송 집계, 환경변수 설정 계층, 반복 가능한 엣지 검증과
+적재 모델 관찰 stream을 포함한다.
 
-Raspberry Pi 5에서 scan ACK test double과 관찰 stream test double을 사용한 실행 검증을
-통과했다. 고정된 센서 2개 구성은 CPU 2 core 상한의 30초 검증에서 모든 scan과 관찰
-record를 환경변수 파일로 주입한 endpoint에 손실 없이 전달했다. source revision, 불변
-image digest와 장비별 관측값은
+Raspberry Pi 5에서 직접 검증한 최신 기준은 `v0.4.0`이다. scan ACK test double과 관찰
+stream test double을 사용한 고정 센서 2개 구성은 CPU 2 core 상한의 30초 검증에서 모든
+scan과 관찰 record를 환경변수 파일로 주입한 endpoint에 손실 없이 전달했다. source
+revision, 불변 image digest와 장비별 관측값은
 [`performance.md`](performance.md)가 정본이다. 실제 scan 수신 프로그램과 별도 시각화
 장비의 endpoint가 확정되면 검증한 digest와 외부 운영 설정으로 상시 container를 배치한다.

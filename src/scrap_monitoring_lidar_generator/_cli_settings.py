@@ -40,40 +40,49 @@ class RuntimeSettings:
     mean_fill_duration_s: float | None
 
 
+@dataclass(frozen=True, slots=True)
+class RuntimeSettingOverrides:
+    """Unresolved command-line values that may override the environment."""
+
+    config_path: Path | None = None
+    scan_host: str | None = None
+    scan_port: int | None = None
+    observation_host: str | None = None
+    observation_port: int | None = None
+    observation_interval_s: float | None = None
+    diagnostics_enabled: bool | None = None
+    diagnostics_output_path: Path | None = None
+    mean_fill_duration_s: float | None = None
+
+
 def resolve_runtime_settings(
     *,
     environment: Mapping[str, str],
-    config_path: Path | None,
-    scan_host: str | None,
-    scan_port: int | None,
-    observation_host: str | None,
-    observation_port: int | None,
-    observation_interval_s: float | None,
-    diagnostics_enabled: bool | None,
-    diagnostics_output_path: Path | None,
-    mean_fill_duration_s: float | None = None,
+    overrides: RuntimeSettingOverrides | None = None,
 ) -> RuntimeSettings:
     """Resolve CLI values before environment values and code defaults."""
+    if overrides is None:
+        overrides = RuntimeSettingOverrides()
     resolved_config_path = _resolve(
-        config_path,
+        overrides.config_path,
         environment,
         CONFIG_ENVIRONMENT_VARIABLE,
         _parse_path,
     )
     resolved_observation_host = _resolve(
-        observation_host,
+        overrides.observation_host,
         environment,
         OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
         _parse_host,
     )
     resolved_observation_port = _resolve(
-        observation_port,
+        overrides.observation_port,
         environment,
         OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
         _parse_port,
     )
     resolved_observation_interval = _resolve(
-        observation_interval_s,
+        overrides.observation_interval_s,
         environment,
         OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE,
         _parse_observation_interval,
@@ -85,13 +94,13 @@ def resolve_runtime_settings(
             environment_variable=CONFIG_ENVIRONMENT_VARIABLE,
         ),
         scan_host=_resolve(
-            scan_host,
+            overrides.scan_host,
             environment,
             SCAN_HOST_ENVIRONMENT_VARIABLE,
             _parse_host,
         ),
         scan_port=_resolve(
-            scan_port,
+            overrides.scan_port,
             environment,
             SCAN_PORT_ENVIRONMENT_VARIABLE,
             _parse_port,
@@ -112,19 +121,19 @@ def resolve_runtime_settings(
             else resolved_observation_interval
         ),
         diagnostics_enabled=_resolve(
-            diagnostics_enabled,
+            overrides.diagnostics_enabled,
             environment,
             DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE,
             _parse_boolean,
         ),
         diagnostics_output_path=_resolve(
-            diagnostics_output_path,
+            overrides.diagnostics_output_path,
             environment,
             DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE,
             _parse_path,
         ),
         mean_fill_duration_s=_resolve(
-            mean_fill_duration_s,
+            overrides.mean_fill_duration_s,
             environment,
             MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
             _parse_positive_number,

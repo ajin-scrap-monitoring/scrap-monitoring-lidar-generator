@@ -14,6 +14,7 @@ from scrap_monitoring_lidar_generator._cli_settings import (
     OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
     SCAN_HOST_ENVIRONMENT_VARIABLE,
     SCAN_PORT_ENVIRONMENT_VARIABLE,
+    RuntimeSettingOverrides,
     RuntimeSettings,
     RuntimeSettingsError,
     resolve_runtime_settings,
@@ -48,15 +49,17 @@ def _resolve(
 ) -> RuntimeSettings:
     return resolve_runtime_settings(
         environment=environment,
-        config_path=config_path,
-        scan_host=scan_host,
-        scan_port=scan_port,
-        observation_host=observation_host,
-        observation_port=observation_port,
-        observation_interval_s=observation_interval_s,
-        diagnostics_enabled=diagnostics_enabled,
-        diagnostics_output_path=diagnostics_output_path,
-        mean_fill_duration_s=mean_fill_duration_s,
+        overrides=RuntimeSettingOverrides(
+            config_path=config_path,
+            scan_host=scan_host,
+            scan_port=scan_port,
+            observation_host=observation_host,
+            observation_port=observation_port,
+            observation_interval_s=observation_interval_s,
+            diagnostics_enabled=diagnostics_enabled,
+            diagnostics_output_path=diagnostics_output_path,
+            mean_fill_duration_s=mean_fill_duration_s,
+        ),
     )
 
 
@@ -199,3 +202,10 @@ def test_environment_setting_is_documented_in_root_readme(name: str) -> None:
     readme = (_ROOT / "README.md").read_text(encoding="utf-8")
 
     assert f"`{name}`" in readme
+
+
+def test_env_example_uses_shared_network_scan_placeholders() -> None:
+    env_example = (_ROOT / ".env.example").read_text(encoding="utf-8")
+
+    assert "SCRAP_LIDAR_GENERATOR_SCAN_HOST=height-calculation" in env_example
+    assert "SCRAP_LIDAR_GENERATOR_SCAN_PORT=<height-calculation-listen-port>" in env_example
