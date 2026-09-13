@@ -11,6 +11,7 @@ from scrap_monitoring_lidar_generator.observation import (
 )
 
 CONFIG_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_CONFIG"
+MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S"
 SCAN_HOST_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_SCAN_HOST"
 SCAN_PORT_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_SCAN_PORT"
 OBSERVATION_HOST_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST"
@@ -36,6 +37,7 @@ class RuntimeSettings:
     observation_interval_s: float
     diagnostics_enabled: bool | None
     diagnostics_output_path: Path | None
+    mean_fill_duration_s: float | None
 
 
 def resolve_runtime_settings(
@@ -49,6 +51,7 @@ def resolve_runtime_settings(
     observation_interval_s: float | None,
     diagnostics_enabled: bool | None,
     diagnostics_output_path: Path | None,
+    mean_fill_duration_s: float | None = None,
 ) -> RuntimeSettings:
     """Resolve CLI values before environment values and code defaults."""
     resolved_config_path = _resolve(
@@ -120,6 +123,12 @@ def resolve_runtime_settings(
             DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE,
             _parse_path,
         ),
+        mean_fill_duration_s=_resolve(
+            mean_fill_duration_s,
+            environment,
+            MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
+            _parse_positive_number,
+        ),
     )
 
 
@@ -166,14 +175,19 @@ def _parse_port(value: str, name: str) -> int:
 
 
 def _parse_observation_interval(value: str, name: str) -> float:
+    result = _parse_positive_number(value, name)
+    if result > MAX_OBSERVATION_INTERVAL_S:
+        raise RuntimeSettingsError(f"{name} must not exceed {MAX_OBSERVATION_INTERVAL_S:g} seconds")
+    return result
+
+
+def _parse_positive_number(value: str, name: str) -> float:
     try:
         result = float(value)
     except ValueError as error:
         raise RuntimeSettingsError(f"{name} must be a number") from error
     if not math.isfinite(result) or result <= 0.0:
         raise RuntimeSettingsError(f"{name} must be a finite positive number")
-    if result > MAX_OBSERVATION_INTERVAL_S:
-        raise RuntimeSettingsError(f"{name} must not exceed {MAX_OBSERVATION_INTERVAL_S:g} seconds")
     return result
 
 
