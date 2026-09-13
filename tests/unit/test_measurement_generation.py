@@ -16,6 +16,7 @@ from scrap_monitoring_lidar_generator.measurement import (
     SpatialDistanceResolver,
     TimedReferenceScan,
 )
+from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import HQ_DISTANCE_STEP_M
 
 
 def _frequencies(*entries: tuple[int, int]) -> tuple[int, ...]:
@@ -136,7 +137,7 @@ def test_noise_is_truncated_and_can_invalidate_a_boundary_distance() -> None:
     boundary = generator.generate(boundary_reference).measured.scan
 
     errors_m = interior.distances_m - 5.0
-    assert bool(np.all(np.abs(errors_m) <= 0.2))
+    assert bool(np.all(np.abs(errors_m) <= 0.2 + HQ_DISTANCE_STEP_M / 2.0))
     assert not bool(np.any(np.abs(errors_m) == 0.2))
     assert abs(float(np.mean(errors_m))) < 0.01
     assert bool(np.any(boundary.distances_m == 0.0))

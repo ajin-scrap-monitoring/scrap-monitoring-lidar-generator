@@ -20,6 +20,8 @@ Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로�
 
 `docs/architecture.md`는 패키지 경계, 의존 방향과 검증 계층의 정본이다. `docs/development-plan.md`는 구현 순서, 단계별 산출물과 완료 조건의 정본이다.
 
+`docs/sdk-compatibility.md`는 RPLIDAR SDK 이후 scan 변환과 생성 데이터 정합성 기준의 정본이다. 실제 장비 관측값은 공개 기본값이나 fixture로 복제하지 않고 `docs/internal/`의 별도 산출물로 관리한다.
+
 새 작업 세션은 `docs/development-plan.md`의 현재 상태와 다음 작업을 확인한 뒤 범위를 정한다. 실제 수신 프로그램과 대상 장비의 공유 부하 검증이 필요한 작업은 문서에 남은 선행 조건을 먼저 충족한다.
 
 프로그램 코드는 `src/scrap_monitoring_lidar_generator/`, 자동 검증은 `tests/`, 공개 가능한 합성 입력 예시는 `examples/`에 둔다. 새로운 최상위 경계가 필요하면 코드와 함께 아키텍처 문서를 갱신한다.

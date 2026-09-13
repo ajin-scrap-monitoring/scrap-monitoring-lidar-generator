@@ -8,6 +8,7 @@ from scrap_monitoring_lidar_generator.measurement import (
     SensorRotationScheduler,
     create_seeded_rotation_scheduler,
 )
+from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import HQ_ANGLE_STEP_DEG
 
 
 def test_integer_rate_ratio_produces_one_ordered_full_rotation() -> None:
@@ -27,7 +28,15 @@ def test_integer_rate_ratio_produces_one_ordered_full_rotation() -> None:
     assert first.completed_at_s == 0.5
     assert first.captured_elapsed_s == 0.0
     np.testing.assert_allclose(first.point_elapsed_times_s, (0.0, 0.125, 0.25, 0.375))
-    np.testing.assert_allclose(first.angles_deg, (350.0, 80.0, 170.0, 260.0))
+    np.testing.assert_allclose(
+        first.angles_deg,
+        (350.00244140625, 80.00244140625, 170.00244140625, 260.00244140625),
+    )
+    np.testing.assert_allclose(
+        first.angles_deg / HQ_ANGLE_STEP_DEG,
+        np.rint(first.angles_deg / HQ_ANGLE_STEP_DEG),
+        atol=1e-12,
+    )
     assert second.scan_id == 2
     assert second.rotation_started_at_s == 0.5
     assert second.completed_at_s == 1.0

@@ -20,6 +20,9 @@ from scrap_monitoring_lidar_generator.measurement.models import (
     TimedMeasuredScan,
     TimedReferenceScan,
 )
+from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import (
+    quantize_hq_distances_m,
+)
 from scrap_monitoring_lidar_generator.measurement.spatial import SpatialDistanceResolver
 
 type FloatArray = NDArray[np.float64]
@@ -168,6 +171,7 @@ class MeasurementGenerator:
             distorted_valid = distances_m > 0.0
             distances_m[distorted_valid] += noise_m[distorted_valid]
 
+        distances_m = quantize_hq_distances_m(distances_m)
         final_valid = (
             (distances_m > 0.0)
             & (distances_m >= self._min_distance_m)

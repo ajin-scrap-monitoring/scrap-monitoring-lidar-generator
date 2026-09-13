@@ -72,6 +72,8 @@ JSON Schema 검사에 더하여 다음 10개 의미 규칙을 적용한다.
 
 각 측정점은 `[angle_deg, distance_m, quality]` 순서의 배열이다. MessagePack 송신 시 각도와 거리는 64비트 부동소수점으로 인코딩하고 품질은 8비트 범위의 정수 값으로 인코딩한다. 측정점 순서는 생성 또는 수집 순서를 유지한다.
 
+RPLIDAR SDK HQ 노드에서 이 값으로 변환하는 공식 자료형과 timestamp 대응 기준은 [`docs/sdk-compatibility.md`](../../docs/sdk-compatibility.md)를 따른다. 이 변환은 version 1의 자료형과 허용 범위를 좁히지 않는다.
+
 각도와 거리는 유한한 수여야 한다. `angle_deg`의 범위는 `0 <= angle_deg < 360`이다. `distance_m`은 무효 측정의 0 또는 `0.05 <= distance_m <= 30` 범위의 유효 거리다. `quality`의 범위는 `0 <= quality <= 255`다.
 
 수신 프로그램은 같은 `environment_id`의 환경 설정에서 `sensor_id`와 일치하는 센서를 선택한다. `angle_rad = angle_deg * pi / 180`, `direction = cos(angle_rad) * u0 + sin(angle_rad) * u90`, `point = p0_m + distance_m * direction` 순서로 유효 측정의 공간 좌표를 계산한다. `distance_m`이 0인 측정은 공간 좌표로 변환하지 않는다.

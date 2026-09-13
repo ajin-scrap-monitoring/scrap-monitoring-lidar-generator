@@ -214,6 +214,7 @@ sudo docker image inspect "$IMAGE_REF" --format '{{index .RepoDigests 0}}'
 | [`docs/development-plan.md`](docs/development-plan.md) | 구현 순서, 산출물과 단계별 완료 조건 |
 | [`docs/dependencies.md`](docs/dependencies.md) | 직접 의존성, 버전, 사용 목적과 라이선스 |
 | [`docs/configuration.md`](docs/configuration.md) | 공개 설정 정본, 기본값 출처와 합성값 분류 |
+| [`docs/sdk-compatibility.md`](docs/sdk-compatibility.md) | RPLIDAR SDK 이후 scan 변환과 생성 데이터 정합성 기준 |
 | [`docs/deployment.md`](docs/deployment.md) | OCI 이미지, 컨테이너 실행과 Release 절차 |
 | [`docs/performance.md`](docs/performance.md) | 생성 구간별 부하 측정과 결과 해석 |
 | [`docs/height-calculation-integration.md`](docs/height-calculation-integration.md) | 한 회전 scan의 높이 계산 프로세스 인계 계약 |

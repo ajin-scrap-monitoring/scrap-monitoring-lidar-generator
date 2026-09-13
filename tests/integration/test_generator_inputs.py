@@ -14,6 +14,7 @@ from scrap_monitoring_lidar_generator.configuration import (
 )
 from scrap_monitoring_lidar_generator.geometry import HitKind, Vec2
 from scrap_monitoring_lidar_generator.measurement import MeasurementResult
+from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import HQ_DISTANCE_STEP_M
 from scrap_monitoring_lidar_generator.runtime import (
     MeasurementGenerationRuntime,
     build_measurement_generation_runtime,
@@ -353,9 +354,14 @@ def test_generator_inputs_apply_shared_falling_material_events(tmp_path: Path) -
                 reductions_m.append(reference_point.distance_m - float(measured_distance_m))
 
     assert reductions_m
-    assert any(reduction_m == pytest.approx(0.2) for reduction_m in reductions_m)
+    quantization_tolerance_m = HQ_DISTANCE_STEP_M / 2.0 + 1e-12
+    assert any(
+        reduction_m == pytest.approx(0.2, abs=quantization_tolerance_m)
+        for reduction_m in reductions_m
+    )
     assert all(
-        reduction_m == pytest.approx(0.0) or reduction_m == pytest.approx(0.2)
+        reduction_m == pytest.approx(0.0, abs=quantization_tolerance_m)
+        or reduction_m == pytest.approx(0.2, abs=quantization_tolerance_m)
         for reduction_m in reductions_m
     )
 
@@ -402,9 +408,14 @@ def test_generator_inputs_apply_collection_occlusion_events(tmp_path: Path) -> N
                 reductions_m.append(reference_point.distance_m - float(measured_distance_m))
 
     assert reductions_m
-    assert any(reduction_m == pytest.approx(0.2) for reduction_m in reductions_m)
+    quantization_tolerance_m = HQ_DISTANCE_STEP_M / 2.0 + 1e-12
+    assert any(
+        reduction_m == pytest.approx(0.2, abs=quantization_tolerance_m)
+        for reduction_m in reductions_m
+    )
     assert all(
-        reduction_m == pytest.approx(0.0) or reduction_m == pytest.approx(0.2)
+        reduction_m == pytest.approx(0.0, abs=quantization_tolerance_m)
+        or reduction_m == pytest.approx(0.2, abs=quantization_tolerance_m)
         for reduction_m in reductions_m
     )
 
