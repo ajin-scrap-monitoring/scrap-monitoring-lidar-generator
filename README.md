@@ -28,16 +28,17 @@ uv run --locked python -m tests.performance.generation \
 | 계층 | 책임 | 제공 방법 |
 | --- | --- | --- |
 | 생성 모델 | 환경, 센서, 시나리오, 측정, 품질과 전송 정책 | version 1 JSON 파일 3개 |
-| 배포 설정 | 설정 경로, 외부 endpoint와 진단 출력 위치 | CLI 인자 또는 환경변수 |
+| 실행 override | 평균 적재 주기, 설정 경로, 외부 endpoint와 진단 출력 위치 | CLI 인자 또는 환경변수 |
 
 CLI(Command-Line Interface) 인자, 환경변수, JSON, 코드 기본값 순서로 값을 선택한다. 앞선
-계층에 값이 있으면 뒤의 계층 값은 사용하지 않는다. scan endpoint와 진단 설정은 환경변수가
-없으면 JSON 값을 사용한다. 관찰 host와 port는 JSON에 포함되지 않으므로 CLI 또는
-환경변수로 반드시 제공한다.
+계층에 값이 있으면 뒤의 계층 값은 사용하지 않는다. 평균 적재 주기, scan endpoint와 진단
+설정은 환경변수가 없으면 JSON 값을 사용한다. 관찰 host와 port는 JSON에 포함되지 않으므로
+CLI 또는 환경변수로 반드시 제공한다.
 
 | 환경변수 | CLI 인자 | 필수 여부 및 fallback |
 | --- | --- | --- |
 | `SCRAP_LIDAR_GENERATOR_CONFIG` | `--config` | 둘 중 하나 필수 |
+| `SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S` | `--mean-fill-duration-s` | `scenario.mean_fill_duration_s` |
 | `SCRAP_LIDAR_GENERATOR_SCAN_HOST` | `--scan-host` | `transport.host` |
 | `SCRAP_LIDAR_GENERATOR_SCAN_PORT` | `--scan-port` | `transport.port` |
 | `SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST` | `--observation-host` | 둘 중 하나 필수 |
@@ -46,14 +47,15 @@ CLI(Command-Line Interface) 인자, 환경변수, JSON, 코드 기본값 순서�
 | `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED` | `--diagnostics-enabled` | `diagnostics.enabled` |
 | `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH` | `--diagnostics-output-path` | `diagnostics.output_path` |
 
-`SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED`는 `true` 또는 `false`만 허용한다. port는
-1부터 65,535까지이며 관찰 주기는 0초보다 크고 86,400초 이하여야 한다. 상대 진단 경로는
-생성 설정 파일의 directory를 기준으로 해석한다. 잘못된 값은 시작 전에 종료 코드 2와
-`configuration error`로 거부한다.
+평균 적재 주기는 0초보다 큰 유한한 값이며 `.env.example`의 기본값은 24시간에 해당하는
+86,400초다. `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED`는 `true` 또는 `false`만 허용한다.
+port는 1부터 65,535까지이며 관찰 주기는 0초보다 크고 86,400초 이하여야 한다. 상대 진단
+경로는 생성 설정 파일의 directory를 기준으로 해석한다. 잘못된 값은 시작 전에 종료 코드
+2와 `configuration error`로 거부한다.
 
 센서 위치와 방향, 시나리오, 측정 사양과 품질 분포는 중첩 객체, 배열과 좌표를 포함하고 같은
-설정 및 seed로 재현돼야 하므로 JSON으로 관리한다. 환경변수는 장비마다 바뀌는 endpoint와
-경로만 덮어쓴다. 공개 합성 입력 3개와 각 값의 출처 및 분류는
+설정 및 seed로 재현돼야 하므로 JSON으로 관리한다. 환경변수는 평균 적재 주기와 장비마다
+바뀌는 endpoint 및 경로만 덮어쓴다. 공개 합성 입력 3개와 각 값의 출처 및 분류는
 [`docs/configuration.md`](docs/configuration.md)가 정본이다.
 
 ## 개발 및 검증
@@ -146,7 +148,8 @@ sudoedit /etc/scrap-monitoring-lidar-generator.env
 ```
 
 `.env.example`과 장비 전용 파일에는 크레덴셜을 넣지 않는다. 현재 생성기의 scan 및 관찰
-계약에는 인증 입력이 없으며 환경변수 8개는 endpoint, port, 경로와 동작 설정만 제공한다.
+계약에는 인증 입력이 없으며 환경변수 9개는 평균 적재 주기, endpoint, port, 경로와 동작
+설정만 제공한다.
 
 ### 운영 container 실행
 

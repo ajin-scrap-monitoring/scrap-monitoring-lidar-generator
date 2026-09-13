@@ -64,8 +64,9 @@ install -m 0600 \
 환경변수 파일은 배포 계정만 읽을 수 있게 한다. 진단을 사용하면 host의 진단 directory를
 UID(User Identifier)와 GID(Group Identifier) 10001이 쓸 수 있게 준비한다. 진단을
 사용하지 않으면 `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=false`로 설정하고 진단 mount를
-생략할 수 있다. 환경변수 파일에는 크레덴셜을 넣지 않는다. 현재 scan 및 관찰 계약에는
-인증 입력이 없으며 환경변수는 비밀값을 처리하지 않는다.
+생략할 수 있다. 평균 적재 주기는 `SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S`로 지정하며
+기본 예시는 24시간인 86,400초다. 환경변수 파일에는 크레덴셜을 넣지 않는다. 현재 scan 및
+관찰 계약에는 인증 입력이 없으며 환경변수는 비밀값을 처리하지 않는다.
 
 생성 설정은 이미지에 포함하지 않고 읽기 전용 bind mount로 전달한다. 다음 명령은 재부팅
 후에도 container를 다시 시작하며 Docker log file의 크기를 제한한다.

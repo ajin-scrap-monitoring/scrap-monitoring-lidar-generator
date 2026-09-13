@@ -14,6 +14,7 @@ from scrap_monitoring_lidar_generator._cli_settings import (
     CONFIG_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE,
+    MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
     OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
     OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE,
     OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
@@ -47,6 +48,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--config",
         type=_path,
         help=f"path to the generator v1 JSON configuration; env: {CONFIG_ENVIRONMENT_VARIABLE}",
+    )
+    parser.add_argument(
+        "--mean-fill-duration-s",
+        type=_positive_float,
+        help=(
+            "override the mean fill duration in seconds; "
+            f"env: {MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE}"
+        ),
     )
     parser.add_argument(
         "--scan-host",
@@ -112,6 +121,7 @@ async def _run_config(
     observation_interval_s: float = DEFAULT_OBSERVATION_INTERVAL_S,
     diagnostics_enabled: bool | None = None,
     diagnostics_output_path: Path | None = None,
+    mean_fill_duration_s: float | None = None,
 ) -> int:
     inputs = load_generator_inputs(path)
     inputs = _apply_runtime_overrides(
@@ -121,6 +131,7 @@ async def _run_config(
         scan_port=scan_port,
         diagnostics_enabled=diagnostics_enabled,
         diagnostics_output_path=diagnostics_output_path,
+        mean_fill_duration_s=mean_fill_duration_s,
     )
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -189,8 +200,17 @@ def _apply_runtime_overrides(
     scan_port: int | None,
     diagnostics_enabled: bool | None,
     diagnostics_output_path: Path | None,
+    mean_fill_duration_s: float | None = None,
 ) -> GeneratorInputs:
     generator = inputs.generator
+    if mean_fill_duration_s is not None:
+        generator = replace(
+            generator,
+            scenario=replace(
+                generator.scenario,
+                mean_fill_duration_s=mean_fill_duration_s,
+            ),
+        )
     if scan_host is not None or scan_port is not None:
         transport = replace(
             generator.transport,
@@ -236,6 +256,7 @@ def main(
             observation_interval_s=arguments.observation_interval_s,
             diagnostics_enabled=arguments.diagnostics_enabled,
             diagnostics_output_path=arguments.diagnostics_output_path,
+            mean_fill_duration_s=arguments.mean_fill_duration_s,
         )
         return asyncio.run(
             _run_config(
@@ -247,6 +268,7 @@ def main(
                 observation_interval_s=settings.observation_interval_s,
                 diagnostics_enabled=settings.diagnostics_enabled,
                 diagnostics_output_path=settings.diagnostics_output_path,
+                mean_fill_duration_s=settings.mean_fill_duration_s,
             )
         )
     except (ConfigurationError, OSError, RuntimeSettingsError, ValueError) as error:

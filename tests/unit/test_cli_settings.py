@@ -8,6 +8,7 @@ from scrap_monitoring_lidar_generator._cli_settings import (
     CONFIG_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE,
+    MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
     OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
     OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE,
     OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
@@ -21,6 +22,7 @@ from scrap_monitoring_lidar_generator._cli_settings import (
 _ROOT = Path(__file__).parents[2]
 _ENVIRONMENT_VARIABLES = (
     CONFIG_ENVIRONMENT_VARIABLE,
+    MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
     SCAN_HOST_ENVIRONMENT_VARIABLE,
     SCAN_PORT_ENVIRONMENT_VARIABLE,
     OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
@@ -42,6 +44,7 @@ def _resolve(
     observation_interval_s: float | None = None,
     diagnostics_enabled: bool | None = None,
     diagnostics_output_path: Path | None = None,
+    mean_fill_duration_s: float | None = None,
 ) -> RuntimeSettings:
     return resolve_runtime_settings(
         environment=environment,
@@ -53,6 +56,7 @@ def _resolve(
         observation_interval_s=observation_interval_s,
         diagnostics_enabled=diagnostics_enabled,
         diagnostics_output_path=diagnostics_output_path,
+        mean_fill_duration_s=mean_fill_duration_s,
     )
 
 
@@ -60,6 +64,7 @@ def test_resolves_all_environment_settings() -> None:
     settings = _resolve(
         {
             CONFIG_ENVIRONMENT_VARIABLE: "/config/generator.v1.json",
+            MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE: "43200",
             SCAN_HOST_ENVIRONMENT_VARIABLE: "height-calculation",
             SCAN_PORT_ENVIRONMENT_VARIABLE: "9001",
             OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "visualizer",
@@ -71,6 +76,7 @@ def test_resolves_all_environment_settings() -> None:
     )
 
     assert settings.config_path == Path("/config/generator.v1.json")
+    assert settings.mean_fill_duration_s == 43_200.0
     assert settings.scan_host == "height-calculation"
     assert settings.scan_port == 9001
     assert settings.observation_host == "visualizer"
@@ -84,6 +90,7 @@ def test_cli_settings_take_precedence_without_parsing_environment_values() -> No
     settings = _resolve(
         {
             CONFIG_ENVIRONMENT_VARIABLE: "",
+            MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE: "invalid",
             SCAN_HOST_ENVIRONMENT_VARIABLE: "",
             SCAN_PORT_ENVIRONMENT_VARIABLE: "invalid",
             OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "",
@@ -100,9 +107,11 @@ def test_cli_settings_take_precedence_without_parsing_environment_values() -> No
         observation_interval_s=3.0,
         diagnostics_enabled=False,
         diagnostics_output_path=Path("cli-diagnostics"),
+        mean_fill_duration_s=21_600.0,
     )
 
     assert settings.config_path == Path("cli.json")
+    assert settings.mean_fill_duration_s == 21_600.0
     assert settings.scan_host == "scan-cli"
     assert settings.scan_port == 9002
     assert settings.observation_host == "observation-cli"
@@ -126,6 +135,7 @@ def test_keeps_optional_scan_endpoint_unset_and_uses_observation_interval_defaul
     assert settings.observation_interval_s == 1.0
     assert settings.diagnostics_enabled is None
     assert settings.diagnostics_output_path is None
+    assert settings.mean_fill_duration_s is None
 
 
 @pytest.mark.parametrize(
@@ -158,6 +168,9 @@ def test_rejects_missing_required_settings(environment: dict[str, str], expected
         (SCAN_PORT_ENVIRONMENT_VARIABLE, "zero"),
         (SCAN_PORT_ENVIRONMENT_VARIABLE, "0"),
         (SCAN_PORT_ENVIRONMENT_VARIABLE, "65536"),
+        (MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE, "zero"),
+        (MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE, "0"),
+        (MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE, "nan"),
         (OBSERVATION_HOST_ENVIRONMENT_VARIABLE, ""),
         (OBSERVATION_PORT_ENVIRONMENT_VARIABLE, "zero"),
         (OBSERVATION_PORT_ENVIRONMENT_VARIABLE, "0"),
