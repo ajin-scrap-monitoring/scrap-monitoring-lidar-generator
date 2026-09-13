@@ -30,7 +30,9 @@
 전송 중단 오류의 즉시 보고를 제공한다. 로컬 기준 진단 version 2는 wire scan과 같은 실행
 식별자 및 대표 시각을 기록한다. RPLIDAR SDK 이후 변환 기준은 공식 HQ 노드의 각도 및
 거리 표현 단위, 첫 측정점 timestamp와 수집 순서를 정의하며 생성 결과는 같은 표현 단위로
-양자화한다.
+양자화한다. 환경, scan, ACK, 오류 schema와 fixture, 소비자 책임 및 수락 항목은
+`height-calculation-contract-proposal/`의 자기완결 전달 묶음에서 관리한다. Producer 제안은
+완료됐으며 높이 계산 프로세스의 채택과 실제 통합은 완료되지 않았다.
 두 번째 목표의 최신 Release와 digest 기반 실행 산출물이 게시됐다. Raspberry Pi 5의 최신
 직접 검증 기준은 `v0.4.0`이며, 공개 합성 환경과 생성 실행 입력은 LiDAR 2대로
 고정되어 있다. CPU 2 core 상한의 30초 검증에서 환경변수 파일로 주입한 endpoint에 scan과
@@ -45,12 +47,12 @@ Repository의 범위가 아니다. 적재 모델은 국소 투입 형상에 안�
 
 남은 작업은 3개다.
 
-1. 높이 계산 프로세스의 실제 수신 port와 version 1 scan 계약 적용 상태를 확인하고 생성 및 송신 경로를 다시 검토한다.
+1. 높이 계산 Repository에 `height-calculation-contract-proposal/`을 전달하고 version 1 계약의 수락 또는 변경 제안을 확인한다.
 2. 실제 높이 계산 프로세스가 준비되면 같은 Docker network에서 생성 프로그램과 통합 검증한다.
 3. 다른 edge process가 준비되면 Raspberry Pi 5 8GB에서 동시 부하를 측정하고 허용 CPU, 메모리, 지연 및 지속 실행 기준을 확정한다.
 
 높이 계산 프로세스의 구현 책임과 통합 완료 조건은
-[`docs/height-calculation-integration.md`](height-calculation-integration.md)가 정본이다. 높이 계산
+[`height-calculation-contract-proposal/`](../height-calculation-contract-proposal/)이 정본이다. 높이 계산
 알고리즘과 별도 시각화 프로그램의 구현은 이 Repository의 범위가 아니다.
 
 관찰 stream은 다음 기준이다.

@@ -71,6 +71,14 @@ jobs:
       - name: Build package
         run: uv build --no-sources
 
+      - name: Package height calculation contract proposal
+        run: |
+          tar \
+            --create \
+            --gzip \
+            --file dist/height-calculation-contract-proposal-v1.tar.gz \
+            height-calculation-contract-proposal
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
 

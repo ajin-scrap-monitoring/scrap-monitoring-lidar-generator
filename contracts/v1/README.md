@@ -1,43 +1,30 @@
-# 입력 및 전송 계약 버전 1
+# 생성기 입력 계약 버전 1
 
 ## 적용 범위
 
-이 디렉토리는 공통 환경, 스캔 및 응답과 생성 프로그램 전용 설정의 버전 1 계약을 관리한다. JSON Schema의 `2020-12`는 schema 문법의 판이며 이 프로젝트의 계약 버전과 구분한다.
+이 디렉토리는 생성 프로그램 전용 설정 계약과 외부 공유 계약의 호환 진입 경로를 관리한다. 높이 계산 프로세스에 전달하는 환경, scan, ACK(Acknowledgement), 오류 schema와 fixture의 정본은 [`height-calculation-contract-proposal/`](../../height-calculation-contract-proposal/)이다.
 
 | 파일 | 계약 |
 | --- | --- |
-| `ack.schema.json` | 정상 처리된 스캔의 ACK(Acknowledgement) 응답 |
-| `environment.schema.json` | 공통 환경 및 센서 설치 설정 |
-| `error.schema.json` | 처리 실패 또는 거부 오류 응답 |
 | `generator.schema.json` | 생성 시나리오, 측정, 전송과 진단 실행 설정 |
 | `quality-profile.schema.json` | 센서별 유효 및 무효 거리 품질 빈도 |
-| `scan.schema.json` | MessagePack에서 디코딩한 스캔 본문 |
+| `environment.schema.json` | 공유 계약 정본을 가리키는 호환 경로 |
+| `scan.schema.json` | 공유 계약 정본을 가리키는 호환 경로 |
+| `ack.schema.json` | 공유 계약 정본을 가리키는 호환 경로 |
+| `error.schema.json` | 공유 계약 정본을 가리키는 호환 경로 |
+| `fixtures/` | 공유 fixture 정본을 가리키는 호환 경로 |
 
-`fixtures/`의 JSON 파일은 사람이 검토하는 합성 원본이며 같은 이름의 `.msgpack.hex` 파일은 본문을 인코딩한 byte의 16진수 표현이다. codec의 출력은 두 표현과 함께 검증한다.
-
-버전 1 consumer는 schema에 없는 field를 거부한다. field 이름, 필수 여부, 자료형, 범위 또는 의미를 변경하면 새로운 계약 버전을 사용한다.
-
-## 환경 식별
-
-`environment_id`는 호출자가 제공하는 비어 있지 않은 문자열이다. 같은 식별자는 같은 환경 및 센서 설치 내용을 의미한다. 환경 또는 설치 내용이 바뀌면 새로운 식별자를 사용한다.
-
-JSON Schema 검사에 더하여 다음 5개 의미 규칙을 적용한다.
-
-- JSON 객체의 중복 field와 비유한 숫자 거부
-- 서로 다른 꼭짓점 3개 이상으로 구성된 자기 교차 없는 경계 다각형
-- `floor_z_m`보다 큰 `top_z_m`
-- 중복되지 않는 `sensor_id`
-- 길이의 절대 오차가 `1e-6` 이하인 `u0`와 `u90` 및 내적의 절대값이 `1e-6` 이하인 직교 관계
+JSON Schema의 `2020-12`는 schema 문법의 판이며 이 프로젝트의 계약 version과 구분한다. 외부 공유 계약의 field, 자료형, wire 표현과 소비자 책임은 전달 묶음에서만 정의한다.
 
 ## 생성 실행 설정
 
-`generator.schema.json`은 생성 프로그램만 사용하는 시나리오, 측정, 전송과 진단 설정이다. 생성 프로그램은 TCP(Transmission Control Protocol) client이고 수신 프로그램은 TCP server다. 생성 프로그램은 설정된 센서마다 같은 수신 endpoint에 독립된 지속 연결을 하나씩 만들고 해당 센서의 여러 스캔을 전송한다. 수신 프로그램은 설정된 센서 수만큼의 동시 연결을 수락한다.
+`generator.schema.json`은 생성 프로그램만 사용하는 시나리오, 측정, 전송과 진단 설정이다. 생성 프로그램은 TCP(Transmission Control Protocol) client이고 높이 계산 프로세스는 TCP server다. 생성 프로그램은 설정된 센서마다 같은 수신 endpoint에 독립된 지속 연결을 하나씩 만들고 해당 센서의 여러 scan을 전송한다.
 
 설정의 `environment_path`, `quality_profile_path`와 진단 출력 경로가 상대 경로이면 생성 실행 설정 파일이 있는 디렉토리를 기준으로 해석한다. 모든 조정값은 설정에 명시하며 schema가 암묵적인 기본값을 제공하지 않는다.
 
 `fill_duration_factor_range`는 회차별 적재 목표 시간을 평균 적재 시간에 대한 배수로 정한다. `collection_duration_factor_range`는 회차별 수거 목표 시간을 평균 적재 시간에 대한 배수로 정한다. 적재 및 수거 속도 배수 범위는 각 회차의 평균 속도를 기준으로 하며 이름이 `_s_range`로 끝나는 시간 범위는 시뮬레이션 초 단위다.
 
-JSON Schema 검사에 더하여 다음 10개 의미 규칙을 적용한다.
+JSON Schema 검사와 함께 다음 10개 의미 규칙을 적용한다.
 
 - 두 값으로 구성된 모든 범위의 최솟값 우선 순서
 - 평균 1을 중심으로 대칭인 회차별 적재 시간 배수 범위
@@ -51,76 +38,3 @@ JSON Schema 검사에 더하여 다음 10개 의미 규칙을 적용한다.
 - 재연결 최대 지연 이하의 재연결 초기 지연
 
 품질 빈도 객체의 key는 `0`부터 `255`까지의 정수 문자열이다. 객체에 없는 품질 값의 빈도는 0이며 유효 거리와 무효 거리 빈도 객체는 각각 하나 이상의 양의 빈도를 포함한다.
-
-## 스캔 식별
-
-스캔 하나는 `run_id`, `sensor_id`, `scan_id` 조합으로 식별한다.
-
-| 필드 | 의미 |
-| --- | --- |
-| `run_id` | 수집 또는 생성 프로세스의 실행별 고유 문자열 |
-| `sensor_id` | 환경 설정에 존재하는 센서 식별 문자열 |
-| `scan_id` | 해당 실행에서 센서별로 1부터 1씩 증가하는 스캔 시퀀스 |
-
-송신 프로그램은 한 회전 스캔을 확보할 때 `scan_id`를 부여한다. 같은 스캔을 재전송하거나 연결을 복구할 때 식별 조합을 유지한다. 프로세스를 재시작하면 새로운 `run_id`를 만들고 센서별 `scan_id`를 1부터 시작한다. 송신 프로그램은 최댓값 다음 스캔을 만들기 전에 새로운 실행을 시작한다. 버퍼에서 스캔이 폐기되어도 다음 스캔의 번호를 당기거나 폐기한 번호를 재사용하지 않는다. 수신 프로그램은 시퀀스의 누락으로 전달되지 않은 스캔을 확인할 수 있다.
-
-`scan_id`는 `1 <= scan_id <= 9223372036854775807` 범위의 64비트 양의 정수다. UUID(Universally Unique Identifier), 생성 시각 또는 메시지 내용의 hash가 아니다.
-
-## 대표 시각과 측정점
-
-`captured_at`은 한 회전의 첫 번째 측정점에 해당하는 UTC(Coordinated Universal Time) Unix 시각이며 마이크로초 단위의 64비트 정수다. 첫 측정점 시각이 마이크로초 경계 사이에 있으면 가장 가까운 마이크로초로 반올림하고 정확히 절반이면 미래 방향 값을 사용한다.
-
-각 측정점은 `[angle_deg, distance_m, quality]` 순서의 배열이다. MessagePack 송신 시 각도와 거리는 64비트 부동소수점으로 인코딩하고 품질은 8비트 범위의 정수 값으로 인코딩한다. 측정점 순서는 생성 또는 수집 순서를 유지한다.
-
-RPLIDAR SDK HQ 노드에서 이 값으로 변환하는 공식 자료형과 timestamp 대응 기준은 [`docs/sdk-compatibility.md`](../../docs/sdk-compatibility.md)를 따른다. 이 변환은 version 1의 자료형과 허용 범위를 좁히지 않는다.
-
-각도와 거리는 유한한 수여야 한다. `angle_deg`의 범위는 `0 <= angle_deg < 360`이다. `distance_m`은 무효 측정의 0 또는 `0.05 <= distance_m <= 30` 범위의 유효 거리다. `quality`의 범위는 `0 <= quality <= 255`다.
-
-수신 프로그램은 같은 `environment_id`의 환경 설정에서 `sensor_id`와 일치하는 센서를 선택한다. `angle_rad = angle_deg * pi / 180`, `direction = cos(angle_rad) * u0 + sin(angle_rad) * u90`, `point = p0_m + distance_m * direction` 순서로 유효 측정의 공간 좌표를 계산한다. `distance_m`이 0인 측정은 공간 좌표로 변환하지 않는다.
-
-## 전송 framing
-
-각 TCP frame은 4 byte unsigned big-endian 정수와 그 정수가 나타내는 길이의 MessagePack 본문으로 구성한다. 길이는 접두부를 제외한 본문 byte 수다. 빈 본문과 `max_message_body_bytes`를 초과하는 본문을 허용하지 않는다. 공개 예시의 개발용 기본값은 1048576 byte다. 송신 프로그램과 수신 프로그램은 같은 상한을 사용한다.
-
-수신 byte는 접두부나 본문 중간에서 나뉘거나 여러 frame이 결합될 수 있다. decoder는 연결별로 불완전한 frame만 보관한다. 0 또는 상한 초과 길이를 읽으면 현재 연결의 부분 상태를 폐기하고 연결을 닫는다. 송신 중단 시 현재 frame 전송을 완료하거나 연결을 닫아 부분 frame 다음에 다른 frame을 이어 붙이지 않는다.
-
-## 수신 응답
-
-수신 프로그램은 스캔 처리와 결과 보존을 모두 완료한 뒤 ACK를 보낸다. ACK는 `run_id`, `sensor_id`, `scan_id`를 모두 포함한다. 생성 프로그램은 세 값이 현재 미응답 스캔과 정확히 일치할 때만 해당 스캔을 전달 완료로 처리한다.
-
-각 센서 전송 lane은 ACK 제한 시간, 연결 중단 또는 일시 오류가 발생하면 보관 한도 안에서 같은 frame을 재전송한다. 다른 센서 lane은 해당 ACK나 재연결을 기다리지 않는다. 이 계약의 전달 방식은 보관 한도가 있는 at-least-once이며 exactly-once가 아니다. 수신 프로그램은 `(run_id, sensor_id, scan_id)`를 멱등성 key로 사용하고 처리 결과와 멱등성 기록을 함께 보존한다.
-
-이미 처리를 완료한 key와 같은 frame을 다시 받으면 수신 프로그램은 계산과 결과 보존을 반복하지 않고 같은 ACK를 보낸다. 같은 key에 다른 본문을 받으면 기존 결과를 변경하지 않고 `invalid_scan`을 보낸다. 같은 key의 최초 처리가 진행 중이면 중복 처리를 동시에 실행하지 않으며 최초 처리가 완료된 뒤 ACK를 보내거나 `temporary_unavailable`을 보낸다. 수신 프로그램은 멱등성 기록을 송신 프로그램의 `buffer_max_age_s` 이상 보존한다.
-
-오류 응답의 `code`는 다음 4개 값 중 하나다.
-
-| code | 의미 | 생성 프로그램 처리 |
-| --- | --- | --- |
-| `temporary_unavailable` | 일시적인 처리 불가 | 연결 종료 후 보관 한도 내 재시도 |
-| `invalid_scan` | 식별 가능한 스캔 본문 오류 | 해당 스캔 폐기 후 다음 스캔 진행 |
-| `environment_mismatch` | 수신 환경과 스캔 환경 불일치 | 전송 중단 및 설정 오류 보고 |
-| `unsupported_version` | 지원하지 않는 protocol 버전 | 전송 중단 및 호환 오류 보고 |
-
-오류 응답은 선택적인 비어 있지 않은 `message`를 포함할 수 있다. 스캔 식별 필드는 세 개를 모두 포함하거나 모두 생략한다. `invalid_scan`은 세 식별 필드를 반드시 포함한다.
-
-## 전송 제한과 재연결
-
-| 설정 | 의미 |
-| --- | --- |
-| `host`, `port` | 수신 TCP endpoint |
-| `max_message_body_bytes` | frame 접두부를 제외한 MessagePack 본문 상한 |
-| `buffer_max_age_s` | 미응답 frame의 최초 적재 시각 기준 보존 시간 |
-| `buffer_max_bytes` | 4 byte 접두부를 포함한 전체 센서 lane의 미응답 frame 합산 크기 상한 |
-| `connect_timeout_s` | TCP 연결 제한 시간 |
-| `send_timeout_s` | 한 frame 전송 제한 시간 |
-| `ack_timeout_s` | 한 스캔의 ACK 대기 제한 시간 |
-| `reconnect_initial_delay_s` | 첫 재연결 지연 상한 |
-| `reconnect_max_delay_s` | 재연결 지연 상한의 최댓값 |
-
-미응답 buffer는 보존 시간 또는 센서별 byte 할당량에 도달하면 해당 lane의 가장 오래된 frame부터 폐기한다. 전체 byte 상한은 센서 식별자 순서로 lane에 균등 분할한다. 연결이 끊겨도 스캔 생성은 계속되고, 재전송하는 frame은 최초 적재 시각을 유지한다.
-
-환경, version 또는 응답 규격 오류가 한 lane에서 발생하면 생성 프로그램은 전체 센서 lane의 전송을 중단하고 최초 오류와 원인 센서를 즉시 보고한다. 시나리오 계산과 미응답 buffer의 보존 시간 만료는 계속된다.
-
-수신 프로그램은 TCP 연결을 실행 또는 시퀀스 경계로 사용하지 않는다. 재연결된 frame은 기존 `run_id`, `sensor_id`, `scan_id`를 유지한다. `scan_id` 순서는 같은 `run_id`와 `sensor_id` 안에서만 비교하며 누락된 번호를 기다리지 않고 다음 수신 스캔을 처리한다.
-
-재연결 지연 상한은 실패마다 초기값부터 2배씩 증가하고 설정한 최댓값을 넘지 않는다. 실제 지연은 0부터 현재 상한까지의 균등 분포인 full jitter를 사용한다. TCP 연결 성공만으로 지연 상한을 초기화하지 않으며 정상 ACK를 받은 뒤 초기값으로 되돌린다. 제한 시간 계산은 단조 증가 시각을 사용한다.

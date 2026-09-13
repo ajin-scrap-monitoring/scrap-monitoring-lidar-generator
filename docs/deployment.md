@@ -2,13 +2,14 @@
 
 ## 배포 산출물
 
-배포 산출물은 3개 구성 요소로 이루어진다.
+배포 산출물은 4개 구성 요소로 이루어진다.
 
 | 구성 요소 | 형식 | 대상 |
 | --- | --- | --- |
 | Python package | source distribution, wheel | Python 3.14 환경 |
 | OCI image | Raspberry Pi 5용 ARM64 image | `linux/arm64` |
-| GitHub Release | version tag, package asset와 `oci-image.txt` | 검증된 `main` commit |
+| 높이 계산 계약 제안 | `height-calculation-contract-proposal-v1.tar.gz` | 높이 계산 Repository 인계 |
+| GitHub Release | version tag, package와 계약 asset 및 `oci-image.txt` | 검증된 `main` commit |
 
 OCI(Open Container Initiative) 이미지는 CPython 3.14.4와 `uv.lock`의 runtime 의존성을 정확히 고정한다. 빌드 단계의 uv와 실행 단계의 CPython base image는 manifest digest로 고정한다. Release 이미지는 Raspberry Pi 5의 `linux/arm64`만 대상으로 한다. 최종 이미지에는 uv와 개발 의존성을 포함하지 않으며 UID(User Identifier)와 GID(Group Identifier) 10001인 비 root 사용자로 실행한다.
 
@@ -162,7 +163,7 @@ tests/edge/run.sh \
 
 ## Release
 
-Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PATCH` tag만 처리한다. workflow는 전체 소스 검증과 package build를 실행하고 `linux/arm64` 이미지를 GitHub Container Registry에 `MAJOR.MINOR.PATCH`와 `sha-<full-git-sha>` tag로 게시한다. 두 tag가 같은 manifest digest를 가리키는지, 실행 platform이 ARM64 하나인지와 package가 Public인지 검증한 뒤 package 파일과 불변 image 참조를 기록한 `oci-image.txt`를 GitHub Release asset으로 게시한다. 배포 환경은 tag 대신 검증한 manifest digest를 사용한다. 이미지는 Software Bill of Materials(SBOM)와 provenance attestation을 포함한다.
+Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PATCH` tag만 처리한다. workflow는 전체 소스 검증과 package build를 실행하고 `linux/arm64` 이미지를 GitHub Container Registry에 `MAJOR.MINOR.PATCH`와 `sha-<full-git-sha>` tag로 게시한다. 두 tag가 같은 manifest digest를 가리키는지, 실행 platform이 ARM64 하나인지와 package가 Public인지 검증한 뒤 Python package, 높이 계산 계약 제안 tar.gz와 불변 image 참조를 기록한 `oci-image.txt`를 GitHub Release asset으로 게시한다. 배포 환경은 tag 대신 검증한 manifest digest를 사용한다. 이미지는 Software Bill of Materials(SBOM)와 provenance attestation을 포함한다.
 
 프로젝트 버전과 tag 버전을 일치시킨 검증 완료 commit에만 release tag를 생성한다. 게시된 tag, image tag와 Release asset은 변경하지 않는다.
 

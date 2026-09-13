@@ -103,7 +103,7 @@ JSON의 0.85부터 0.95 범위와 동일하다. `SCRAP_LIDAR_GENERATOR_DIAGNOSTI
 
 ### 전송과 진단 정책
 
-`transport`의 endpoint, frame 크기, buffer, timeout과 재접속 값은 센서 사양이 아닌 개발용 TCP 전송 정책이다. 전송 계약과 기본 frame 상한은 [`contracts/v1/README.md`](../contracts/v1/README.md)에서 정의한다. `diagnostics`와 `seed`는 검증 출력의 범위와 결정론을 제어하는 개발 정책이다. 실제 scan 및 관찰 수신 endpoint는 CLI 또는 환경변수로 주입하고, 관찰 주기의 코드 기본값은 1초다.
+`transport`의 endpoint, frame 크기, buffer, timeout과 재접속 값은 센서 사양이 아닌 개발용 TCP 전송 정책이다. 높이 계산 프로세스와 공유하는 전송 계약은 [`height-calculation-contract-proposal/`](../height-calculation-contract-proposal/)에서 정의한다. `diagnostics`와 `seed`는 검증 출력의 범위와 결정론을 제어하는 개발 정책이다. 실제 scan 및 관찰 수신 endpoint는 CLI 또는 환경변수로 주입하고, 관찰 주기의 코드 기본값은 1초다.
 
 운영 실행은 scan endpoint override가 없으면 설정 파일에 명시한 전송 endpoint를 사용한다. 공개 예시의 `receiver` 주소는 합성 실행을 위한 container network 이름이며 실제 운영 주소를 나타내지 않는다.
 

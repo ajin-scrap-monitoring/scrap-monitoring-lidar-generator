@@ -217,10 +217,10 @@ sudo docker image inspect "$IMAGE_REF" --format '{{index .RepoDigests 0}}'
 | [`docs/sdk-compatibility.md`](docs/sdk-compatibility.md) | RPLIDAR SDK 이후 scan 변환과 생성 데이터 정합성 기준 |
 | [`docs/deployment.md`](docs/deployment.md) | OCI 이미지, 컨테이너 실행과 Release 절차 |
 | [`docs/performance.md`](docs/performance.md) | 생성 구간별 부하 측정과 결과 해석 |
-| [`docs/height-calculation-integration.md`](docs/height-calculation-integration.md) | 한 회전 scan의 높이 계산 프로세스 인계 계약 |
+| [`height-calculation-contract-proposal/`](height-calculation-contract-proposal/) | 높이 계산 Repository에 전달하는 자기완결 계약 제안 |
 | [`docs/observation.md`](docs/observation.md) | 적재 모델 관찰 stream과 외부 시각화 경계 |
 | [`docs/visualizer-requirements.md`](docs/visualizer-requirements.md) | 별도 시각화 Repository 구현 요구사항 |
-| [`contracts/v1/`](contracts/v1/) | 환경, 생성 실행, 품질 분포와 스캔 및 응답 계약 버전 1 |
+| [`contracts/v1/`](contracts/v1/) | 생성 실행 및 품질 설정 계약과 공유 계약 호환 경로 |
 | [`contracts/observation/v1/`](contracts/observation/v1/) | 적재 모델 관찰 출력 계약 버전 1 |
 | [Organization 개발 운영 규칙](https://github.com/ajin-scrap-monitoring/.github/blob/main/GOVERNANCE.md) | Issue, 브랜치, Pull Request, CI(Continuous Integration)와 Release 기준 |
 
