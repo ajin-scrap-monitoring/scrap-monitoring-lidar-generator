@@ -73,8 +73,10 @@ install -m 0600 \
 UID(User Identifier)와 GID(Group Identifier) 10001이 쓸 수 있게 준비한다. 진단을
 사용하지 않으면 `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=false`로 설정하고 진단 mount를
 생략할 수 있다. 평균 적재 주기는 `SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S`로 지정하며
-기본 예시는 24시간인 86,400초다. 환경변수 파일에는 크레덴셜을 넣지 않는다. 현재 scan 및
-관찰 계약에는 인증 입력이 없으며 환경변수는 비밀값을 처리하지 않는다.
+기본 예시는 24시간인 86,400초다. 수거 기준 임계치는
+`SCRAP_LIDAR_GENERATOR_COLLECTION_THRESHOLD_CENTER_RATIO`로 지정하며 기본 예시 0.90은
+회차별 0.85부터 0.95 범위를 만든다. 환경변수 파일에는 크레덴셜을 넣지 않는다. 현재 scan
+및 관찰 계약에는 인증 입력이 없으며 환경변수는 비밀값을 처리하지 않는다.
 
 운영 구성 요소는 생성기 container, 높이 계산 container와 별도 장비의 관찰 수신 프로그램
 3개다. 생성기와 높이 계산 container는 같은 사용자 정의 Docker network에 연결하고, 높이
@@ -169,10 +171,11 @@ Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PA
 
 ## 현재 검증 기준
 
-현재 게시된 ARM64 배포 산출물은 `v0.5.2` Release다. Release asset의 image는
-`linux/arm64` 단일 실행 platform과 Public package 상태를 확인했다. 고정 LiDAR 2대 생성,
-센서별 독립 전송 lane, 전체 종료 전송 집계, 환경변수 설정 계층, 반복 가능한 엣지 검증과
-적재 모델 관찰 stream을 포함한다.
+현재 ARM64 배포 산출물은 GitHub의
+[최신 Release](https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-generator/releases/latest)에서
+확인한다. Release asset의 image는 `linux/arm64` 단일 실행 platform과 Public package
+상태를 확인한다. 고정 LiDAR 2대 생성, 센서별 독립 전송 lane, 전체 종료 전송 집계,
+환경변수 설정 계층, 반복 가능한 엣지 검증과 적재 모델 관찰 stream을 포함한다.
 
 Raspberry Pi 5에서 직접 검증한 최신 기준은 `v0.4.0`이다. scan ACK test double과 관찰
 stream test double을 사용한 고정 센서 2개 구성은 CPU 2 core 상한의 30초 검증에서 모든

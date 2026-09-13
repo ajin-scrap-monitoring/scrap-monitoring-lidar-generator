@@ -35,6 +35,7 @@ def _settings(
     diagnostics_enabled: bool | None = None,
     diagnostics_output_path: Path | None = None,
     mean_fill_duration_s: float | None = None,
+    collection_threshold_center_ratio: float | None = None,
 ) -> RuntimeSettings:
     return RuntimeSettings(
         config_path=config_path or _ROOT / "examples" / "generator.v1.json",
@@ -46,6 +47,7 @@ def _settings(
         diagnostics_enabled=diagnostics_enabled,
         diagnostics_output_path=diagnostics_output_path,
         mean_fill_duration_s=mean_fill_duration_s,
+        collection_threshold_center_ratio=collection_threshold_center_ratio,
     )
 
 
@@ -118,6 +120,7 @@ def test_main_reads_environment_settings(monkeypatch: pytest.MonkeyPatch) -> Non
             environment={
                 "SCRAP_LIDAR_GENERATOR_CONFIG": "generator.json",
                 "SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S": "43200",
+                "SCRAP_LIDAR_GENERATOR_COLLECTION_THRESHOLD_CENTER_RATIO": "0.8",
                 "SCRAP_LIDAR_GENERATOR_SCAN_HOST": "height-calculation",
                 "SCRAP_LIDAR_GENERATOR_SCAN_PORT": "9001",
                 "SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST": "visualizer",
@@ -135,6 +138,7 @@ def test_main_reads_environment_settings(monkeypatch: pytest.MonkeyPatch) -> Non
             scan_host="height-calculation",
             scan_port=9001,
             mean_fill_duration_s=43_200.0,
+            collection_threshold_center_ratio=0.8,
             observation_host="visualizer",
             observation_port=9101,
             observation_interval_s=2.0,
@@ -223,6 +227,8 @@ def test_main_passes_observation_stream_arguments(monkeypatch: pytest.MonkeyPatc
         ("--scan-port", "0"),
         ("--scan-port", "65536"),
         ("--mean-fill-duration-s", "0"),
+        ("--collection-threshold-center-ratio", "0.05"),
+        ("--collection-threshold-center-ratio", "0.951"),
         ("--observation-port", "0"),
         ("--observation-port", "65536"),
         ("--observation-interval-s", "86400.1"),
@@ -326,6 +332,7 @@ def test_run_config_applies_scan_endpoint_overrides(monkeypatch: pytest.MonkeyPa
         assert inputs.generator.transport.host == "height-calculation"
         assert inputs.generator.transport.port == 9200
         assert inputs.generator.scenario.mean_fill_duration_s == 43_200.0
+        assert inputs.generator.scenario.collection_threshold_range == pytest.approx((0.75, 0.85))
         assert inputs.generator.diagnostics.enabled is False
         assert inputs.generator.diagnostics.output_path == _ROOT / "examples" / "runtime-output"
         stop_event.set()
@@ -341,6 +348,7 @@ def test_run_config_applies_scan_endpoint_overrides(monkeypatch: pytest.MonkeyPa
                 diagnostics_enabled=False,
                 diagnostics_output_path=Path("runtime-output"),
                 mean_fill_duration_s=43_200.0,
+                collection_threshold_center_ratio=0.8,
             )
         )
     )
@@ -398,6 +406,23 @@ def test_runtime_mean_fill_duration_override_changes_generation_fingerprint() ->
     assert generator_input_fingerprint(overridden) != generator_input_fingerprint(inputs)
 
 
+def test_runtime_collection_threshold_override_preserves_half_range() -> None:
+    config_path = _ROOT / "examples" / "generator.v1.json"
+    inputs = load_generator_inputs(config_path)
+
+    overridden = cli._apply_runtime_overrides(
+        inputs,
+        _settings(
+            config_path=config_path,
+            collection_threshold_center_ratio=0.9,
+        ),
+    )
+
+    assert overridden.generator.scenario.collection_threshold_range == pytest.approx((0.85, 0.95))
+    assert inputs.generator.scenario.collection_threshold_range == (0.85, 0.95)
+    assert generator_input_fingerprint(overridden) != generator_input_fingerprint(inputs)
+
+
 def test_runtime_overrides_do_not_change_generation_fingerprint() -> None:
     config_path = _ROOT / "examples" / "generator.v1.json"
     inputs = load_generator_inputs(config_path)
@@ -425,4 +450,5 @@ def test_help_exits_successfully(capsys: pytest.CaptureFixture[str]) -> None:
     assert "usage: scrap-monitoring-lidar-generator" in output
     assert "SCRAP_LIDAR_GENERATOR_CONFIG" in output
     assert "SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S" in output
+    assert "--collection-threshold-center-ratio" in output
     assert "SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH" in output

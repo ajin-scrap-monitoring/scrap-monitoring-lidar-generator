@@ -12,6 +12,9 @@ from scrap_monitoring_lidar_generator.observation import (
 
 CONFIG_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_CONFIG"
 MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S"
+COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE = (
+    "SCRAP_LIDAR_GENERATOR_COLLECTION_THRESHOLD_CENTER_RATIO"
+)
 SCAN_HOST_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_SCAN_HOST"
 SCAN_PORT_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_SCAN_PORT"
 OBSERVATION_HOST_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST"
@@ -19,6 +22,10 @@ OBSERVATION_PORT_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT"
 OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S"
 DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED"
 DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH"
+
+COLLECTION_THRESHOLD_HALF_RANGE = 0.05
+MIN_COLLECTION_THRESHOLD_CENTER_RATIO = COLLECTION_THRESHOLD_HALF_RANGE
+MAX_COLLECTION_THRESHOLD_CENTER_RATIO = 1.0 - COLLECTION_THRESHOLD_HALF_RANGE
 
 
 class RuntimeSettingsError(ValueError):
@@ -38,6 +45,7 @@ class RuntimeSettings:
     diagnostics_enabled: bool | None
     diagnostics_output_path: Path | None
     mean_fill_duration_s: float | None
+    collection_threshold_center_ratio: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +61,7 @@ class RuntimeSettingOverrides:
     diagnostics_enabled: bool | None = None
     diagnostics_output_path: Path | None = None
     mean_fill_duration_s: float | None = None
+    collection_threshold_center_ratio: float | None = None
 
 
 def resolve_runtime_settings(
@@ -138,6 +147,12 @@ def resolve_runtime_settings(
             MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
             _parse_positive_number,
         ),
+        collection_threshold_center_ratio=_resolve(
+            overrides.collection_threshold_center_ratio,
+            environment,
+            COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE,
+            _parse_collection_threshold_center_ratio,
+        ),
     )
 
 
@@ -197,6 +212,19 @@ def _parse_positive_number(value: str, name: str) -> float:
         raise RuntimeSettingsError(f"{name} must be a number") from error
     if not math.isfinite(result) or result <= 0.0:
         raise RuntimeSettingsError(f"{name} must be a finite positive number")
+    return result
+
+
+def _parse_collection_threshold_center_ratio(value: str, name: str) -> float:
+    result = _parse_positive_number(value, name)
+    if (
+        result <= MIN_COLLECTION_THRESHOLD_CENTER_RATIO
+        or result > MAX_COLLECTION_THRESHOLD_CENTER_RATIO
+    ):
+        raise RuntimeSettingsError(
+            f"{name} must be greater than {MIN_COLLECTION_THRESHOLD_CENTER_RATIO:g} "
+            f"and at most {MAX_COLLECTION_THRESHOLD_CENTER_RATIO:g}"
+        )
     return result
 
 
