@@ -133,25 +133,20 @@ sudo install -m 0644 \
 sudo install -d -o 10001 -g 10001 -m 0700 "$DIAGNOSTICS_DIR"
 ```
 
-배포 장비에서 `/etc/scrap-monitoring-lidar-generator.env`를 다음 형식으로 만들고 실제
-DNS(Domain Name System) 이름 또는 IP 주소를 입력한다. 이 파일은 Git에 추가하지 않는다.
+배포 장비에서 [`.env.example`](.env.example)을 장비 전용 환경변수 파일로 복사한다. 파일의
+`height-calculation.example`과 `visualizer.example`을 container에서 접근 가능한 실제
+DNS(Domain Name System) 이름 또는 IP 주소로 바꾼다. port와 경로가 배포 환경에서 다르면
+같이 수정한다. 장비 전용 파일은 Git에 추가하지 않는다.
 
 ```bash
-sudo touch /etc/scrap-monitoring-lidar-generator.env
-sudo chmod 0600 /etc/scrap-monitoring-lidar-generator.env
+sudo install -o root -g root -m 0600 \
+  .env.example \
+  /etc/scrap-monitoring-lidar-generator.env
 sudoedit /etc/scrap-monitoring-lidar-generator.env
 ```
 
-```dotenv
-SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v1.json
-SCRAP_LIDAR_GENERATOR_SCAN_HOST=height-calculation.example
-SCRAP_LIDAR_GENERATOR_SCAN_PORT=9000
-SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST=visualizer.example
-SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT=9100
-SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S=1
-SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=true
-SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics
-```
+`.env.example`과 장비 전용 파일에는 크레덴셜을 넣지 않는다. 현재 생성기의 scan 및 관찰
+계약에는 인증 입력이 없으며 환경변수 8개는 endpoint, port, 경로와 동작 설정만 제공한다.
 
 ### 운영 container 실행
 

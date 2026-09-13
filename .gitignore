@@ -16,6 +16,7 @@ build/
 .env
 .env.*
 *.env
+!.env.example
 
 # Local diagnostics can contain reference data that Git must not track.
 diagnostics/

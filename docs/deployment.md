@@ -37,7 +37,7 @@ GitHub Container Registry(GHCR) image는 Public이므로 pull credential이 필�
 Release asset에서 불변 image 참조를 가져와 image를 준비한다.
 
 ```bash
-gh release download v0.3.1 \
+gh release download v0.4.0 \
   --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
   --pattern oci-image.txt \
   --dir /tmp/scrap-monitoring-lidar-generator-release
@@ -51,24 +51,21 @@ docker image pull "$IMAGE_REF"
 `environment_path`와 `quality_profile_path`는 `generator.v1.json`이 있는 directory를
 기준으로 해석된다.
 
-배포값은 다음 형식의 장비 전용 환경변수 파일로 준비한다. 실제 사설 주소, 자격 증명과
-운영 설정은 Git에 추가하지 않는다.
+Repository의 [`.env.example`](../.env.example)을 장비 전용 환경변수 파일로 복사하고 실제
+scan 및 관찰 endpoint를 입력한다. 장비 전용 파일, 실제 사설 주소와 운영 설정은 Git에
+추가하지 않는다.
 
-```dotenv
-SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v1.json
-SCRAP_LIDAR_GENERATOR_SCAN_HOST=height-calculation.example
-SCRAP_LIDAR_GENERATOR_SCAN_PORT=9000
-SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST=visualizer.example
-SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT=9100
-SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S=1
-SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=true
-SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics
+```bash
+install -m 0600 \
+  .env.example \
+  /path/to/scrap-monitoring-lidar-generator.env
 ```
 
 환경변수 파일은 배포 계정만 읽을 수 있게 한다. 진단을 사용하면 host의 진단 directory를
 UID(User Identifier)와 GID(Group Identifier) 10001이 쓸 수 있게 준비한다. 진단을
 사용하지 않으면 `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=false`로 설정하고 진단 mount를
-생략할 수 있다.
+생략할 수 있다. 환경변수 파일에는 크레덴셜을 넣지 않는다. 현재 scan 및 관찰 계약에는
+인증 입력이 없으며 환경변수는 비밀값을 처리하지 않는다.
 
 생성 설정은 이미지에 포함하지 않고 읽기 전용 bind mount로 전달한다. 다음 명령은 재부팅
 후에도 container를 다시 시작하며 Docker log file의 크기를 제한한다.
@@ -152,12 +149,14 @@ Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PA
 
 ## 현재 검증 기준
 
-현재 ARM64 배포 기준은 `v0.3.1` Release다. Release asset의 image는 `linux/arm64` 단일
+현재 ARM64 배포 기준은 `v0.4.0` Release다. Release asset의 image는 `linux/arm64` 단일
 실행 platform과 Public package 상태를 확인했다. 고정 LiDAR 2대 생성, 센서별 독립 전송
-lane, 전체 종료 전송 집계, 반복 가능한 엣지 검증과 적재 모델 관찰 stream을 포함한다.
+lane, 전체 종료 전송 집계, 환경변수 설정 계층, 반복 가능한 엣지 검증과 적재 모델 관찰
+stream을 포함한다.
 
 Raspberry Pi 5에서 scan ACK test double과 관찰 stream test double을 사용한 실행 검증을
 통과했다. 고정된 센서 2개 구성은 CPU 2 core 상한의 30초 검증에서 모든 scan과 관찰
-record를 손실 없이 전달했다. source revision, 불변 image digest와 장비별 관측값은
+record를 환경변수 파일로 주입한 endpoint에 손실 없이 전달했다. source revision, 불변
+image digest와 장비별 관측값은
 [`performance.md`](performance.md)가 정본이다. 실제 scan 수신 프로그램과 별도 시각화
 장비의 endpoint가 확정되면 검증한 digest와 외부 운영 설정으로 상시 container를 배치한다.
