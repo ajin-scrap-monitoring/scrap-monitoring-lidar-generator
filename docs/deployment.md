@@ -169,7 +169,7 @@ Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PA
 
 ## 현재 검증 기준
 
-현재 게시된 ARM64 배포 산출물은 `v0.5.1` Release다. Release asset의 image는
+현재 게시된 ARM64 배포 산출물은 `v0.5.2` Release다. Release asset의 image는
 `linux/arm64` 단일 실행 platform과 Public package 상태를 확인했다. 고정 LiDAR 2대 생성,
 센서별 독립 전송 lane, 전체 종료 전송 집계, 환경변수 설정 계층, 반복 가능한 엣지 검증과
 적재 모델 관찰 stream을 포함한다.
