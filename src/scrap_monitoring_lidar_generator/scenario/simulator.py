@@ -346,6 +346,8 @@ class ScenarioSimulator:
                 )
             change = self._surface.remove_volume_uniformly(requested_m3)
 
+        self._surface.relax_slopes()
+
         tolerance_m3 = max(1.0, self._surface.capacity_m3) * _STATE_TOLERANCE
         if change.unapplied_m3 > tolerance_m3:
             raise RuntimeError("scenario surface could not apply the planned volume change")

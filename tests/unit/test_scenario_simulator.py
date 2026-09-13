@@ -1,10 +1,13 @@
 """Tests for deterministic fill and collection state transitions."""
 
+import math
+
 import numpy as np
 import pytest
 
 from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
 from scrap_monitoring_lidar_generator.scenario import (
+    DEFAULT_ANGLE_OF_REPOSE_DEG,
     CollectionPlan,
     FillPlan,
     HeightField,
@@ -218,6 +221,25 @@ def test_inlet_switches_to_lower_comparison_area() -> None:
     snapshot = simulator.advance_to(0.25)
 
     assert snapshot.current_inlet_index == 1
+
+
+def test_scenario_relaxes_deposits_to_the_angle_of_repose() -> None:
+    simulator = ScenarioSimulator(
+        _surface(),
+        _settings(pile_spread_radius_m=0.05),
+        seed=88,
+    )
+
+    simulator.advance_to(5.0)
+
+    heights_m = simulator.surface.heights_m
+    maximum_slope = max(
+        float(np.max(np.abs(np.diff(heights_m, axis=0)) / 0.1)),
+        float(np.max(np.abs(np.diff(heights_m, axis=1)) / 0.1)),
+        float(np.max(np.abs(heights_m[1:, 1:] - heights_m[:-1, :-1]) / (0.1 * math.sqrt(2.0)))),
+        float(np.max(np.abs(heights_m[1:, :-1] - heights_m[:-1, 1:]) / (0.1 * math.sqrt(2.0)))),
+    )
+    assert maximum_slope <= math.tan(math.radians(DEFAULT_ANGLE_OF_REPOSE_DEG)) + 0.01
 
 
 def test_surface_changes_only_on_update_or_transition_events() -> None:

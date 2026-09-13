@@ -6,7 +6,7 @@ Raspberry Pi 5의 엣지 컨테이너에서 센서 2대의 합성 scan을 높이
 ## 주요 기능
 
 - LiDAR 2대의 독립 회전 및 scan 생성
-- 적재와 수거에 따른 결정론적 합성 표면 및 측정 왜곡
+- 적재와 수거에 따른 안식각 기반 결정론적 합성 표면 및 측정 왜곡
 - 센서별 독립 TCP(Transmission Control Protocol) 전송과 ACK(Acknowledgement) 재시도
 - 별도 시각화 프로그램용 적재 모델 관찰 stream
 

@@ -16,11 +16,17 @@ from scrap_monitoring_lidar_generator.scenario._height_field_intersection import
 )
 
 type FloatArray = NDArray[np.float64]
+type IndexArray = NDArray[np.intp]
 type _Triangle2 = tuple[Vec2, Vec2, Vec2]
 
 _GEOMETRY_TOLERANCE = 1e-12
 _VOLUME_TOLERANCE = 1e-12
 _KERNEL_WEIGHT_FLOOR = 1e-12
+DEFAULT_ANGLE_OF_REPOSE_DEG = 35.0
+DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS = 32
+_MAX_ANGLE_OF_REPOSE_DEG = 90.0
+_NEIGHBOR_OFFSETS = ((0, 1), (1, 0), (1, 1), (1, -1))
+_RELAXATION_NODE_FRACTION = 1.0
 _PARTIAL_CELL = 1
 _FULL_CELL = 2
 
@@ -46,6 +52,22 @@ class RoughnessChange:
     applied_peak_delta_m: float
 
 
+@dataclass(frozen=True, slots=True)
+class SlopeRelaxation:
+    """Bounded mass-conserving redistribution of unstable surface slopes."""
+
+    iterations: int
+    moved_volume_m3: float
+    remaining_excess_height_m: float
+
+
+@dataclass(frozen=True, slots=True)
+class _NeighborPairs:
+    first_indices: IndexArray
+    second_indices: IndexArray
+    distances_m: FloatArray
+
+
 class HeightField:
     """Mutable bilinear surface over a simple polygon."""
 
@@ -55,6 +77,7 @@ class HeightField:
         "_cell_size_m",
         "_floor_z_m",
         "_heights_m",
+        "_neighbor_pairs",
         "_top_z_m",
         "_volume_weights_m2",
         "_x_coordinates_m",
@@ -105,6 +128,11 @@ class HeightField:
             origin=Vec2(minimum_x, minimum_y),
             cell_size_m=cell_size_m,
             shape=self._heights_m.shape,
+        )
+        self._neighbor_pairs = _neighbor_pairs(
+            self.shape,
+            self._cell_size_m,
+            active_nodes=self._volume_weights_m2 > 0.0,
         )
         cell_area_m2 = cell_size_m * cell_size_m
         area_tolerance_m2 = max(_GEOMETRY_TOLERANCE, cell_area_m2 * 1e-10)
@@ -373,6 +401,108 @@ class HeightField:
         )
         return RoughnessChange(peak_delta_m, peak_delta_m * scale)
 
+    def relax_slopes(
+        self,
+        *,
+        angle_of_repose_deg: float = DEFAULT_ANGLE_OF_REPOSE_DEG,
+        max_iterations: int = DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS,
+    ) -> SlopeRelaxation:
+        """Move material downhill until neighbor slopes are stable or bounded work ends."""
+        if (
+            not math.isfinite(angle_of_repose_deg)
+            or angle_of_repose_deg <= 0.0
+            or angle_of_repose_deg >= _MAX_ANGLE_OF_REPOSE_DEG
+        ):
+            raise ValueError("angle of repose must be finite and between 0 and 90 degrees")
+        if isinstance(max_iterations, bool) or not isinstance(max_iterations, int):
+            raise ValueError("slope relaxation iterations must be an integer")
+        if max_iterations <= 0:
+            raise ValueError("slope relaxation iterations must be positive")
+
+        initial_volume_m3 = self.volume_m3
+        maximum_slope = math.tan(math.radians(angle_of_repose_deg))
+        total_moved_m3 = 0.0
+        completed_iterations = 0
+        movement_tolerance_m3 = max(1.0, self.capacity_m3) * _VOLUME_TOLERANCE
+        for _ in range(max_iterations):
+            moved_m3 = self._relax_neighbor_pairs(maximum_slope=maximum_slope)
+            total_moved_m3 += moved_m3
+            completed_iterations += 1
+            if moved_m3 <= movement_tolerance_m3:
+                break
+
+        np.clip(self._heights_m, self._floor_z_m, self._top_z_m, out=self._heights_m)
+        volume_tolerance_m3 = max(1.0, self.capacity_m3) * _VOLUME_TOLERANCE
+        if abs(self.volume_m3 - initial_volume_m3) > volume_tolerance_m3:
+            raise RuntimeError("slope relaxation did not preserve surface volume")
+        return SlopeRelaxation(
+            iterations=completed_iterations,
+            moved_volume_m3=total_moved_m3,
+            remaining_excess_height_m=self._maximum_excess_height(
+                self._neighbor_pairs,
+                maximum_slope=maximum_slope,
+            ),
+        )
+
+    def _relax_neighbor_pairs(self, *, maximum_slope: float) -> float:
+        heights_m = self._heights_m.ravel()
+        weights_m2 = self._volume_weights_m2.ravel()
+        pairs = self._neighbor_pairs
+        height_differences_m = heights_m[pairs.first_indices] - heights_m[pairs.second_indices]
+        excess_heights_m = np.abs(height_differences_m) - maximum_slope * pairs.distances_m
+        unstable = excess_heights_m > 0.0
+        if not np.any(unstable):
+            return 0.0
+
+        first_indices = pairs.first_indices[unstable]
+        second_indices = pairs.second_indices[unstable]
+        excess_heights_m = excess_heights_m[unstable]
+        first_is_source = height_differences_m[unstable] > 0.0
+        source_indices = np.where(first_is_source, first_indices, second_indices)
+        destination_indices = np.where(first_is_source, second_indices, first_indices)
+        source_weights_m2 = weights_m2[source_indices]
+        destination_weights_m2 = weights_m2[destination_indices]
+        requested_m3 = excess_heights_m / (1.0 / source_weights_m2 + 1.0 / destination_weights_m2)
+        source_scales = _node_transfer_scales(
+            source_indices,
+            requested_m3,
+            excess_heights_m,
+            available_m3=(heights_m - self._floor_z_m) * weights_m2,
+            weights_m2=weights_m2,
+        )
+        destination_scales = _node_transfer_scales(
+            destination_indices,
+            requested_m3,
+            excess_heights_m,
+            available_m3=(self._top_z_m - heights_m) * weights_m2,
+            weights_m2=weights_m2,
+        )
+        moved_m3 = requested_m3 * np.minimum(
+            source_scales[source_indices],
+            destination_scales[destination_indices],
+        )
+        volume_changes_m3 = np.zeros_like(heights_m)
+        np.add.at(volume_changes_m3, source_indices, -moved_m3)
+        np.add.at(volume_changes_m3, destination_indices, moved_m3)
+        active = weights_m2 > 0.0
+        heights_m[active] += volume_changes_m3[active] / weights_m2[active]
+        return float(np.sum(moved_m3))
+
+    def _maximum_excess_height(
+        self,
+        neighbor_pairs: _NeighborPairs,
+        *,
+        maximum_slope: float,
+    ) -> float:
+        heights_m = self._heights_m.ravel()
+        excess_heights_m = (
+            np.abs(
+                heights_m[neighbor_pairs.first_indices] - heights_m[neighbor_pairs.second_indices]
+            )
+            - maximum_slope * neighbor_pairs.distances_m
+        )
+        return max(0.0, float(np.max(excess_heights_m, initial=0.0)))
+
     def _build_local_profile(self, center: Vec2, spread_radius_m: float) -> FloatArray:
         if not self._boundary.contains(center):
             raise ValueError("volume change center must lie inside the surface boundary")
@@ -394,6 +524,62 @@ def _require_volume(volume_m3: float) -> float:
     if not math.isfinite(volume_m3) or volume_m3 < 0.0:
         raise ValueError("volume must be a finite non-negative number")
     return volume_m3
+
+
+def _neighbor_pairs(
+    shape: tuple[int, int],
+    cell_size_m: float,
+    *,
+    active_nodes: NDArray[np.bool_],
+) -> _NeighborPairs:
+    first_indices: list[int] = []
+    second_indices: list[int] = []
+    distances_m: list[float] = []
+    for y_index in range(shape[0]):
+        for x_index in range(shape[1]):
+            for y_offset, x_offset in _NEIGHBOR_OFFSETS:
+                neighbor_y = y_index + y_offset
+                neighbor_x = x_index + x_offset
+                if (
+                    0 <= neighbor_y < shape[0]
+                    and 0 <= neighbor_x < shape[1]
+                    and active_nodes[y_index, x_index]
+                    and active_nodes[neighbor_y, neighbor_x]
+                ):
+                    first_indices.append(y_index * shape[1] + x_index)
+                    second_indices.append(neighbor_y * shape[1] + neighbor_x)
+                    distances_m.append(cell_size_m * math.hypot(x_offset, y_offset))
+    return _NeighborPairs(
+        first_indices=np.array(first_indices, dtype=np.intp),
+        second_indices=np.array(second_indices, dtype=np.intp),
+        distances_m=np.array(distances_m, dtype=np.float64),
+    )
+
+
+def _node_transfer_scales(
+    node_indices: IndexArray,
+    requested_m3: FloatArray,
+    excess_heights_m: FloatArray,
+    *,
+    available_m3: FloatArray,
+    weights_m2: FloatArray,
+) -> FloatArray:
+    requested_by_node_m3 = np.bincount(
+        node_indices,
+        weights=requested_m3,
+        minlength=len(available_m3),
+    )
+    maximum_excess_by_node_m = np.zeros_like(available_m3)
+    np.maximum.at(maximum_excess_by_node_m, node_indices, excess_heights_m)
+    stable_change_limit_m3 = _RELAXATION_NODE_FRACTION * maximum_excess_by_node_m * weights_m2
+    allowed_m3 = np.minimum(available_m3, stable_change_limit_m3)
+    scales = np.ones_like(available_m3)
+    has_request = requested_by_node_m3 > 0.0
+    scales[has_request] = np.minimum(
+        1.0,
+        allowed_m3[has_request] / requested_by_node_m3[has_request],
+    )
+    return scales
 
 
 def _solve_height_delta(
