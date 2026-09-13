@@ -32,7 +32,7 @@
 | `v1/ack.schema.json` | 처리 완료 응답 |
 | `v1/error.schema.json` | 처리 실패 또는 거부 응답 |
 | `v1/fixtures/environment.v1.json` | 공개 합성 환경 fixture |
-| `v1/fixtures/scan.v1.json` | 사람이 검토하는 scan fixture |
+| `v1/fixtures/scan.v1.json` | 유효 및 무효 측정 2개만 담은 최소 scan fixture |
 | `v1/fixtures/scan.v1.msgpack.hex` | scan MessagePack 본문 fixture |
 | `v1/fixtures/ack.v1.json` | 사람이 검토하는 ACK fixture |
 | `v1/fixtures/ack.v1.msgpack.hex` | ACK MessagePack 본문 fixture |
@@ -83,7 +83,7 @@ Schema는 센서 2대를 요구한다. Schema 검사와 함께 다음 5개 의�
 
 ## Scan 본문
 
-한 회전 scan의 MessagePack 객체는 다음 형태다.
+다음 객체는 wire 표현을 설명하기 위한 최소 fixture다. `points`의 2개 항목은 SDK 단위로 양자화된 유효 측정과 거리가 0인 무효 측정을 하나씩 보여줄 뿐이며, 한 회전의 측정점 수를 뜻하지 않는다.
 
 ```text
 {
@@ -100,6 +100,8 @@ Schema는 센서 2대를 요구한다. Schema 검사와 함께 다음 5개 의�
   ]
 }
 ```
+
+공개 생성 프로파일은 센서별 초당 32,000개 측정과 초당 10회전을 사용하므로 한 회전당 명목 측정점 수는 3,200개다. 이 값은 현재 프로파일 두 빈도의 비율이지 version 1 계약의 고정 배열 길이가 아니다. 실제 SDK가 반환하거나 다른 유효 프로파일이 생성한 scan은 점 개수가 달라질 수 있다. Consumer는 `points` 개수를 2개 또는 3,200개로 고정하지 않고 `max_message_body_bytes` 안에서 1개 이상의 측정점을 처리한다.
 
 `run_id`, `sensor_id`, `scan_id` 조합은 한 scan의 멱등성 key다. `scan_id`는 같은 실행과 센서 안에서 1부터 증가하는 64-bit 양의 정수다. 재전송과 재연결은 같은 key를 유지하며 새로운 실행은 새로운 `run_id`와 센서별 `scan_id` 1로 시작한다.
 
