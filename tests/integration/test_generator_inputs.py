@@ -48,17 +48,17 @@ def _write_inputs(
     quality: dict[str, Any],
 ) -> Path:
     files = {
-        "generator.v1.json": generator,
+        "generator.v2.json": generator,
         "environment.v1.json": environment,
         "quality-profile.v1.json": quality,
     }
     for name, value in files.items():
         (directory / name).write_text(json.dumps(value), encoding="utf-8")
-    return directory / "generator.v1.json"
+    return directory / "generator.v2.json"
 
 
 def test_loads_generator_and_referenced_inputs() -> None:
-    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v2.json")
 
     assert inputs.environment.environment_id == "synthetic-scrap-pit-v1"
     assert inputs.generator.seed == 123456789
@@ -68,25 +68,12 @@ def test_loads_generator_and_referenced_inputs() -> None:
     ]
 
 
-def test_rejects_buffer_limit_smaller_than_the_environment_sensor_count(
-    tmp_path: Path,
-) -> None:
-    generator = _load_example("generator.v1.json")
-    environment = _load_example("environment.v1.json")
-    quality = _load_example("quality-profile.v1.json")
-    generator["transport"]["buffer_max_bytes"] = 1
-    path = _write_inputs(tmp_path, generator, environment, quality)
-
-    with pytest.raises(ConfigurationError, match="at least the environment sensor count"):
-        load_generator_inputs(path)
-
-
 @pytest.mark.parametrize("sensor_count", [1, 3])
 def test_rejects_generator_inputs_without_exactly_two_sensors(
     tmp_path: Path,
     sensor_count: int,
 ) -> None:
-    generator = _load_example("generator.v1.json")
+    generator = _load_example("generator.v2.json")
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
     if sensor_count == 1:
@@ -106,7 +93,7 @@ def test_rejects_generator_inputs_without_exactly_two_sensors(
 
 
 def test_builds_running_scenario_from_generator_inputs() -> None:
-    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v2.json")
     simulator = build_scenario_simulator(inputs)
 
     initial = simulator.snapshot
@@ -121,7 +108,7 @@ def test_builds_running_scenario_from_generator_inputs() -> None:
 
 
 def test_scenario_builder_scales_rate_change_durations() -> None:
-    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v2.json")
     simulator = build_scenario_simulator(inputs)
     plan = simulator.phase_plan
     assert isinstance(plan, FillPlan)
@@ -137,7 +124,7 @@ def test_scenario_builder_scales_rate_change_durations() -> None:
 
 
 def test_builds_rotation_schedulers_from_generator_inputs() -> None:
-    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v2.json")
     schedulers = build_rotation_schedulers(inputs)
 
     assert [scheduler.sensor_id for scheduler in schedulers] == [
@@ -150,7 +137,7 @@ def test_builds_rotation_schedulers_from_generator_inputs() -> None:
 
 
 def test_generates_timed_reference_scan_from_generator_inputs() -> None:
-    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v2.json")
     runtime = build_reference_generation_runtime(inputs)
 
     scans = runtime.next_completed_scans()
@@ -163,7 +150,7 @@ def test_generates_timed_reference_scan_from_generator_inputs() -> None:
 
 
 def test_generates_reproducible_reference_and_final_measurement_scans() -> None:
-    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v2.json")
     runtimes = [build_measurement_generation_runtime(inputs) for _ in range(2)]
 
     first_sequence = [runtimes[0].next_completed_scans()[0] for _ in range(4)]
@@ -212,7 +199,7 @@ def test_generates_reproducible_reference_and_final_measurement_scans() -> None:
 def test_all_distortions_reproduce_across_fill_collection_and_next_cycle(
     tmp_path: Path,
 ) -> None:
-    generator = _load_example("generator.v1.json")
+    generator = _load_example("generator.v2.json")
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
     scenario = generator["scenario"]
@@ -319,7 +306,7 @@ def test_all_distortions_reproduce_across_fill_collection_and_next_cycle(
 
 
 def test_generator_inputs_apply_shared_falling_material_events(tmp_path: Path) -> None:
-    generator = _load_example("generator.v1.json")
+    generator = _load_example("generator.v2.json")
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
     generator["scenario"]["mean_fill_duration_s"] = 86_400
@@ -367,7 +354,7 @@ def test_generator_inputs_apply_shared_falling_material_events(tmp_path: Path) -
 
 
 def test_generator_inputs_apply_collection_occlusion_events(tmp_path: Path) -> None:
-    generator = _load_example("generator.v1.json")
+    generator = _load_example("generator.v2.json")
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
     generator["scenario"]["mean_fill_duration_s"] = 1
@@ -421,7 +408,7 @@ def test_generator_inputs_apply_collection_occlusion_events(tmp_path: Path) -> N
 
 
 def test_rejects_invalid_measurement_runtime_sensor_sets() -> None:
-    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v2.json")
     reference_runtime = build_reference_generation_runtime(inputs)
     generator = build_measurement_generators(inputs)[0]
 
@@ -435,7 +422,7 @@ def test_rejects_invalid_measurement_runtime_sensor_sets() -> None:
 
 
 def test_generator_inputs_scale_and_apply_dropout_intervals(tmp_path: Path) -> None:
-    generator = _load_example("generator.v1.json")
+    generator = _load_example("generator.v2.json")
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
     generator["scenario"]["mean_fill_duration_s"] = 86_400
@@ -458,7 +445,7 @@ def test_generator_inputs_scale_and_apply_dropout_intervals(tmp_path: Path) -> N
 
 
 def test_rejects_quality_sensor_mismatch(tmp_path: Path) -> None:
-    generator = _load_example("generator.v1.json")
+    generator = _load_example("generator.v2.json")
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
     quality["sensors"][0]["sensor_id"] = "different-sensor"
@@ -469,7 +456,7 @@ def test_rejects_quality_sensor_mismatch(tmp_path: Path) -> None:
 
 
 def test_rejects_inlet_outside_environment(tmp_path: Path) -> None:
-    generator = _load_example("generator.v1.json")
+    generator = _load_example("generator.v2.json")
     environment = _load_example("environment.v1.json")
     quality = _load_example("quality-profile.v1.json")
     generator["scenario"]["inlet_positions_xy_m"][0] = [100, 100]

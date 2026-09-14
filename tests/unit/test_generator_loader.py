@@ -14,7 +14,7 @@ from scrap_monitoring_lidar_generator.configuration import (
 )
 
 _ROOT = Path(__file__).parents[2]
-_EXAMPLE_PATH = _ROOT / "examples" / "generator.v1.json"
+_EXAMPLE_PATH = _ROOT / "examples" / "generator.v2.json"
 
 
 @pytest.fixture
@@ -73,16 +73,10 @@ def test_loads_generator_and_resolves_relative_paths() -> None:
         2.0,
     )
     assert config.measurement.distortions.dropout.enabled is False
-    assert config.transport.host == "receiver"
-    assert config.transport.port == 9000
-    assert config.transport.max_message_body_bytes == 1_048_576
-    assert config.transport.buffer_max_age_s == 5.0
-    assert config.transport.buffer_max_bytes == 16_777_216
-    assert config.transport.connect_timeout_s == 3.0
-    assert config.transport.send_timeout_s == 2.0
-    assert config.transport.ack_timeout_s == 2.0
-    assert config.transport.reconnect_initial_delay_s == 0.5
-    assert config.transport.reconnect_max_delay_s == 5.0
+    assert config.observation_transport.connect_timeout_s == 3.0
+    assert config.observation_transport.send_timeout_s == 2.0
+    assert config.observation_transport.reconnect_initial_delay_s == 0.5
+    assert config.observation_transport.reconnect_max_delay_s == 5.0
     assert config.diagnostics.output_path == _ROOT / "examples" / "diagnostics"
 
 
@@ -113,18 +107,10 @@ def test_rejects_missing_nested_field(valid_generator: dict[str, Any]) -> None:
         (("measurement", "min_distance_m"), 0.01),
         (("measurement", "max_distance_m"), 31),
         (("measurement", "distance_noise", "enabled"), 1),
-        (("transport", "host"), ""),
-        (("transport", "port"), 0),
-        (("transport", "port"), 65_536),
-        (("transport", "max_message_body_bytes"), 0),
-        (("transport", "max_message_body_bytes"), 4_294_967_296),
-        (("transport", "buffer_max_age_s"), 0),
-        (("transport", "buffer_max_bytes"), 0),
-        (("transport", "connect_timeout_s"), float("inf")),
-        (("transport", "send_timeout_s"), 0),
-        (("transport", "ack_timeout_s"), 0),
-        (("transport", "reconnect_initial_delay_s"), 0),
-        (("transport", "reconnect_max_delay_s"), 0),
+        (("observation_transport", "connect_timeout_s"), float("inf")),
+        (("observation_transport", "send_timeout_s"), 0),
+        (("observation_transport", "reconnect_initial_delay_s"), 0),
+        (("observation_transport", "reconnect_max_delay_s"), 0),
     ],
 )
 def test_rejects_invalid_generator_values(
@@ -152,7 +138,7 @@ def test_rejects_distance_range_without_width(valid_generator: dict[str, Any]) -
 def test_rejects_reconnect_initial_delay_above_maximum(
     valid_generator: dict[str, Any],
 ) -> None:
-    valid_generator["transport"]["reconnect_initial_delay_s"] = 5.1
+    valid_generator["observation_transport"]["reconnect_initial_delay_s"] = 5.1
 
     with pytest.raises(ConfigurationError, match="must not exceed"):
         _parse(valid_generator)

@@ -60,7 +60,7 @@ fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 config_dir="$(cd "$config_dir" && pwd)"
-for required_file in environment.v1.json generator.v1.json quality-profile.v1.json; do
+for required_file in environment.v1.json generator.v2.json quality-profile.v1.json; do
   if [[ ! -f "$config_dir/$required_file" ]]; then
     echo "missing configuration file: $config_dir/$required_file" >&2
     exit 2
@@ -73,18 +73,20 @@ else
   mkdir -p "$output_dir"
   output_dir="$(cd "$output_dir" && pwd)"
 fi
-for result_file in docker-stats.jsonl generator.log receiver.log container-inspect.json; do
-  if [[ -e "$output_dir/$result_file" ]]; then
-    echo "result file already exists: $output_dir/$result_file" >&2
+for result_path in docker-stats.jsonl generator.log receiver.log container-inspect.json status; do
+  if [[ -e "$output_dir/$result_path" ]]; then
+    echo "result path already exists: $output_dir/$result_path" >&2
     exit 2
   fi
 done
+mkdir -m 0777 "$output_dir/status"
 
 resource_prefix="lidar-validation-$(date +%s)-$$"
 network_name="$resource_prefix"
 receiver_name="$resource_prefix-receiver"
 generator_name="$resource_prefix-generator"
 environment_file=""
+socket_directory=""
 
 cleanup() {
   docker container rm --force "$generator_name" >/dev/null 2>&1 || true
@@ -93,17 +95,26 @@ cleanup() {
   if [[ -n "$environment_file" ]]; then
     rm -f "$environment_file"
   fi
+  if [[ -n "$socket_directory" && -d "$socket_directory" ]]; then
+    rm -rf -- "$socket_directory"
+  fi
 }
 trap cleanup EXIT
 
 environment_file="$(mktemp -t lidar-generator-validation.XXXXXX.env)"
+socket_directory="$(mktemp -d -t lidar-generator-sockets.XXXXXX)"
 chmod 600 "$environment_file"
+chmod 777 "$socket_directory"
 printf '%s\n' \
-  'SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v1.json' \
-  'SCRAP_LIDAR_GENERATOR_SCAN_HOST=scan-receiver' \
-  'SCRAP_LIDAR_GENERATOR_SCAN_PORT=9000' \
+  'SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v2.json' \
+  'SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR=/sockets' \
+  'SCRAP_LIDAR_GENERATOR_STATUS_DIR=/status' \
+  'SITE_ID=validation-site' \
+  'EDGE_ID=validation-edge' \
+  'CONFIG_REVISION=validation-r1' \
+  'DEPLOYMENT_REVISION=validation-deployment-r1' \
   'SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST=observation-receiver' \
-  'SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT=9100' \
+  'SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT=17000' \
   'SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S=1' \
   'SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=true' \
   'SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics' \
@@ -114,13 +125,18 @@ docker network create "$network_name" >/dev/null
 docker run --detach \
   --name "$receiver_name" \
   --network "$network_name" \
-  --network-alias scan-receiver \
   --network-alias observation-receiver \
-  --mount "type=bind,src=$config_dir,dst=/config,readonly" \
+  --mount "type=bind,src=$config_dir/environment.v1.json,dst=/config/environment.v1.json,readonly" \
   --mount "type=bind,src=$script_dir,dst=/validation,readonly" \
+  --mount "type=bind,src=$socket_directory,dst=/sockets" \
   --entrypoint /app/.venv/bin/python \
   "$image_ref" \
-  /validation/receiver.py --environment /config/environment.v1.json >/dev/null
+  /validation/receiver.py \
+  --environment /config/environment.v1.json \
+  --socket-dir /sockets \
+  --edge-id validation-edge \
+  --config-revision validation-r1 \
+  --observation-port 17000 >/dev/null
 
 receiver_ready="false"
 for _ in {1..100}; do
@@ -144,8 +160,10 @@ docker run --detach \
   --network "$network_name" \
   --cpus "$cpu_limit" \
   --mount "type=bind,src=$config_dir/environment.v1.json,dst=/config/environment.v1.json,readonly" \
-  --mount "type=bind,src=$config_dir/generator.v1.json,dst=/config/generator.v1.json,readonly" \
+  --mount "type=bind,src=$config_dir/generator.v2.json,dst=/config/generator.v2.json,readonly" \
   --mount "type=bind,src=$config_dir/quality-profile.v1.json,dst=/config/quality-profile.v1.json,readonly" \
+  --mount "type=bind,src=$socket_directory,dst=/sockets" \
+  --mount "type=bind,src=$output_dir/status,dst=/status" \
   --tmpfs /data/diagnostics:uid=10001,gid=10001,mode=0700 \
   --env-file "$environment_file" \
   "$image_ref" >/dev/null
@@ -168,8 +186,8 @@ if [[ "$generator_exit_code" != "0" || "$receiver_exit_code" != "0" ]]; then
 fi
 
 if ! docker run --rm \
-  --user "$(id -u):$(id -g)" \
-  --mount "type=bind,src=$config_dir,dst=/config,readonly" \
+  --user 0:0 \
+  --mount "type=bind,src=$config_dir/environment.v1.json,dst=/config/environment.v1.json,readonly" \
   --mount "type=bind,src=$script_dir,dst=/validation,readonly" \
   --mount "type=bind,src=$output_dir,dst=/results,readonly" \
   --entrypoint /app/.venv/bin/python \
@@ -178,7 +196,7 @@ if ! docker run --rm \
   --environment /config/environment.v1.json \
   --generator-log /results/generator.log \
   --receiver-log /results/receiver.log \
-  --max-pending-frames 2; then
+  --status-dir /results/status; then
   echo "validation_output=$output_dir"
   exit 1
 fi

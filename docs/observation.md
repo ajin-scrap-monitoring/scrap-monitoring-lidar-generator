@@ -45,9 +45,15 @@ wire 형식, 전달 의미와 field 의미는
 
 ```bash
 uv run --locked scrap-monitoring-lidar-generator \
-  --config /path/to/generator.v1.json \
+  --config /path/to/generator.v2.json \
+  --grpc-socket-dir /run/lidar \
+  --status-dir /status \
+  --site-id example-site \
+  --edge-id example-edge \
+  --config-revision example-r1 \
+  --deployment-revision example-deployment-r1 \
   --observation-host observation-receiver-host \
-  --observation-port 9100
+  --observation-port 17000
 ```
 
 관찰 간격은 0보다 크고 86,400초 이하여야 한다. 첫 레코드는 처음 완료한 scan 시점의

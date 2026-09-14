@@ -10,11 +10,11 @@ from typing import Protocol, TextIO
 
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
 from scrap_monitoring_lidar_generator.measurement import MeasurementResult
-from scrap_monitoring_lidar_generator.scenario import ScenarioSimulator
-from scrap_monitoring_lidar_generator.transport import (
+from scrap_monitoring_lidar_generator.runtime.timestamps import (
     MAX_SIGNED_64_BIT,
     scan_captured_at_utc_us,
 )
+from scrap_monitoring_lidar_generator.scenario import ScenarioSimulator
 
 _MAX_SEED = 18_446_744_073_709_551_615
 _DIAGNOSTICS_VERSION = 2

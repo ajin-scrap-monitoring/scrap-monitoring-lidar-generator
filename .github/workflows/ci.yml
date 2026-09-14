@@ -62,8 +62,26 @@ jobs:
       - name: Test
         run: uv run --locked pytest
 
+      - name: Verify generated LiDAR wire modules
+        run: uv run --locked python -m tools.generate_lidar_wire --check
+
+      - name: Check out pinned edge platform contract
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: ajin-scrap-monitoring/ajin-edge-platform
+          ref: 666ca6067a3bb86833b74140cb659049025d0dae
+          path: .contract/ajin-edge-platform
+          persist-credentials: false
+
+      - name: Verify edge platform processing compatibility
+        run: |
+          uv run --locked python -m tools.verify_edge_platform_contract \
+            --edge-platform-root .contract/ajin-edge-platform
+
       - name: Smoke test CLI
-        run: uv run --locked scrap-monitoring-lidar-generator --help
+        run: |
+          uv run --locked scrap-monitoring-lidar-generator --help
+          uv run --locked scrap-monitoring-lidar-generator-export-processing-config --help
 
       - name: Build package
         run: uv build --no-sources

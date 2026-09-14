@@ -8,6 +8,7 @@ __pycache__/
 .rumdl_cache/
 .coverage
 htmlcov/
+.contract/
 dist/
 build/
 *.egg-info/

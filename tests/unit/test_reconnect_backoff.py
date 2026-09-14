@@ -2,7 +2,7 @@
 
 import pytest
 
-from scrap_monitoring_lidar_generator.transport import ReconnectBackoff
+from scrap_monitoring_lidar_generator.observation.backoff import ReconnectBackoff
 
 
 def test_failure_doubles_cap_until_maximum() -> None:
@@ -21,7 +21,7 @@ def test_normal_ack_resets_cap_but_not_random_stream() -> None:
     first_delay_s = backoff.next_delay_after_failure()
     backoff.next_delay_after_failure()
 
-    backoff.reset_after_ack()
+    backoff.reset_after_success()
 
     assert backoff.current_delay_cap_s == 0.5
     assert backoff.consecutive_failures == 0
@@ -37,11 +37,11 @@ def test_same_seed_produces_same_jitter_sequence() -> None:
     ]
 
 
-def test_transport_seed_domain_is_stable() -> None:
+def test_observation_seed_domain_is_stable() -> None:
     backoff = ReconnectBackoff(initial_delay_s=0.5, maximum_delay_s=5.0, seed=123)
 
     assert [backoff.next_delay_after_failure() for _ in range(3)] == pytest.approx(
-        [0.3100664873699944, 0.11316388265572797, 1.7942534034740267]
+        [0.02412539429710675, 0.5509383705315569, 0.24595779563302234]
     )
 
 

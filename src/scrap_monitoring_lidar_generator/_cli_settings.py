@@ -1,6 +1,7 @@
 """Resolve deployment settings from CLI values and environment variables."""
 
 import math
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,8 +16,12 @@ MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURAT
 COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE = (
     "SCRAP_LIDAR_GENERATOR_COLLECTION_THRESHOLD_CENTER_RATIO"
 )
-SCAN_HOST_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_SCAN_HOST"
-SCAN_PORT_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_SCAN_PORT"
+GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR"
+STATUS_DIR_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_STATUS_DIR"
+SITE_ID_ENVIRONMENT_VARIABLE = "SITE_ID"
+EDGE_ID_ENVIRONMENT_VARIABLE = "EDGE_ID"
+CONFIG_REVISION_ENVIRONMENT_VARIABLE = "CONFIG_REVISION"
+DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE = "DEPLOYMENT_REVISION"
 OBSERVATION_HOST_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST"
 OBSERVATION_PORT_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT"
 OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S"
@@ -26,6 +31,8 @@ DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE = "SCRAP_LIDAR_GENERATOR_DIAGNOSTIC
 COLLECTION_THRESHOLD_HALF_RANGE = 0.05
 MIN_COLLECTION_THRESHOLD_CENTER_RATIO = COLLECTION_THRESHOLD_HALF_RANGE
 MAX_COLLECTION_THRESHOLD_CENTER_RATIO = 1.0 - COLLECTION_THRESHOLD_HALF_RANGE
+_IDENTITY_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
+_DRIVER_IDENTITY_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 
 
 class RuntimeSettingsError(ValueError):
@@ -37,8 +44,12 @@ class RuntimeSettings:
     """Resolved runtime values after applying CLI and environment precedence."""
 
     config_path: Path
-    scan_host: str | None
-    scan_port: int | None
+    grpc_socket_dir: Path
+    status_dir: Path
+    site_id: str
+    edge_id: str
+    config_revision: str
+    deployment_revision: str
     observation_host: str
     observation_port: int
     observation_interval_s: float
@@ -53,8 +64,12 @@ class RuntimeSettingOverrides:
     """Unresolved command-line values that may override the environment."""
 
     config_path: Path | None = None
-    scan_host: str | None = None
-    scan_port: int | None = None
+    grpc_socket_dir: Path | None = None
+    status_dir: Path | None = None
+    site_id: str | None = None
+    edge_id: str | None = None
+    config_revision: str | None = None
+    deployment_revision: str | None = None
     observation_host: str | None = None
     observation_port: int | None = None
     observation_interval_s: float | None = None
@@ -102,17 +117,60 @@ def resolve_runtime_settings(
             option="--config",
             environment_variable=CONFIG_ENVIRONMENT_VARIABLE,
         ),
-        scan_host=_resolve(
-            overrides.scan_host,
-            environment,
-            SCAN_HOST_ENVIRONMENT_VARIABLE,
-            _parse_host,
+        grpc_socket_dir=_require(
+            _resolve(
+                overrides.grpc_socket_dir,
+                environment,
+                GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE,
+                _parse_absolute_path,
+            ),
+            option="--grpc-socket-dir",
+            environment_variable=GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE,
         ),
-        scan_port=_resolve(
-            overrides.scan_port,
-            environment,
-            SCAN_PORT_ENVIRONMENT_VARIABLE,
-            _parse_port,
+        status_dir=_require(
+            _resolve(
+                overrides.status_dir,
+                environment,
+                STATUS_DIR_ENVIRONMENT_VARIABLE,
+                _parse_absolute_path,
+            ),
+            option="--status-dir",
+            environment_variable=STATUS_DIR_ENVIRONMENT_VARIABLE,
+        ),
+        site_id=_require(
+            _resolve(overrides.site_id, environment, SITE_ID_ENVIRONMENT_VARIABLE, _parse_identity),
+            option="--site-id",
+            environment_variable=SITE_ID_ENVIRONMENT_VARIABLE,
+        ),
+        edge_id=_require(
+            _resolve(
+                overrides.edge_id,
+                environment,
+                EDGE_ID_ENVIRONMENT_VARIABLE,
+                _parse_driver_identity,
+            ),
+            option="--edge-id",
+            environment_variable=EDGE_ID_ENVIRONMENT_VARIABLE,
+        ),
+        config_revision=_require(
+            _resolve(
+                overrides.config_revision,
+                environment,
+                CONFIG_REVISION_ENVIRONMENT_VARIABLE,
+                _parse_driver_identity,
+            ),
+            option="--config-revision",
+            environment_variable=CONFIG_REVISION_ENVIRONMENT_VARIABLE,
+        ),
+        deployment_revision=_require(
+            _resolve(
+                overrides.deployment_revision,
+                environment,
+                DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE,
+                _parse_identity,
+            ),
+            option="--deployment-revision",
+            environment_variable=DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE,
         ),
         observation_host=_require(
             resolved_observation_host,
@@ -180,6 +238,25 @@ def _parse_path(value: str, name: str) -> Path:
     if not value:
         raise RuntimeSettingsError(f"{name} must be a non-empty path")
     return Path(value)
+
+
+def _parse_absolute_path(value: str, name: str) -> Path:
+    result = _parse_path(value, name)
+    if not result.is_absolute():
+        raise RuntimeSettingsError(f"{name} must be an absolute path")
+    return result
+
+
+def _parse_identity(value: str, name: str) -> str:
+    if _IDENTITY_PATTERN.fullmatch(value) is None:
+        raise RuntimeSettingsError(f"{name} must be a safe deployment identifier")
+    return value
+
+
+def _parse_driver_identity(value: str, name: str) -> str:
+    if _DRIVER_IDENTITY_PATTERN.fullmatch(value) is None:
+        raise RuntimeSettingsError(f"{name} must be a driver-compatible identifier")
+    return value
 
 
 def _parse_host(value: str, name: str) -> str:

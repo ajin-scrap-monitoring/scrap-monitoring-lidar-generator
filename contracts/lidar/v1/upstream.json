@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/ajin-scrap-monitoring/ajin-edge-platform",
+  "commit": "666ca6067a3bb86833b74140cb659049025d0dae",
+  "path": "contracts/lidar/v1/lidar.proto",
+  "sha256": "a02672aa5c4548fd73ca2dc1f5ce85ea246bcecc907a64a6a94819c5e64cc516"
+}

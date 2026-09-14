@@ -27,7 +27,7 @@ def _inputs(
     *,
     sample_scan_limit_per_sensor: int = 2,
 ) -> GeneratorInputs:
-    inputs = load_generator_inputs(_EXAMPLES / "generator.v1.json")
+    inputs = load_generator_inputs(_EXAMPLES / "generator.v2.json")
     diagnostics = replace(
         inputs.generator.diagnostics,
         output_path=temporary_directory / "diagnostics",
@@ -178,11 +178,10 @@ def test_input_fingerprint_uses_generation_values_but_not_runtime_delivery_setti
                 output_path=tmp_path / "elsewhere",
                 sample_scan_limit_per_sensor=999,
             ),
-            transport=replace(
-                inputs.generator.transport,
-                host="relocated-receiver",
-                port=9_001,
-                ack_timeout_s=4.0,
+            observation_transport=replace(
+                inputs.generator.observation_transport,
+                connect_timeout_s=4.0,
+                send_timeout_s=3.0,
             ),
         ),
     )

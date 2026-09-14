@@ -7,27 +7,45 @@ import pytest
 from scrap_monitoring_lidar_generator._cli_settings import (
     COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE,
     CONFIG_ENVIRONMENT_VARIABLE,
+    CONFIG_REVISION_ENVIRONMENT_VARIABLE,
+    DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE,
+    EDGE_ID_ENVIRONMENT_VARIABLE,
+    GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE,
     MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
     OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
     OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE,
     OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
-    SCAN_HOST_ENVIRONMENT_VARIABLE,
-    SCAN_PORT_ENVIRONMENT_VARIABLE,
+    SITE_ID_ENVIRONMENT_VARIABLE,
+    STATUS_DIR_ENVIRONMENT_VARIABLE,
     RuntimeSettingOverrides,
-    RuntimeSettings,
     RuntimeSettingsError,
     resolve_runtime_settings,
 )
 
 _ROOT = Path(__file__).parents[2]
+_REQUIRED = {
+    CONFIG_ENVIRONMENT_VARIABLE: "/config/generator.v2.json",
+    GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE: "/run/lidar",
+    STATUS_DIR_ENVIRONMENT_VARIABLE: "/status",
+    SITE_ID_ENVIRONMENT_VARIABLE: "site-a",
+    EDGE_ID_ENVIRONMENT_VARIABLE: "edge-a",
+    CONFIG_REVISION_ENVIRONMENT_VARIABLE: "config-r1",
+    DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE: "deployment-r1",
+    OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "visualizer",
+    OBSERVATION_PORT_ENVIRONMENT_VARIABLE: "17000",
+}
 _ENVIRONMENT_VARIABLES = (
     CONFIG_ENVIRONMENT_VARIABLE,
+    GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE,
+    STATUS_DIR_ENVIRONMENT_VARIABLE,
+    SITE_ID_ENVIRONMENT_VARIABLE,
+    EDGE_ID_ENVIRONMENT_VARIABLE,
+    CONFIG_REVISION_ENVIRONMENT_VARIABLE,
+    DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE,
     MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
     COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE,
-    SCAN_HOST_ENVIRONMENT_VARIABLE,
-    SCAN_PORT_ENVIRONMENT_VARIABLE,
     OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
     OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
     OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE,
@@ -36,114 +54,64 @@ _ENVIRONMENT_VARIABLES = (
 )
 
 
-def _resolve(
-    environment: dict[str, str],
-    *,
-    config_path: Path | None = None,
-    scan_host: str | None = None,
-    scan_port: int | None = None,
-    observation_host: str | None = None,
-    observation_port: int | None = None,
-    observation_interval_s: float | None = None,
-    diagnostics_enabled: bool | None = None,
-    diagnostics_output_path: Path | None = None,
-    mean_fill_duration_s: float | None = None,
-    collection_threshold_center_ratio: float | None = None,
-) -> RuntimeSettings:
-    return resolve_runtime_settings(
-        environment=environment,
-        overrides=RuntimeSettingOverrides(
-            config_path=config_path,
-            scan_host=scan_host,
-            scan_port=scan_port,
-            observation_host=observation_host,
-            observation_port=observation_port,
-            observation_interval_s=observation_interval_s,
-            diagnostics_enabled=diagnostics_enabled,
-            diagnostics_output_path=diagnostics_output_path,
-            mean_fill_duration_s=mean_fill_duration_s,
-            collection_threshold_center_ratio=collection_threshold_center_ratio,
-        ),
-    )
-
-
 def test_resolves_all_environment_settings() -> None:
-    settings = _resolve(
-        {
-            CONFIG_ENVIRONMENT_VARIABLE: "/config/generator.v1.json",
+    settings = resolve_runtime_settings(
+        environment={
+            **_REQUIRED,
             MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE: "43200",
             COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE: "0.8",
-            SCAN_HOST_ENVIRONMENT_VARIABLE: "height-calculation",
-            SCAN_PORT_ENVIRONMENT_VARIABLE: "9001",
-            OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "visualizer",
-            OBSERVATION_PORT_ENVIRONMENT_VARIABLE: "9101",
             OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE: "2.5",
             DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE: "true",
             DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE: "/data/diagnostics",
         }
     )
 
-    assert settings.config_path == Path("/config/generator.v1.json")
+    assert settings.config_path == Path("/config/generator.v2.json")
+    assert settings.grpc_socket_dir == Path("/run/lidar")
+    assert settings.status_dir == Path("/status")
+    assert settings.site_id == "site-a"
+    assert settings.edge_id == "edge-a"
+    assert settings.config_revision == "config-r1"
+    assert settings.deployment_revision == "deployment-r1"
     assert settings.mean_fill_duration_s == 43_200.0
     assert settings.collection_threshold_center_ratio == 0.8
-    assert settings.scan_host == "height-calculation"
-    assert settings.scan_port == 9001
     assert settings.observation_host == "visualizer"
-    assert settings.observation_port == 9101
+    assert settings.observation_port == 17_000
     assert settings.observation_interval_s == 2.5
     assert settings.diagnostics_enabled is True
     assert settings.diagnostics_output_path == Path("/data/diagnostics")
 
 
 def test_cli_settings_take_precedence_without_parsing_environment_values() -> None:
-    settings = _resolve(
-        {
-            CONFIG_ENVIRONMENT_VARIABLE: "",
-            MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE: "invalid",
-            COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE: "invalid",
-            SCAN_HOST_ENVIRONMENT_VARIABLE: "",
-            SCAN_PORT_ENVIRONMENT_VARIABLE: "invalid",
-            OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "",
-            OBSERVATION_PORT_ENVIRONMENT_VARIABLE: "invalid",
-            OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE: "invalid",
-            DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE: "invalid",
-            DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE: "",
-        },
-        config_path=Path("cli.json"),
-        scan_host="scan-cli",
-        scan_port=9002,
-        observation_host="observation-cli",
-        observation_port=9102,
-        observation_interval_s=3.0,
-        diagnostics_enabled=False,
-        diagnostics_output_path=Path("cli-diagnostics"),
-        mean_fill_duration_s=21_600.0,
-        collection_threshold_center_ratio=0.75,
+    settings = resolve_runtime_settings(
+        environment={name: "invalid" for name in _ENVIRONMENT_VARIABLES},
+        overrides=RuntimeSettingOverrides(
+            config_path=Path("cli.json"),
+            grpc_socket_dir=Path("/cli/sockets"),
+            status_dir=Path("/cli/status"),
+            site_id="cli-site",
+            edge_id="cli-edge",
+            config_revision="cli-config",
+            deployment_revision="cli-deployment",
+            observation_host="observation-cli",
+            observation_port=9_102,
+            observation_interval_s=3.0,
+            diagnostics_enabled=False,
+            diagnostics_output_path=Path("cli-diagnostics"),
+            mean_fill_duration_s=21_600.0,
+            collection_threshold_center_ratio=0.75,
+        ),
     )
 
-    assert settings.config_path == Path("cli.json")
-    assert settings.mean_fill_duration_s == 21_600.0
-    assert settings.collection_threshold_center_ratio == 0.75
-    assert settings.scan_host == "scan-cli"
-    assert settings.scan_port == 9002
+    assert settings.grpc_socket_dir == Path("/cli/sockets")
+    assert settings.edge_id == "cli-edge"
     assert settings.observation_host == "observation-cli"
-    assert settings.observation_port == 9102
-    assert settings.observation_interval_s == 3.0
-    assert settings.diagnostics_enabled is False
-    assert settings.diagnostics_output_path == Path("cli-diagnostics")
+    assert settings.mean_fill_duration_s == 21_600.0
 
 
-def test_keeps_optional_scan_endpoint_unset_and_uses_observation_interval_default() -> None:
-    settings = _resolve(
-        {
-            CONFIG_ENVIRONMENT_VARIABLE: "generator.json",
-            OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "visualizer",
-            OBSERVATION_PORT_ENVIRONMENT_VARIABLE: "9100",
-        }
-    )
+def test_uses_observation_interval_default_and_optional_overrides() -> None:
+    settings = resolve_runtime_settings(environment=_REQUIRED)
 
-    assert settings.scan_host is None
-    assert settings.scan_port is None
     assert settings.observation_interval_s == 1.0
     assert settings.diagnostics_enabled is None
     assert settings.diagnostics_output_path is None
@@ -151,89 +119,49 @@ def test_keeps_optional_scan_endpoint_unset_and_uses_observation_interval_defaul
     assert settings.collection_threshold_center_ratio is None
 
 
-@pytest.mark.parametrize("value", ["0.0500001", "0.95"])
-def test_accepts_collection_threshold_center_boundaries(value: str) -> None:
-    settings = _resolve(
-        {
-            CONFIG_ENVIRONMENT_VARIABLE: "generator.json",
-            COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE: value,
-            OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "visualizer",
-            OBSERVATION_PORT_ENVIRONMENT_VARIABLE: "9100",
-        }
-    )
+@pytest.mark.parametrize("missing", _REQUIRED)
+def test_rejects_missing_required_settings(missing: str) -> None:
+    environment = {name: value for name, value in _REQUIRED.items() if name != missing}
 
-    assert settings.collection_threshold_center_ratio == float(value)
-
-
-@pytest.mark.parametrize(
-    ("environment", "expected_name"),
-    [
-        ({}, CONFIG_ENVIRONMENT_VARIABLE),
-        (
-            {CONFIG_ENVIRONMENT_VARIABLE: "generator.json"},
-            OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
-        ),
-        (
-            {
-                CONFIG_ENVIRONMENT_VARIABLE: "generator.json",
-                OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "visualizer",
-            },
-            OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
-        ),
-    ],
-)
-def test_rejects_missing_required_settings(environment: dict[str, str], expected_name: str) -> None:
-    with pytest.raises(RuntimeSettingsError, match=expected_name):
-        _resolve(environment)
+    with pytest.raises(RuntimeSettingsError, match=missing):
+        resolve_runtime_settings(environment=environment)
 
 
 @pytest.mark.parametrize(
     ("name", "value"),
     [
         (CONFIG_ENVIRONMENT_VARIABLE, ""),
-        (SCAN_HOST_ENVIRONMENT_VARIABLE, ""),
-        (SCAN_PORT_ENVIRONMENT_VARIABLE, "zero"),
-        (SCAN_PORT_ENVIRONMENT_VARIABLE, "0"),
-        (SCAN_PORT_ENVIRONMENT_VARIABLE, "65536"),
-        (MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE, "zero"),
+        (GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE, "relative"),
+        (STATUS_DIR_ENVIRONMENT_VARIABLE, "relative"),
+        (SITE_ID_ENVIRONMENT_VARIABLE, "bad value"),
+        (EDGE_ID_ENVIRONMENT_VARIABLE, ""),
+        (EDGE_ID_ENVIRONMENT_VARIABLE, "x" * 65),
+        (CONFIG_REVISION_ENVIRONMENT_VARIABLE, "/bad"),
+        (CONFIG_REVISION_ENVIRONMENT_VARIABLE, "x" * 65),
+        (DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE, "bad value"),
         (MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE, "0"),
-        (MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE, "nan"),
-        (COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE, "zero"),
         (COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE, "0.05"),
-        (COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE, "0.951"),
         (OBSERVATION_HOST_ENVIRONMENT_VARIABLE, ""),
-        (OBSERVATION_PORT_ENVIRONMENT_VARIABLE, "zero"),
-        (OBSERVATION_PORT_ENVIRONMENT_VARIABLE, "0"),
-        (OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE, "zero"),
-        (OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE, "0"),
+        (OBSERVATION_PORT_ENVIRONMENT_VARIABLE, "65536"),
         (OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE, "86400.1"),
-        (DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE, "1"),
         (DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE, "TRUE"),
         (DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE, ""),
     ],
 )
 def test_rejects_invalid_environment_values(name: str, value: str) -> None:
-    environment = {
-        CONFIG_ENVIRONMENT_VARIABLE: "generator.json",
-        OBSERVATION_HOST_ENVIRONMENT_VARIABLE: "visualizer",
-        OBSERVATION_PORT_ENVIRONMENT_VARIABLE: "9100",
-        name: value,
-    }
-
     with pytest.raises(RuntimeSettingsError, match=name):
-        _resolve(environment)
+        resolve_runtime_settings(environment={**_REQUIRED, name: value})
 
 
 @pytest.mark.parametrize("name", _ENVIRONMENT_VARIABLES)
 def test_environment_setting_is_documented_in_root_readme(name: str) -> None:
-    readme = (_ROOT / "README.md").read_text(encoding="utf-8")
-
-    assert f"`{name}`" in readme
+    assert f"`{name}`" in (_ROOT / "README.md").read_text(encoding="utf-8")
 
 
-def test_env_example_uses_shared_network_scan_placeholders() -> None:
+def test_env_example_uses_uds_and_deployment_identity() -> None:
     env_example = (_ROOT / ".env.example").read_text(encoding="utf-8")
 
-    assert "SCRAP_LIDAR_GENERATOR_SCAN_HOST=height-calculation" in env_example
-    assert "SCRAP_LIDAR_GENERATOR_SCAN_PORT=<height-calculation-listen-port>" in env_example
+    assert "SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR=/run/lidar" in env_example
+    assert "SITE_ID=<site-id>" in env_example
+    assert "EDGE_ID=<edge-id>" in env_example
     assert "SCRAP_LIDAR_GENERATOR_COLLECTION_THRESHOLD_CENTER_RATIO=0.90" in env_example

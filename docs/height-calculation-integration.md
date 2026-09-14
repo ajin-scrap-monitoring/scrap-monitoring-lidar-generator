@@ -1,1 +1,1 @@
-../height-calculation-contract-proposal/README.md
+../edge-platform-integration/README.md

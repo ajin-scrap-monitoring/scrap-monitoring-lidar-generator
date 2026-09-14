@@ -2,45 +2,33 @@
 
 ## 배포 산출물
 
-배포 산출물은 4개 구성 요소로 이루어진다.
+Release 산출물은 4개다.
 
-| 구성 요소 | 형식 | 대상 |
-| --- | --- | --- |
-| Python package | source distribution, wheel | Python 3.14 환경 |
-| OCI image | Raspberry Pi 5용 ARM64 image | `linux/arm64` |
-| 높이 계산 계약 제안 | `height-calculation-contract-proposal-v1.tar.gz` | 높이 계산 Repository 인계 |
-| GitHub Release | version tag, package와 계약 asset 및 `oci-image.txt` | 검증된 `main` commit |
+| 산출물 | 용도 |
+| --- | --- |
+| Python wheel | Python 3.14 설치 |
+| Python source distribution | source 배포 |
+| `edge-platform-integration-v1.tar.gz` | 담당자 Repository 통합 인계 |
+| `oci-image.txt` | ARM64 OCI image의 digest 고정 참조 |
 
-OCI(Open Container Initiative) 이미지는 CPython 3.14.4와 `uv.lock`의 runtime 의존성을 정확히 고정한다. 빌드 단계의 uv와 실행 단계의 CPython base image는 manifest digest로 고정한다. Release 이미지는 Raspberry Pi 5의 `linux/arm64`만 대상으로 한다. 최종 이미지에는 uv와 개발 의존성을 포함하지 않으며 UID(User Identifier)와 GID(Group Identifier) 10001인 비 root 사용자로 실행한다.
+OCI(Open Container Initiative) image는 Raspberry Pi 5용 `linux/arm64` 단일 실행 platform이다.
+CPython base image, uv와 runtime 의존성은 고정되어 있다. 최종 image는 UID(User Identifier)와
+GID(Group Identifier) 10001, read-only root filesystem 전제로 실행하며 compiler, uv, SDK와
+개발 의존성을 포함하지 않는다.
 
-## 로컬 이미지 검증
+## Release 선택
 
-현재 CPU(Central Processing Unit) architecture용 이미지를 빌드하고 CLI(Command-Line Interface)를 확인한다.
-
-```bash
-docker build --tag scrap-monitoring-lidar-generator:local .
-docker run --rm scrap-monitoring-lidar-generator:local --help
-```
-
-## 컨테이너 실행
-
-배포 입력은 5개다.
-
-| 입력 | 제공 방법 | 필수 조건 |
-| --- | --- | --- |
-| ARM64 image | Release asset `oci-image.txt`의 불변 참조 | `linux/arm64`, Public GHCR package |
-| 생성 설정 directory | LiDAR 2대를 포함하는 `examples/`의 3개 JSON 파일을 기반으로 만든 외부 설정 | container의 `/config`에 읽기 전용 mount |
-| scan 수신 endpoint | 환경변수 또는 `generator.v1.json`의 `transport` | 공용 Docker network에서 접근 가능한 높이 계산 process의 TCP server |
-| 관찰 수신 endpoint | 환경변수 또는 CLI 인자 | container에서 접근 가능한 시각화 프로그램의 TCP server |
-| 진단 출력 | 환경변수 또는 `generator.v1.json`의 `diagnostics` | host의 쓰기 가능한 별도 directory |
-
-GitHub Container Registry(GHCR) image는 Public이므로 pull credential이 필요하지 않다.
-Release asset에서 불변 image 참조를 가져와 image를 준비한다.
+배포자는 GitHub Release tag와 image digest를 함께 고정한다.
 
 ```bash
+git clone https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-generator.git
+cd scrap-monitoring-lidar-generator
+
 RELEASE_TAG="$(gh release view \
   --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
   --json tagName --jq .tagName)"
+git switch --detach "$RELEASE_TAG"
+
 RELEASE_DIR="$(mktemp -d)"
 gh release download "$RELEASE_TAG" \
   --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
@@ -50,137 +38,177 @@ IMAGE_REF="$(sed -n '1p' "$RELEASE_DIR/oci-image.txt")"
 docker image pull "$IMAGE_REF"
 ```
 
-엣지 장비에는 Repository clone, Python, uv와 compiler가 필요하지 않다. 배포 제어 장비가
-`examples/environment.v1.json`, `examples/generator.v1.json`과
-`examples/quality-profile.v1.json`을 설정 directory에 함께 배치한다. 상대 경로인
-`environment_path`와 `quality_profile_path`는 `generator.v1.json`이 있는 directory를
-기준으로 해석된다.
+`latest` tag와 변경 가능한 version tag를 실행 입력으로 사용하지 않는다. `oci-image.txt`의
+`name@sha256:<digest>` 값을 사용한다. Public GHCR(GitHub Container Registry) package이므로
+pull credential은 필요하지 않다.
 
-Repository의 [`.env.example`](../.env.example)을 장비 전용 환경변수 파일로 복사하고 실제
-scan 및 관찰 endpoint를 입력한다. `SCRAP_LIDAR_GENERATOR_SCAN_HOST`의 예시값
-`height-calculation`은 공용 Docker network의 높이 계산 container 이름 또는 network
-alias다. `SCRAP_LIDAR_GENERATOR_SCAN_PORT`의
-`<height-calculation-listen-port>`는 높이 계산 프로세스의 실제 TCP 수신 port로 반드시
-바꾼다. 이 프로젝트는 scan 전용 관례 port를 정하지 않는다. 장비 전용 파일, 실제 사설
-주소와 운영 설정은 Git에 추가하지 않는다.
+## 배포 입력
+
+배포 입력은 6개다.
+
+| 입력 | 제공 방식 |
+| --- | --- |
+| 생성기 image | Release digest |
+| 공개 합성 JSON 3개 | read-only bind mount |
+| 생성기 실행 설정 | 장비별 `.env` |
+| scan UDS directory | 생성기와 `lidar-processing`의 공용 bind mount |
+| 상태 directory | 생성기와 상태 수집기의 공용 bind mount |
+| 진단 directory | 선택적 writable bind mount |
+
+관찰 수신 프로그램은 별도 장비에서 TCP server를 연다. 생성기 `.env`의 관찰 host와 port가
+해당 endpoint를 가리킨다. scan 통신은 같은 edge host의 UDS이므로 Docker network와 TCP
+port가 필요하지 않다.
+
+## Host 준비
+
+두 container는 UID와 GID 10001로 실행한다. 공용 socket directory는 두 process가 접근할 수
+있도록 10001:10001과 mode 0770으로 준비한다.
 
 ```bash
-install -m 0600 \
-  .env.example \
-  /path/to/scrap-monitoring-lidar-generator.env
+CONFIG_DIR=/opt/ajin/config/lidar-generator
+SOCKET_DIR=/opt/ajin/runtime/sockets/lidar-generator
+STATUS_DIR=/opt/ajin/runtime/status
+DIAGNOSTICS_DIR=/opt/ajin/runtime/diagnostics/lidar-generator
+
+sudo install -d -m 0755 "$CONFIG_DIR"
+sudo install -m 0644 \
+  examples/environment.v1.json \
+  examples/generator.v2.json \
+  examples/quality-profile.v1.json \
+  "$CONFIG_DIR/"
+sudo install -d -m 0755 "$STATUS_DIR"
+sudo install -d -o 10001 -g 10001 -m 0770 \
+  "$SOCKET_DIR" \
+  "$STATUS_DIR/lidar-driver-a" \
+  "$STATUS_DIR/lidar-driver-b" \
+  "$DIAGNOSTICS_DIR"
+sudo install -o root -g root -m 0600 \
+  .env.example /etc/scrap-monitoring-lidar-generator.env
+sudoedit /etc/scrap-monitoring-lidar-generator.env
 ```
 
-환경변수 파일은 배포 계정만 읽을 수 있게 한다. 진단을 사용하면 host의 진단 directory를
-UID(User Identifier)와 GID(Group Identifier) 10001이 쓸 수 있게 준비한다. 진단을
-사용하지 않으면 `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=false`로 설정하고 진단 mount를
-생략할 수 있다. 평균 적재 주기는 `SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S`로 지정하며
-기본 예시는 24시간인 86,400초다. 수거 기준 임계치는
-`SCRAP_LIDAR_GENERATOR_COLLECTION_THRESHOLD_CENTER_RATIO`로 지정하며 기본 예시 0.90은
-회차별 0.85부터 0.95 범위를 만든다. 환경변수 파일에는 크레덴셜을 넣지 않는다. 현재 scan
-및 관찰 계약에는 인증 입력이 없으며 환경변수는 비밀값을 처리하지 않는다.
+장비별 `.env`의 `<...>` placeholder와 `visualizer.example`을 실제 배포값으로 바꾼다. 다음
+container 경로는 mount 대상과 일치해야 한다.
 
-운영 구성 요소는 생성기 container, 높이 계산 container와 별도 장비의 관찰 수신 프로그램
-3개다. 생성기와 높이 계산 container는 같은 사용자 정의 Docker network에 연결하고, 높이
-계산 container는 `height-calculation` 이름 또는 network alias로 TCP server를 연다. 관찰
-수신 프로그램은 이 network에 참여하지 않아도 된다.
+```text
+SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v2.json
+SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR=/run/lidar
+SCRAP_LIDAR_GENERATOR_STATUS_DIR=/status
+SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics
+```
 
-생성 설정은 이미지에 포함하지 않고 읽기 전용 bind mount로 전달한다. 다음 명령은 공용
-network를 준비하고, 재부팅 후에도 생성기 container를 다시 시작하며 Docker log file의
-크기를 제한한다.
+환경변수 전체 목록과 역할은 [`configuration.md`](configuration.md)가 정본이다. 현재 생성기
+계약에는 자격 증명이 없으므로 `.env`와 Docker secret에 자격 증명을 추가하지 않는다.
+
+## 처리 설정 준비
+
+`lidar-processing`은 생성기 JSON을 직접 읽지 않는다. 배포 제어 장비에서 exporter를 실행해
+담당자 처리 JSON을 만든다.
 
 ```bash
-EDGE_NETWORK=scrap-monitoring-edge
-docker network inspect "$EDGE_NETWORK" >/dev/null 2>&1 || \
-  docker network create "$EDGE_NETWORK"
+uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
+  --generator-config "$CONFIG_DIR/generator.v2.json" \
+  --base-config /path/to/edge-base.json \
+  --socket-dir /sockets \
+  --site-id "$SITE_ID" \
+  --edge-id "$EDGE_ID" \
+  --config-revision "$CONFIG_REVISION" \
+  --output /path/to/edge.json
+```
 
-docker run --detach \
+생성기와 처리 설정의 `SITE_ID`, `EDGE_ID`, `CONFIG_REVISION`은 같아야 한다. 합성 exporter
+출력은 `demo` calibration이고 실제 현장 calibration을 대체하지 않는다. exporter는 base
+설정의 `lidar-driver-a`와 `lidar-driver-b` service version을 실행 중인 생성기 package version으로
+바꾼다. exporter source와 배포 image version이 다르면 `--driver-service-version`에 image
+version을 지정한다.
+
+최종 `edge.json`을 read-only로 `lidar-processing`에 mount한다. 처리 container의
+`CONFIG_SHA256`은 exporter 입력이 아니라 최종 파일에서 계산한다.
+
+```bash
+CONFIG_SHA256="$(sha256sum /path/to/edge.json | awk '{print $1}')"
+```
+
+## 생성기 실행
+
+```bash
+sudo docker run --detach \
   --name scrap-monitoring-lidar-generator \
-  --network "$EDGE_NETWORK" \
   --restart unless-stopped \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges=true \
+  --init \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  --env-file /path/to/scrap-monitoring-lidar-generator.env \
-  --mount type=bind,src=/path/to/config,dst=/config,readonly \
-  --mount type=bind,src=/path/to/diagnostics,dst=/data/diagnostics \
+  --env-file /etc/scrap-monitoring-lidar-generator.env \
+  --mount type=bind,src="$CONFIG_DIR",dst=/config,readonly \
+  --mount type=bind,src="$SOCKET_DIR",dst=/run/lidar \
+  --mount type=bind,src="$STATUS_DIR/lidar-driver-a",dst=/status/lidar-driver-a \
+  --mount type=bind,src="$STATUS_DIR/lidar-driver-b",dst=/status/lidar-driver-b \
+  --mount type=bind,src="$DIAGNOSTICS_DIR",dst=/data/diagnostics \
   "$IMAGE_REF"
 ```
 
-scan 수신 endpoint와 관찰 수신 endpoint는 서로 다른 설정이다. scan endpoint는 공용
-Docker network의 내부 DNS로 해석한다. 관찰 endpoint에는 생성기 container에서 router를
-거쳐 접근할 수 있는 DNS(Domain Name System) 이름 또는 IP 주소를 사용한다. 공개
-Repository에는 실제 사설 주소를 기록하지 않는다.
-전체 환경변수 목록, CLI 대응값과 우선순위는 [`configuration.md`](configuration.md)의
-실행 설정 계층이 정본이다.
+진단을 사용하지 않으면 `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=false`로 지정하고 진단
+mount를 생략할 수 있다. Docker Engine의 `--cpus`와 `--memory`는 장비 검증에서 확정한 값만
+적용한다. Repository는 다른 edge process와 함께 측정하기 전에 운영 자원 상한을 정하지 않는다.
 
-Docker Engine의 `--cpus`와 `--memory`로 생성 프로그램의 자원 상한을 지정할 수 있다.
-대상 Raspberry Pi 5에서 다른 edge process와 함께 측정한 결과가 확정되기 전에는
-Repository가 기본 자원 상한을 정하지 않는다.
+`lidar-processing` container는 같은 host `SOCKET_DIR`을 `/sockets`에 mount한다. 처리 JSON의
+endpoint는 `unix:/sockets/lidar_1.sock`과 `unix:/sockets/lidar_2.sock`이다. 같은 UID와 GID를
+사용하므로 생성기가 mode 0660으로 만든 socket에 연결할 수 있다.
 
-Docker Engine은 SIGTERM을 전달하며 프로그램은 진행 중인 생성과 송신 작업을 종료한 뒤
-마지막 집계를 표준 출력에 기록한다. 첫 줄은 실행 식별자와 생성, ACK 및 미응답 frame 수를
-제공한다. `transport` 줄은 적재, 송신, ACK, 거부, 시간 만료, 용량 폐기, 크기 초과, 연결 실패,
-미응답 frame 및 byte를 제공한다. `observation` 줄은 전송, 폐기와 연결 실패를 제공한다.
-환경, version 또는 응답 규격 오류로 전체 scan 전송이
-중단되면 원인 센서와 오류를 최초 발생 시 표준 오류에 기록한다. 시나리오 계산과 bounded
-buffer 만료는 container가 종료될 때까지 계속된다. 설정 오류도 표준 오류에 기록한다.
-`docker logs scrap-monitoring-lidar-generator`로 시작 및 종료 결과를 확인한다. 실행 중인
-container와 적용 image digest는 다음 명령으로 확인한다.
+## 생명주기와 운영 확인
+
+생성기는 구독자가 없어도 두 sensor의 scan을 계속 만들고 최신 frame 2개를 갱신한다. 처리
+container가 나중에 연결하면 연결 이후의 최신 frame부터 받는다. gRPC 구독 재연결은 적재
+모델을 초기화하지 않는다. 생성기 process 재시작만 새 빈 적재 모델, 새 `instance_id`와
+sequence 1을 만든다.
+
+SIGTERM은 생성, 관찰 publisher, 상태 writer와 gRPC server를 순서대로 종료한다. 정상 종료는
+UDS 파일을 제거한다. 비정상 종료로 남은 socket은 다음 시작 때 socket type인지 확인한 뒤
+제거한다. 일반 파일과 directory는 덮어쓰지 않는다.
 
 ```bash
-docker container inspect scrap-monitoring-lidar-generator \
+sudo docker container inspect scrap-monitoring-lidar-generator \
   --format '{{.State.Status}} {{.State.ExitCode}} {{.Image}}'
-docker image inspect "$IMAGE_REF" --format '{{index .RepoDigests 0}}'
+sudo docker logs --tail 20 scrap-monitoring-lidar-generator
+sudo docker image inspect "$IMAGE_REF" --format '{{index .RepoDigests 0}}'
+sudo find "$SOCKET_DIR" "$STATUS_DIR" -maxdepth 2 \( -type f -o -type s \)
 ```
 
-적재 모델 관찰은 [`docs/observation.md`](observation.md)의 별도 TCP stream을 사용한다. 운영 이미지는 JSON Lines snapshot을 계속 전송하지만 관찰 기록, 3D 렌더러와 FFmpeg를 포함하지 않는다.
+정상 실행은 `lidar_1.sock`, `lidar_2.sock`,
+`lidar-driver-a/lidar-driver-a.json`과 `lidar-driver-b/lidar-driver-b.json`을 만든다. 이 하위
+구조는 담당자 orchestrator가 읽는 경로다. driver 상태는 첫 frame 전 `STARTING`, 게시 후
+`HEALTHY`다.
 
-## 반복 가능한 엣지 검증
+## 반복 가능한 image 검증
 
-`tests/edge/run.sh`는 Docker Engine만 설치된 Linux 장비에서 scan ACK와 관찰 JSON Lines 수신 test double을 실행한다. 검증 도구는 test double 코드를 대상 image에 읽기 전용 mount하므로 운영 image에 개발 도구나 추가 의존성을 포함하지 않는다. 검증 대상은 도구와 같은 source revision으로 만든 digest 고정 image여야 한다.
-
-검증 입력은 5개다.
-
-| 입력 | 기준 |
-| --- | --- |
-| image | `name@sha256:<digest>` 형식의 불변 참조 |
-| 설정 directory | 정확히 2개 센서를 포함하는 3개 JSON 설정 |
-| 실행 구간 | 양의 정수 wall-clock 초, 기본 30초 |
-| CPU 상한 | 양의 Docker CPU 값, 개발 검증 기본 2 core |
-| 결과 directory | 생략 시 `/tmp` 아래 임시 directory |
-
-Repository의 검증 도구와 설정을 엣지 장비의 작업 directory에 전달한 뒤 다음 명령을 실행한다.
+검증 도구는 digest image, 공개 설정, sensor별 gRPC 구독, 관찰 TCP 수신과 상태 파일을 하나의
+격리 실행에서 확인한다.
 
 ```bash
+VALIDATION_DIR="$(mktemp -d)"
 tests/edge/run.sh \
   --image "$IMAGE_REF" \
   --config-dir examples \
   --duration-s 30 \
   --cpus 2 \
-  --output-dir /tmp/lidar-edge-validation
+  --output-dir "$VALIDATION_DIR"
 ```
 
-도구는 센서별 TCP 연결과 scan 수신, sequence gap, 전송 폐기 및 실패, 종료 시 최대 2개의 전송 중 frame, 관찰 header와 동적 snapshot을 검사한다. `generator.log`, `receiver.log`, `docker-stats.jsonl`과 `container-inspect.json`은 지정한 결과 directory에 남는다. 이 결과에는 실행 환경의 경로와 운영 정보가 포함될 수 있으므로 Git에 추가하지 않는다. CPU 2 core는 test double 검증의 시작값이며 실제 높이 계산 process와 다른 edge process를 포함한 운영 자원 기준이 아니다.
+성공 출력은 `edge_validation=passed sensors=2`로 시작한다. 검증기는 두 구독의 frame 수신,
+sequence, Proto 정규화 범위, 관찰 header와 snapshot, 두 상태 파일을 검사한다. 결과 directory는
+로그, Docker 통계, inspect와 상태 snapshot을 포함할 수 있으므로 Git에 추가하지 않는다. CPU
+2 core는 test double 검증 시작값이며 운영 상한이 아니다.
 
-## Release
+## Release workflow
 
-Release workflow는 원격 `main` 이력에 포함된 commit의 `vMAJOR.MINOR.PATCH` tag만 처리한다. workflow는 전체 소스 검증과 package build를 실행하고 `linux/arm64` 이미지를 GitHub Container Registry에 `MAJOR.MINOR.PATCH`와 `sha-<full-git-sha>` tag로 게시한다. 두 tag가 같은 manifest digest를 가리키는지, 실행 platform이 ARM64 하나인지와 package가 Public인지 검증한 뒤 Python package, 높이 계산 계약 제안 tar.gz와 불변 image 참조를 기록한 `oci-image.txt`를 GitHub Release asset으로 게시한다. 배포 환경은 tag 대신 검증한 manifest digest를 사용한다. 이미지는 Software Bill of Materials(SBOM)와 provenance attestation을 포함한다.
+Release workflow는 원격 `main` 이력에 포함된 `vMAJOR.MINOR.PATCH` tag만 처리한다. tag version과
+`pyproject.toml` version이 같아야 한다. workflow는 전체 검증, 담당자 source 직접 검증,
+package와 ARM64 image build를 수행한다. image에는 SBOM(Software Bill of Materials)과 provenance
+attestation을 포함한다.
 
-프로젝트 버전과 tag 버전을 일치시킨 검증 완료 commit에만 release tag를 생성한다. 게시된 tag, image tag와 Release asset은 변경하지 않는다.
-
-배포할 version의 Release asset `oci-image.txt`를 불변 image 참조의 정본으로 사용한다.
-장비별 검증 결과와 적용한 digest는 [`performance.md`](performance.md)에 기록한다.
-
-## 현재 검증 기준
-
-현재 ARM64 배포 산출물은 GitHub의
-[최신 Release](https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-generator/releases/latest)에서
-확인한다. Release asset의 image는 `linux/arm64` 단일 실행 platform과 Public package
-상태를 확인한다. 고정 LiDAR 2대 생성, 센서별 독립 전송 lane, 전체 종료 전송 집계,
-환경변수 설정 계층, 반복 가능한 엣지 검증과 적재 모델 관찰 stream을 포함한다.
-
-Raspberry Pi 5에서 직접 검증한 최신 기준은 `v0.4.0`이다. scan ACK test double과 관찰
-stream test double을 사용한 고정 센서 2개 구성은 CPU 2 core 상한의 30초 검증에서 모든
-scan과 관찰 record를 환경변수 파일로 주입한 endpoint에 손실 없이 전달했다. source
-revision, 불변 image digest와 장비별 관측값은
-[`performance.md`](performance.md)가 정본이다. 실제 scan 수신 프로그램과 별도 시각화
-장비의 endpoint가 확정되면 검증한 digest와 외부 운영 설정으로 상시 container를 배치한다.
+workflow는 version tag와 `sha-<full-git-sha>` tag가 같은 manifest digest인지, 실행 platform이
+`linux/arm64` 하나인지, GHCR package가 Public인지 확인한 뒤 Release를 게시한다. 게시한 tag,
+image tag와 Release asset은 변경하지 않는다.

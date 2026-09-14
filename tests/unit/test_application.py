@@ -4,6 +4,7 @@ import asyncio
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import ClassVar, TypedDict
 
 import pytest
 
@@ -14,22 +15,44 @@ from scrap_monitoring_lidar_generator.runtime import (
     run_generator_application,
     run_scan_generation,
 )
-from scrap_monitoring_lidar_generator.transport import (
-    BufferEnqueueResult,
-    ScanMessage,
-    ScanMessageFactory,
-)
+from scrap_monitoring_lidar_generator.scan_stream import ScanFrameFactory, ScanServerStats
+from scrap_monitoring_lidar_generator.wire import lidar_pb2
 
 _ROOT = Path(__file__).parents[2]
 
 
 class _RecordingSink:
     def __init__(self) -> None:
-        self.messages: list[ScanMessage] = []
+        self.frames: list[lidar_pb2.ScanFrame] = []
 
-    def enqueue_scan(self, message: ScanMessage) -> BufferEnqueueResult:
-        self.messages.append(message)
-        return BufferEnqueueResult(accepted=True, discarded=())
+    async def publish(self, frame: lidar_pb2.ScanFrame) -> None:
+        self.frames.append(frame)
+
+
+class _ScanServer(_RecordingSink):
+    instance_ids: ClassVar[dict[str, str]] = {
+        "lidar_1": "instance-1",
+        "lidar_2": "instance-2",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = False
+        self.closed = False
+
+    @property
+    def stats(self) -> ScanServerStats:
+        return ScanServerStats(
+            published_frames=len(self.frames),
+            frame_loss=0,
+            subscribers=0,
+        )
+
+    async def start(self) -> None:
+        self.started = True
+
+    async def close(self) -> None:
+        self.closed = True
 
 
 class _ObservationPublisher:
@@ -67,7 +90,7 @@ class _ObservationPublisher:
 
 
 def _inputs_with_diagnostics_disabled() -> GeneratorInputs:
-    inputs = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
+    inputs = load_generator_inputs(_ROOT / "examples" / "generator.v2.json")
     return replace(
         inputs,
         generator=replace(
@@ -77,14 +100,40 @@ def _inputs_with_diagnostics_disabled() -> GeneratorInputs:
     )
 
 
+class _ApplicationArguments(TypedDict):
+    grpc_socket_dir: Path
+    status_dir: Path
+    site_id: str
+    edge_id: str
+    config_revision: str
+    deployment_revision: str
+    scan_server: _ScanServer
+
+
+def _application_arguments(server: _ScanServer) -> _ApplicationArguments:
+    return {
+        "grpc_socket_dir": Path("/tmp/test-sockets"),
+        "status_dir": Path("/tmp/test-status"),
+        "site_id": "site-a",
+        "edge_id": "edge-a",
+        "config_revision": "config-a",
+        "deployment_revision": "deployment-a",
+        "scan_server": server,
+    }
+
+
 def test_generation_uses_absolute_rotation_deadlines_and_message_identity() -> None:
     async def run() -> None:
         inputs = _inputs_with_diagnostics_disabled()
         runtime = build_measurement_generation_runtime(inputs)
-        factory = ScanMessageFactory(
-            environment_id=inputs.environment.environment_id,
-            run_id="run-a",
-            run_started_at_utc_us=1_800_000_000_000_000,
+        clock_values = iter((1_000_000_000, 1_000_000_001, 1_100_000_000, 1_100_000_001))
+        factory = ScanFrameFactory(
+            sensor_ids=("lidar_1", "lidar_2"),
+            edge_id="edge-a",
+            config_revision="config-a",
+            instance_ids={"lidar_1": "instance-1", "lidar_2": "instance-2"},
+            monotonic_ns=lambda: next(clock_values),
+            unix_ms=lambda: 1_800_000_000_000,
         )
         sink = _RecordingSink()
         stop_event = asyncio.Event()
@@ -92,27 +141,27 @@ def test_generation_uses_absolute_rotation_deadlines_and_message_identity() -> N
 
         async def wait_until(deadline_s: float, event: asyncio.Event) -> bool:
             deadlines.append(deadline_s)
-            if len(deadlines) == 2:
+            if len(deadlines) == 3:
                 event.set()
                 return True
             return False
 
         generated = await run_scan_generation(
             runtime=runtime,
-            message_factory=factory,
+            frame_factory=factory,
             sink=sink,
             stop_event=stop_event,
             run_started_at_monotonic_s=100.0,
             wait_until=wait_until,
         )
 
-        assert generated == 2
-        assert deadlines == pytest.approx([100.0 + 1.0 / 10.0, 100.0 + 2.0 / 10.0])
-        assert len(sink.messages) == 2
-        assert [message.sensor_id for message in sink.messages] == ["lidar_1", "lidar_2"]
-        assert all(message.run_id == "run-a" for message in sink.messages)
-        assert all(message.scan_id == 1 for message in sink.messages)
-        assert all(message.captured_at == 1_800_000_000_000_000 for message in sink.messages)
+        assert generated == 4
+        assert deadlines == pytest.approx(
+            [100.0 + 1.0 / 10.0, 100.0 + 2.0 / 10.0, 100.0 + 3.0 / 10.0]
+        )
+        assert [frame.sensor_id for frame in sink.frames] == ["lidar_1", "lidar_2"]
+        assert all(frame.sequence == 1 for frame in sink.frames)
+        assert all(frame.acquired_at_unix_ms == 1_800_000_000_000 for frame in sink.frames)
 
     asyncio.run(run())
 
@@ -122,28 +171,29 @@ def test_application_returns_identity_and_empty_counters_when_already_stopped() 
         stop_event = asyncio.Event()
         stop_event.set()
 
+        server = _ScanServer()
         summary = await run_generator_application(
             _inputs_with_diagnostics_disabled(),
             stop_event=stop_event,
             run_id="run-a",
             run_started_at_utc_us=123,
             observation_publisher=_ObservationPublisher(),
+            **_application_arguments(server),
         )
 
         assert summary.run_id == "run-a"
         assert summary.run_started_at_utc_us == 123
         assert summary.generated_scans == 0
-        assert summary.pending_frames == 0
-        assert summary.pending_bytes == 0
-        assert summary.sender_stats.enqueued_frames == 0
-        assert summary.sender_halt is None
+        assert summary.scan_server_stats.published_frames == 0
+        assert server.started
+        assert server.closed
 
     asyncio.run(run())
 
 
 def test_application_composes_two_generated_scans_and_closes_diagnostics(tmp_path: Path) -> None:
     async def run() -> None:
-        inputs = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
+        inputs = load_generator_inputs(_ROOT / "examples" / "generator.v2.json")
         inputs = replace(
             inputs,
             generator=replace(
@@ -167,6 +217,7 @@ def test_application_composes_two_generated_scans_and_closes_diagnostics(tmp_pat
                 return True
             return False
 
+        server = _ScanServer()
         summary = await run_generator_application(
             inputs,
             stop_event=stop_event,
@@ -174,12 +225,11 @@ def test_application_composes_two_generated_scans_and_closes_diagnostics(tmp_pat
             run_started_at_utc_us=123,
             wait_until=wait_until,
             observation_publisher=_ObservationPublisher(),
+            **_application_arguments(server),
         )
 
         assert summary.generated_scans == 2
-        assert summary.pending_frames == 2
-        assert summary.pending_bytes > 0
-        assert summary.sender_stats.enqueued_frames == 2
+        assert summary.scan_server_stats.published_frames == 0
         diagnostic_files = list((tmp_path / "diagnostics").iterdir())
         assert len(diagnostic_files) == 1
         diagnostic_text = diagnostic_files[0].read_text(encoding="utf-8")
@@ -208,6 +258,7 @@ def test_application_publishes_observation_without_changing_generation() -> None
             return False
 
         publisher = _ObservationPublisher()
+        server = _ScanServer()
         summary = await run_generator_application(
             inputs,
             stop_event=stop_event,
@@ -215,6 +266,7 @@ def test_application_publishes_observation_without_changing_generation() -> None
             run_started_at_utc_us=123,
             wait_until=wait_until,
             observation_publisher=publisher,
+            **_application_arguments(server),
         )
 
         assert summary.generated_scans == 2
@@ -241,6 +293,7 @@ def test_observation_failure_does_not_stop_scan_generation() -> None:
                 return True
             return False
 
+        server = _ScanServer()
         summary = await run_generator_application(
             inputs,
             stop_event=stop_event,
@@ -248,6 +301,7 @@ def test_observation_failure_does_not_stop_scan_generation() -> None:
             run_started_at_utc_us=123,
             wait_until=wait_until,
             observation_publisher=_ObservationPublisher(raises=True),
+            **_application_arguments(server),
         )
 
         assert summary.generated_scans == 2
