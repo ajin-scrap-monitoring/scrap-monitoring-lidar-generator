@@ -158,6 +158,23 @@ def test_quality_sampling_follows_configured_frequencies() -> None:
     assert 0.72 < float(np.mean(qualities == 20)) < 0.78
 
 
+def test_negative_noisy_distance_becomes_invalid_without_aborting_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reference = _reference((1.0, 1.0, 1.0, 0.0, 2.0, 10.0))
+    monkeypatch.setattr(
+        "scrap_monitoring_lidar_generator.measurement.generation._sample_truncated_normal",
+        lambda *args, **kwargs: np.array((-2.0, -1.0, -0.25, 5.0, 0.25, 5.0)),
+    )
+    generator = _generator(noise_enabled=True, standard_deviation_m=10.0, limit_m=20.0)
+
+    result = generator.generate(reference)
+
+    assert result.reference is reference
+    assert result.measured.scan.distances_m.tolist() == [0.0, 0.0, 0.0, 0.0, 2.25, 0.0]
+    assert result.measured.scan.qualities.tolist() == [7, 7, 7, 7, 64, 7]
+
+
 def test_same_seed_reproduces_consecutive_measurement_scans() -> None:
     generators = [_generator(noise_enabled=True, seed=456) for _ in range(2)]
     references = [_reference((5.0,) * 100, scan_id=index) for index in (1, 2)]

@@ -199,7 +199,8 @@ Release 선택, Host 준비, 전체 Docker 명령과 반복 가능한 image 검�
 | [`docs/deployment.md`](docs/deployment.md) | 검증 image 배포와 실행 |
 | [`docs/performance.md`](docs/performance.md) | 부하 측정 범위와 기준 |
 | [`docs/dependencies.md`](docs/dependencies.md) | 직접 의존성과 라이선스 |
-| [`docs/development-plan.md`](docs/development-plan.md) | 현재 완료 상태와 후속 검증 |
+| [`docs/development-plan.md`](docs/development-plan.md) | 현재 상태와 Python에서 Rust로의 전환 계획 |
+| [`docs/synthetic-environment-specification/`](docs/synthetic-environment-specification/) | 공개 합성 환경의 자기완결 Markdown, DOCX, PDF와 도면 묶음 |
 
 ## 이용 조건
 

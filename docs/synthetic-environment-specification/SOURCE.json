@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "environment_id": "synthetic-scrap-pit-v1",
+  "input_fingerprint_sha256": "c062670498a299f28eecf78667c18eccea6316ae06d8711a48ba99b2aa27f126",
+  "artifact_fingerprint_sha256": "123cb885cd6e0a11c022c65f5e22d1f0247fe460c61cb40a0756c36ee724ab19",
+  "sources": [
+    {
+      "path": "examples/environment.v1.json",
+      "sha256": "9d1253e0ed80a3c2b67609c7397a499bf8e6061cbd7144ff273732e9aa32a33a"
+    },
+    {
+      "path": "examples/generator.v2.json",
+      "sha256": "33d21c149410f69e4ac1dcb2fc52caab2aaaffd61a8f4e986fb165ae740efd9f"
+    },
+    {
+      "path": "examples/quality-profile.v1.json",
+      "sha256": "a89f33e158c937e727d45523ad103a4b349298041dce1f12630fce6f2b6ee91c"
+    }
+  ],
+  "generator": {
+    "path": "docs/synthetic-environment-specification/generate.py",
+    "sha256": "60366498e871dc3a72d95a0c22f0b53fbc8b89159c6d6c760b3ab8d9a2f9dfb5"
+  },
+  "model_values": {
+    "angle_of_repose_deg": 35.0,
+    "slope_relaxation_max_iterations": 32
+  },
+  "generated_artifacts": [
+    "assets/plan-view.png",
+    "assets/isometric-view.png",
+    "synthetic-environment-specification.md",
+    "synthetic-environment-specification.docx",
+    "synthetic-environment-specification.pdf"
+  ]
+}

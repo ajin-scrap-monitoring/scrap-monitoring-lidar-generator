@@ -30,6 +30,10 @@ dev = [
     "types-jsonschema>=4.26.0.20260518,<5",
     "types-grpcio>=1.83.0.20260730,<1.84",
 ]
+docs = [
+    "pillow==12.3.0",
+    "python-docx==1.2.0",
+]
 [tool.uv]
 required-version = "==0.12.12"
 

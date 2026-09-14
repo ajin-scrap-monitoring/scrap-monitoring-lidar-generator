@@ -2,7 +2,7 @@
 
 ## 적용 범위
 
-현재 직접 사용하는 외부 의존성은 22개다. NumPy, `grpcio`와 `protobuf`는 애플리케이션
+현재 직접 사용하는 외부 의존성은 26개다. NumPy, `grpcio`와 `protobuf`는 애플리케이션
 runtime의 수치 연산과 외부 gRPC(Google Remote Procedure Call) 계약에 사용한다. 나머지
 항목은 Python 실행, wire binding 생성, 빌드, 개발 검증, CI(Continuous Integration)와
 Release에 사용한다.
@@ -31,5 +31,9 @@ Release에 사용한다.
 | `docker/build-push-action` | `v7.3.0` | OCI image build, attestation과 registry 게시 | [Docker](https://github.com/docker/build-push-action) | Apache-2.0 |
 | `softprops/action-gh-release` | `v3.0.3` | integration bundle과 image 참조를 포함한 GitHub Release 게시 | [GitHub](https://github.com/softprops/action-gh-release) | MIT |
 | rumdl | `>=0.2.70,<0.3` | Markdown 형식 검사 | [GitHub](https://github.com/rvben/rumdl) | MIT |
+| Pillow | `12.3.0` | 합성 환경 PNG 도면 생성 | [Pillow](https://python-pillow.github.io/) | HPND |
+| `python-docx` | `1.2.0` | 합성 환경 DOCX 생성 | [python-docx](https://python-docx.readthedocs.io/) | MIT |
+| LibreOffice | `7.4` | 합성 환경 DOCX의 PDF 변환 | [LibreOffice](https://www.libreoffice.org/) | MPL-2.0 |
+| DejaVu Sans | `2.37` | 합성 환경 PNG 도면 글꼴 | [DejaVu Fonts](https://dejavu-fonts.github.io/) | Bitstream-Vera |
 
 애플리케이션 또는 개발 의존성을 추가하거나 버전을 변경하면 같은 Pull Request에서 이 표와 잠금 파일을 갱신한다.

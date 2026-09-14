@@ -171,6 +171,7 @@ class MeasurementGenerator:
             distorted_valid = distances_m > 0.0
             distances_m[distorted_valid] += noise_m[distorted_valid]
 
+        np.maximum(distances_m, 0.0, out=distances_m)
         distances_m = quantize_hq_distances_m(distances_m)
         final_valid = (
             (distances_m > 0.0)

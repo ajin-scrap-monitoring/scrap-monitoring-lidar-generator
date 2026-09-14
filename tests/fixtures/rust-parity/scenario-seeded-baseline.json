@@ -1,0 +1,1745 @@
+{
+  "comparison_class": "python-seeded-reference",
+  "generator_overrides": {
+    "measurement": {
+      "distortions": {
+        "collection_occlusion": {
+          "duration_s_range": [
+            6480.0,
+            8640.0
+          ],
+          "event_interval_s_range": [
+            2160.0,
+            4320.0
+          ]
+        },
+        "dropout": {
+          "duration_s_range": [
+            2160.0,
+            2160.0
+          ],
+          "enabled": true,
+          "event_interval_s_range": [
+            8640.0,
+            8640.0
+          ]
+        },
+        "falling_material": {
+          "duration_s_range": [
+            2160.0,
+            6480.0
+          ],
+          "event_rate_per_s": 4.6296296296296294e-05,
+          "radius_m_range": [
+            0.2,
+            0.5
+          ]
+        },
+        "reflection_error": {
+          "probability": 0.1
+        },
+        "voids": {
+          "duration_s_range": [
+            10800.0,
+            21600.0
+          ],
+          "radius_m_range": [
+            0.15,
+            0.25
+          ],
+          "surface_area_ratio": 0.01
+        }
+      },
+      "rotation_rate_hz": 4.0,
+      "sample_rate_hz": 40.0
+    },
+    "scenario": {
+      "collection_duration_factor_range": [
+        0.25,
+        0.25
+      ],
+      "collection_rate_change_duration_s_range": [
+        5400.0,
+        10800.0
+      ],
+      "collection_threshold_range": [
+        0.6,
+        0.6
+      ],
+      "fill_duration_factor_range": [
+        1.0,
+        1.0
+      ],
+      "fill_rate_change_duration_s_range": [
+        21600.0,
+        43200.0
+      ],
+      "mean_fill_duration_s": 4.0
+    }
+  },
+  "records": [
+    {
+      "inlet_heights_m": [
+        1.7680217971122207,
+        0.6521308919121185
+      ],
+      "scans": [
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            3.712,
+            6.06825,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            24,
+            24,
+            24,
+            80,
+            80,
+            0,
+            0,
+            0,
+            0
+          ],
+          "reference": {
+            "angles_deg": [
+              144.7613525390625,
+              180.7635498046875,
+              216.76025390625,
+              252.762451171875,
+              288.7591552734375,
+              324.7613525390625,
+              0.7635498046875,
+              36.76025390625,
+              72.762451171875,
+              108.7591552734375
+            ],
+            "completed_at_s": 0.5,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.696354979579243,
+              6.066032717541501,
+              10.262002783934003,
+              0.8354665762095587,
+              0.5235139622962557,
+              0.0
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "wall",
+              "floor",
+              "wall",
+              "wall",
+              null
+            ],
+            "point_elapsed_times_s": [
+              0.25,
+              0.275,
+              0.3,
+              0.325,
+              0.35,
+              0.375,
+              0.4,
+              0.425,
+              0.45,
+              0.475
+            ],
+            "rotation_started_at_s": 0.25,
+            "scan_id": 2,
+            "sensor_id": "lidar_1"
+          }
+        },
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            24,
+            0,
+            24,
+            0,
+            24,
+            0,
+            24,
+            0,
+            24,
+            0
+          ],
+          "reference": {
+            "angles_deg": [
+              91.9061279296875,
+              127.9083251953125,
+              163.905029296875,
+              199.9072265625,
+              235.9039306640625,
+              271.9061279296875,
+              307.9083251953125,
+              343.905029296875,
+              19.9072265625,
+              55.9039306640625
+            ],
+            "completed_at_s": 0.5,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              5.049952740821661,
+              10.754507795523178,
+              4.709582995749319
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "floor",
+              "wall"
+            ],
+            "point_elapsed_times_s": [
+              0.25,
+              0.275,
+              0.3,
+              0.325,
+              0.35,
+              0.375,
+              0.4,
+              0.425,
+              0.45,
+              0.475
+            ],
+            "rotation_started_at_s": 0.25,
+            "scan_id": 2,
+            "sensor_id": "lidar_2"
+          }
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": 0,
+        "cycle_index": 0,
+        "elapsed_s": 0.5,
+        "phase": "filling",
+        "phase_duration_s": 4.0,
+        "phase_ends_at_s": 4.0,
+        "phase_started_at_s": 0.0,
+        "rate_factor": 1.074459439858005,
+        "surface_fill_ratio": 0.07732832523912349,
+        "surface_updated_at_s": 0.5,
+        "surface_volume_m3": 11.413660805294626,
+        "target_fill_ratio": 0.6
+      }
+    },
+    {
+      "inlet_heights_m": [
+        3.957315136061597,
+        2.5928566147788286
+      ],
+      "scans": [
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            3.68425,
+            6.085,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            0,
+            0,
+            48,
+            80,
+            0,
+            0,
+            0,
+            0
+          ],
+          "reference": {
+            "angles_deg": [
+              144.7613525390625,
+              180.7635498046875,
+              216.76025390625,
+              252.762451171875,
+              288.7591552734375,
+              324.7613525390625,
+              0.7635498046875,
+              36.76025390625,
+              72.762451171875,
+              108.7591552734375
+            ],
+            "completed_at_s": 2.0,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.696354979579243,
+              6.066032717541501,
+              6.205853676689715,
+              0.8354665762095587,
+              0.5235139622962557,
+              0.0
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "wall",
+              "surface",
+              "wall",
+              "wall",
+              null
+            ],
+            "point_elapsed_times_s": [
+              1.75,
+              1.775,
+              1.8,
+              1.825,
+              1.85,
+              1.875,
+              1.9,
+              1.925,
+              1.95,
+              1.975
+            ],
+            "rotation_started_at_s": 1.75,
+            "scan_id": 8,
+            "sensor_id": "lidar_1"
+          }
+        },
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            0,
+            0,
+            24,
+            0,
+            24,
+            24,
+            0,
+            0
+          ],
+          "reference": {
+            "angles_deg": [
+              91.9061279296875,
+              127.9083251953125,
+              163.905029296875,
+              199.9072265625,
+              235.9039306640625,
+              271.9061279296875,
+              307.9083251953125,
+              343.905029296875,
+              19.9072265625,
+              55.9039306640625
+            ],
+            "completed_at_s": 2.0,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              5.049952740821661,
+              8.431060468128551,
+              4.709582995749319
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "surface",
+              "wall"
+            ],
+            "point_elapsed_times_s": [
+              1.75,
+              1.775,
+              1.8,
+              1.825,
+              1.85,
+              1.875,
+              1.9,
+              1.925,
+              1.95,
+              1.975
+            ],
+            "rotation_started_at_s": 1.75,
+            "scan_id": 8,
+            "sensor_id": "lidar_2"
+          }
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": 0,
+        "cycle_index": 0,
+        "elapsed_s": 2.0,
+        "phase": "filling",
+        "phase_duration_s": 4.0,
+        "phase_ends_at_s": 4.0,
+        "phase_started_at_s": 0.0,
+        "rate_factor": 0.9189368296717758,
+        "surface_fill_ratio": 0.302075644965508,
+        "surface_updated_at_s": 2.0,
+        "surface_volume_m3": 44.58636519690898,
+        "target_fill_ratio": 0.6
+      }
+    },
+    {
+      "inlet_heights_m": [
+        6.266435475675731,
+        4.670552052256475
+      ],
+      "scans": [
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            3.70075,
+            6.067,
+            2.1565,
+            0.835,
+            0.51975,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            0,
+            24,
+            80,
+            48,
+            48,
+            48,
+            80,
+            24
+          ],
+          "reference": {
+            "angles_deg": [
+              144.7613525390625,
+              180.7635498046875,
+              216.76025390625,
+              252.762451171875,
+              288.7591552734375,
+              324.7613525390625,
+              0.7635498046875,
+              36.76025390625,
+              72.762451171875,
+              108.7591552734375
+            ],
+            "completed_at_s": 3.75,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.696354979579243,
+              6.066032717541501,
+              3.0384915187165262,
+              0.8354665762095587,
+              0.5235139622962557,
+              0.0
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "wall",
+              "surface",
+              "wall",
+              "wall",
+              null
+            ],
+            "point_elapsed_times_s": [
+              3.5,
+              3.525,
+              3.55,
+              3.575,
+              3.6,
+              3.625,
+              3.65,
+              3.675,
+              3.7,
+              3.725
+            ],
+            "rotation_started_at_s": 3.5,
+            "scan_id": 15,
+            "sensor_id": "lidar_1"
+          }
+        },
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            5.042,
+            5.65025,
+            4.69175
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            0,
+            24,
+            24,
+            0,
+            24,
+            80,
+            80,
+            80
+          ],
+          "reference": {
+            "angles_deg": [
+              91.9061279296875,
+              127.9083251953125,
+              163.905029296875,
+              199.9072265625,
+              235.9039306640625,
+              271.9061279296875,
+              307.9083251953125,
+              343.905029296875,
+              19.9072265625,
+              55.9039306640625
+            ],
+            "completed_at_s": 3.75,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              5.049952740821661,
+              5.6480188075306925,
+              4.709582995749319
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "surface",
+              "wall"
+            ],
+            "point_elapsed_times_s": [
+              3.5,
+              3.525,
+              3.55,
+              3.575,
+              3.6,
+              3.625,
+              3.65,
+              3.675,
+              3.7,
+              3.725
+            ],
+            "rotation_started_at_s": 3.5,
+            "scan_id": 15,
+            "sensor_id": "lidar_2"
+          }
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": 1,
+        "cycle_index": 0,
+        "elapsed_s": 3.75,
+        "phase": "filling",
+        "phase_duration_s": 4.0,
+        "phase_ends_at_s": 4.0,
+        "phase_started_at_s": 0.0,
+        "rate_factor": 1.0,
+        "surface_fill_ratio": 0.5249999999999999,
+        "surface_updated_at_s": 3.5,
+        "surface_volume_m3": 77.48999999999998,
+        "target_fill_ratio": 0.6
+      }
+    },
+    {
+      "inlet_heights_m": [
+        6.619452270910709,
+        5.868074210149076
+      ],
+      "scans": [
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            3.68525,
+            6.07775,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            24,
+            24,
+            0,
+            0,
+            80,
+            48,
+            0,
+            0,
+            24,
+            24
+          ],
+          "reference": {
+            "angles_deg": [
+              144.7613525390625,
+              180.7635498046875,
+              216.76025390625,
+              252.762451171875,
+              288.7591552734375,
+              324.7613525390625,
+              0.7635498046875,
+              36.76025390625,
+              72.762451171875,
+              108.7591552734375
+            ],
+            "completed_at_s": 4.0,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.696354979579243,
+              6.066032717541501,
+              3.0384915187165262,
+              0.8354665762095587,
+              0.5235139622962557,
+              0.0
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "wall",
+              "surface",
+              "wall",
+              "wall",
+              null
+            ],
+            "point_elapsed_times_s": [
+              3.75,
+              3.775,
+              3.8,
+              3.825,
+              3.85,
+              3.875,
+              3.9,
+              3.925,
+              3.95,
+              3.975
+            ],
+            "rotation_started_at_s": 3.75,
+            "scan_id": 16,
+            "sensor_id": "lidar_1"
+          }
+        },
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            24,
+            0,
+            24,
+            24,
+            24,
+            24,
+            0,
+            0,
+            0,
+            0
+          ],
+          "reference": {
+            "angles_deg": [
+              91.9061279296875,
+              127.9083251953125,
+              163.905029296875,
+              199.9072265625,
+              235.9039306640625,
+              271.9061279296875,
+              307.9083251953125,
+              343.905029296875,
+              19.9072265625,
+              55.9039306640625
+            ],
+            "completed_at_s": 4.0,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              5.049952740821661,
+              5.6480188075306925,
+              4.709582995749319
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "surface",
+              "wall"
+            ],
+            "point_elapsed_times_s": [
+              3.75,
+              3.775,
+              3.8,
+              3.825,
+              3.85,
+              3.875,
+              3.9,
+              3.925,
+              3.95,
+              3.975
+            ],
+            "rotation_started_at_s": 3.75,
+            "scan_id": 16,
+            "sensor_id": "lidar_2"
+          }
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": null,
+        "cycle_index": 0,
+        "elapsed_s": 4.0,
+        "phase": "collecting",
+        "phase_duration_s": 1.0,
+        "phase_ends_at_s": 5.0,
+        "phase_started_at_s": 4.0,
+        "rate_factor": 1.0,
+        "surface_fill_ratio": 0.6,
+        "surface_updated_at_s": 4.0,
+        "surface_volume_m3": 88.55999999999999,
+        "target_fill_ratio": 0.6
+      }
+    },
+    {
+      "inlet_heights_m": [
+        4.142245832890924,
+        3.3990870888056315
+      ],
+      "scans": [
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            3.7105,
+            6.06625,
+            4.35975,
+            0.83475,
+            0.54,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            0,
+            24,
+            80,
+            80,
+            80,
+            48,
+            48,
+            24
+          ],
+          "reference": {
+            "angles_deg": [
+              144.7613525390625,
+              180.7635498046875,
+              216.76025390625,
+              252.762451171875,
+              288.7591552734375,
+              324.7613525390625,
+              0.7635498046875,
+              36.76025390625,
+              72.762451171875,
+              108.7591552734375
+            ],
+            "completed_at_s": 4.75,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.696354979579243,
+              6.066032717541501,
+              5.459964179981828,
+              0.8354665762095587,
+              0.5235139622962557,
+              0.0
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "wall",
+              "surface",
+              "wall",
+              "wall",
+              null
+            ],
+            "point_elapsed_times_s": [
+              4.5,
+              4.525,
+              4.55,
+              4.575,
+              4.6,
+              4.625,
+              4.65,
+              4.675,
+              4.7,
+              4.725
+            ],
+            "rotation_started_at_s": 4.5,
+            "scan_id": 19,
+            "sensor_id": "lidar_1"
+          }
+        },
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            5.0685,
+            6.63425,
+            4.71975
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            24,
+            0,
+            0,
+            0,
+            0,
+            80,
+            80,
+            80
+          ],
+          "reference": {
+            "angles_deg": [
+              91.9061279296875,
+              127.9083251953125,
+              163.905029296875,
+              199.9072265625,
+              235.9039306640625,
+              271.9061279296875,
+              307.9083251953125,
+              343.905029296875,
+              19.9072265625,
+              55.9039306640625
+            ],
+            "completed_at_s": 4.75,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              5.049952740821661,
+              6.633698025556346,
+              4.709582995749319
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "surface",
+              "wall"
+            ],
+            "point_elapsed_times_s": [
+              4.5,
+              4.525,
+              4.55,
+              4.575,
+              4.6,
+              4.625,
+              4.65,
+              4.675,
+              4.7,
+              4.725
+            ],
+            "rotation_started_at_s": 4.5,
+            "scan_id": 19,
+            "sensor_id": "lidar_2"
+          }
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": null,
+        "cycle_index": 0,
+        "elapsed_s": 4.75,
+        "phase": "collecting",
+        "phase_duration_s": 1.0,
+        "phase_ends_at_s": 5.0,
+        "phase_started_at_s": 4.0,
+        "rate_factor": 1.0,
+        "surface_fill_ratio": 0.35227935619802137,
+        "surface_updated_at_s": 4.5,
+        "surface_volume_m3": 51.996432974827954,
+        "target_fill_ratio": 0.6
+      }
+    },
+    {
+      "inlet_heights_m": [
+        0.0,
+        0.0
+      ],
+      "scans": [
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            3.711,
+            6.07475,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            24,
+            0,
+            0,
+            80,
+            48,
+            0,
+            24,
+            0,
+            0
+          ],
+          "reference": {
+            "angles_deg": [
+              144.7613525390625,
+              180.7635498046875,
+              216.76025390625,
+              252.762451171875,
+              288.7591552734375,
+              324.7613525390625,
+              0.7635498046875,
+              36.76025390625,
+              72.762451171875,
+              108.7591552734375
+            ],
+            "completed_at_s": 5.0,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.696354979579243,
+              6.066032717541501,
+              5.459964179981828,
+              0.8354665762095587,
+              0.5235139622962557,
+              0.0
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "wall",
+              "surface",
+              "wall",
+              "wall",
+              null
+            ],
+            "point_elapsed_times_s": [
+              4.75,
+              4.775,
+              4.8,
+              4.825,
+              4.85,
+              4.875,
+              4.9,
+              4.925,
+              4.95,
+              4.975
+            ],
+            "rotation_started_at_s": 4.75,
+            "scan_id": 20,
+            "sensor_id": "lidar_1"
+          }
+        },
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            24,
+            24,
+            0,
+            24,
+            0,
+            0,
+            0,
+            24
+          ],
+          "reference": {
+            "angles_deg": [
+              91.9061279296875,
+              127.9083251953125,
+              163.905029296875,
+              199.9072265625,
+              235.9039306640625,
+              271.9061279296875,
+              307.9083251953125,
+              343.905029296875,
+              19.9072265625,
+              55.9039306640625
+            ],
+            "completed_at_s": 5.0,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              5.049952740821661,
+              6.633698025556346,
+              4.709582995749319
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "surface",
+              "wall"
+            ],
+            "point_elapsed_times_s": [
+              4.75,
+              4.775,
+              4.8,
+              4.825,
+              4.85,
+              4.875,
+              4.9,
+              4.925,
+              4.95,
+              4.975
+            ],
+            "rotation_started_at_s": 4.75,
+            "scan_id": 20,
+            "sensor_id": "lidar_2"
+          }
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": 0,
+        "cycle_index": 1,
+        "elapsed_s": 5.0,
+        "phase": "filling",
+        "phase_duration_s": 4.0,
+        "phase_ends_at_s": 9.0,
+        "phase_started_at_s": 5.0,
+        "rate_factor": 1.0,
+        "surface_fill_ratio": 0.0,
+        "surface_updated_at_s": 5.0,
+        "surface_volume_m3": 0.0,
+        "target_fill_ratio": 0.6
+      }
+    },
+    {
+      "inlet_heights_m": [
+        2.6579280997217682,
+        1.5121011181297326
+      ],
+      "scans": [
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            3.70025,
+            6.082,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            24,
+            0,
+            48,
+            80,
+            0,
+            24,
+            24,
+            0
+          ],
+          "reference": {
+            "angles_deg": [
+              144.7613525390625,
+              180.7635498046875,
+              216.76025390625,
+              252.762451171875,
+              288.7591552734375,
+              324.7613525390625,
+              0.7635498046875,
+              36.76025390625,
+              72.762451171875,
+              108.7591552734375
+            ],
+            "completed_at_s": 6.0,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.696354979579243,
+              6.066032717541501,
+              9.134322404923184,
+              0.8354665762095587,
+              0.5235139622962557,
+              0.0
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "wall",
+              "surface",
+              "wall",
+              "wall",
+              null
+            ],
+            "point_elapsed_times_s": [
+              5.75,
+              5.775,
+              5.8,
+              5.825,
+              5.85,
+              5.875,
+              5.9,
+              5.925,
+              5.95,
+              5.975
+            ],
+            "rotation_started_at_s": 5.75,
+            "scan_id": 24,
+            "sensor_id": "lidar_1"
+          }
+        },
+        {
+          "distances_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quality_bytes": [
+            0,
+            0,
+            24,
+            0,
+            0,
+            24,
+            0,
+            0,
+            0,
+            0
+          ],
+          "reference": {
+            "angles_deg": [
+              91.9061279296875,
+              127.9083251953125,
+              163.905029296875,
+              199.9072265625,
+              235.9039306640625,
+              271.9061279296875,
+              307.9083251953125,
+              343.905029296875,
+              19.9072265625,
+              55.9039306640625
+            ],
+            "completed_at_s": 6.0,
+            "distances_m": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              5.049952740821661,
+              10.662054013325564,
+              4.709582995749319
+            ],
+            "hit_kinds": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              "wall",
+              "surface",
+              "wall"
+            ],
+            "point_elapsed_times_s": [
+              5.75,
+              5.775,
+              5.8,
+              5.825,
+              5.85,
+              5.875,
+              5.9,
+              5.925,
+              5.95,
+              5.975
+            ],
+            "rotation_started_at_s": 5.75,
+            "scan_id": 24,
+            "sensor_id": "lidar_2"
+          }
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": 0,
+        "cycle_index": 1,
+        "elapsed_s": 6.0,
+        "phase": "filling",
+        "phase_duration_s": 4.0,
+        "phase_ends_at_s": 9.0,
+        "phase_started_at_s": 5.0,
+        "rate_factor": 1.1775635282153774,
+        "surface_fill_ratio": 0.17146511967459294,
+        "surface_updated_at_s": 6.0,
+        "surface_volume_m3": 25.308251663969916,
+        "target_fill_ratio": 0.6
+      }
+    }
+  ],
+  "scenario_plan": [
+    {
+      "segments": [
+        {
+          "deviation": 0.08444842796281617,
+          "duration_s": 1.287852975415288,
+          "start_s": 0.0
+        },
+        {
+          "deviation": -0.09616771818144926,
+          "duration_s": 1.1309113003581244,
+          "start_s": 1.287852975415288
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": 0,
+        "cycle_index": 0,
+        "elapsed_s": 0.0,
+        "phase": "filling",
+        "phase_duration_s": 4.0,
+        "phase_ends_at_s": 4.0,
+        "phase_started_at_s": 0.0,
+        "rate_factor": 1.0,
+        "surface_fill_ratio": 0.0,
+        "surface_updated_at_s": 0.0,
+        "surface_volume_m3": 0.0,
+        "target_fill_ratio": 0.6
+      }
+    },
+    {
+      "segments": [
+        {
+          "deviation": -0.3939651008140774,
+          "duration_s": 0.4546460102893808,
+          "start_s": 0.0
+        },
+        {
+          "deviation": 0.644065374716759,
+          "duration_s": 0.2781001250954429,
+          "start_s": 0.4546460102893808
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": null,
+        "cycle_index": 0,
+        "elapsed_s": 4.0,
+        "phase": "collecting",
+        "phase_duration_s": 1.0,
+        "phase_ends_at_s": 5.0,
+        "phase_started_at_s": 4.0,
+        "rate_factor": 1.0,
+        "surface_fill_ratio": 0.6,
+        "surface_updated_at_s": 4.0,
+        "surface_volume_m3": 88.55999999999999,
+        "target_fill_ratio": 0.6
+      }
+    },
+    {
+      "segments": [
+        {
+          "deviation": 0.2371297774289648,
+          "duration_s": 1.4990116655290309,
+          "start_s": 0.0
+        },
+        {
+          "deviation": -0.2146289751069519,
+          "duration_s": 1.6561617667567545,
+          "start_s": 1.4990116655290309
+        }
+      ],
+      "snapshot": {
+        "current_inlet_index": 0,
+        "cycle_index": 1,
+        "elapsed_s": 5.0,
+        "phase": "filling",
+        "phase_duration_s": 4.0,
+        "phase_ends_at_s": 9.0,
+        "phase_started_at_s": 5.0,
+        "rate_factor": 1.0,
+        "surface_fill_ratio": 0.0,
+        "surface_updated_at_s": 5.0,
+        "surface_volume_m3": 0.0,
+        "target_fill_ratio": 0.6
+      }
+    }
+  ],
+  "spatial_events": {
+    "collection_occlusion": [
+      {
+        "cycle_index": 0,
+        "distance_reduction_m": 0.6883691421728984,
+        "end_center": {
+          "x": 3.5895173013904134,
+          "y": 0.4286715096532644
+        },
+        "ends_at_s": 4.538808483309697,
+        "radius_m": 0.2570565736691527,
+        "start_center": {
+          "x": 2.4634861472300913,
+          "y": 2.8178762233288563
+        },
+        "started_at_s": 4.188404425474915
+      },
+      {
+        "cycle_index": 0,
+        "distance_reduction_m": 1.955221217277797,
+        "end_center": {
+          "x": 2.9243667199419905,
+          "y": 2.995674586722353
+        },
+        "ends_at_s": 4.678122020222585,
+        "radius_m": 0.4948176035523538,
+        "start_center": {
+          "x": 2.826408852365764,
+          "y": 0.7624635863009134
+        },
+        "started_at_s": 4.311207692005132
+      },
+      {
+        "cycle_index": 0,
+        "distance_reduction_m": 1.080227240389466,
+        "end_center": {
+          "x": 0.5616036139500657,
+          "y": 1.1264876745978036
+        },
+        "ends_at_s": 4.787739804418088,
+        "radius_m": 0.41081981398598166,
+        "start_center": {
+          "x": 0.777689447270129,
+          "y": 1.1249148548773074
+        },
+        "started_at_s": 4.483259424291247
+      },
+      {
+        "cycle_index": 0,
+        "distance_reduction_m": 1.6510724665573708,
+        "end_center": {
+          "x": 1.0713359067740447,
+          "y": 0.6751335502287631
+        },
+        "ends_at_s": 4.92955348979248,
+        "radius_m": 0.3402368706219949,
+        "start_center": {
+          "x": 1.6874445323794296,
+          "y": 2.0830345027430064
+        },
+        "started_at_s": 4.592659776268906
+      },
+      {
+        "cycle_index": 0,
+        "distance_reduction_m": 1.1521694995205585,
+        "end_center": {
+          "x": 1.1371299242556154,
+          "y": 0.6406822492346742
+        },
+        "ends_at_s": 5.0,
+        "radius_m": 0.49809825401037855,
+        "start_center": {
+          "x": 3.4415629189027532,
+          "y": 3.447966530998449
+        },
+        "started_at_s": 4.702718344640658
+      },
+      {
+        "cycle_index": 0,
+        "distance_reduction_m": 0.9571487654191331,
+        "end_center": {
+          "x": 3.1960524231349416,
+          "y": 2.357358372436526
+        },
+        "ends_at_s": 5.0,
+        "radius_m": 0.3838199288103586,
+        "start_center": {
+          "x": 3.1985848265308117,
+          "y": 3.5516540304631437
+        },
+        "started_at_s": 4.847962970869218
+      }
+    ],
+    "falling_material": [
+      {
+        "center": {
+          "x": 1.4962098631198026,
+          "y": 1.3902900123928226
+        },
+        "cycle_index": 0,
+        "distance_reduction_m": 1.3300113318620608,
+        "ends_at_s": 0.9420214023696182,
+        "radius_m": 0.4344266757382237,
+        "started_at_s": 0.7353611502103753
+      },
+      {
+        "center": {
+          "x": 1.2580984084999034,
+          "y": 1.5521474006962583
+        },
+        "cycle_index": 0,
+        "distance_reduction_m": 0.8451271896320243,
+        "ends_at_s": 1.0063735353505796,
+        "radius_m": 0.22085131720720996,
+        "started_at_s": 0.8707086039524623
+      }
+    ],
+    "generated_through_s": 6.0,
+    "voids": [
+      {
+        "center": {
+          "x": 0.4004583984435546,
+          "y": 1.5985998313347554
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.09283218104231312,
+        "ends_at_s": 1.0,
+        "expires_at_s": 1.0918573340735838,
+        "radius_m": 0.21715734893588656,
+        "started_at_s": 0.5,
+        "surface_height_at_start_m": 1.5396426877243559
+      },
+      {
+        "center": {
+          "x": 2.1431242862955684,
+          "y": 1.2890858875288167
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.05978104980547762,
+        "ends_at_s": 1.5,
+        "expires_at_s": 1.5549412573878343,
+        "radius_m": 0.15695413321833726,
+        "started_at_s": 1.0,
+        "surface_height_at_start_m": 2.120393422243924
+      },
+      {
+        "center": {
+          "x": 3.6070152586790076,
+          "y": 3.3771138047334555
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.1053309825607021,
+        "ends_at_s": 1.5,
+        "expires_at_s": 1.681094565252708,
+        "radius_m": 0.24154630379756806,
+        "started_at_s": 1.0,
+        "surface_height_at_start_m": 0.542334981230517
+      },
+      {
+        "center": {
+          "x": 3.529738187636036,
+          "y": 4.393944071797307
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.1737054684137555,
+        "ends_at_s": 2.0,
+        "expires_at_s": 2.490453266369159,
+        "radius_m": 0.15164916492211766,
+        "started_at_s": 1.5,
+        "surface_height_at_start_m": 0.4941090902790284
+      },
+      {
+        "center": {
+          "x": 0.5644933077625351,
+          "y": 1.1392290021505995
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.16107691494606313,
+        "ends_at_s": 2.0,
+        "expires_at_s": 2.1952993496429327,
+        "radius_m": 0.15811300189564773,
+        "started_at_s": 1.5,
+        "surface_height_at_start_m": 3.949451971154761
+      },
+      {
+        "center": {
+          "x": 2.1552335644519864,
+          "y": 2.116323550301927
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.10992071871598273,
+        "ends_at_s": 2.5,
+        "expires_at_s": 2.9177759317798024,
+        "radius_m": 0.20927037014053762,
+        "started_at_s": 2.0,
+        "surface_height_at_start_m": 3.376311705268117
+      },
+      {
+        "center": {
+          "x": 2.323388790460794,
+          "y": 0.6436085065451399
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.16371434868417267,
+        "ends_at_s": 2.5,
+        "expires_at_s": 2.662355951073659,
+        "radius_m": 0.2118938192145779,
+        "started_at_s": 2.0,
+        "surface_height_at_start_m": 3.6997773107797247
+      },
+      {
+        "center": {
+          "x": 0.8068441551504661,
+          "y": 0.7083998412837527
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.11717587414989857,
+        "ends_at_s": 3.0,
+        "expires_at_s": 3.009251566581375,
+        "radius_m": 0.17451073083738317,
+        "started_at_s": 2.5,
+        "surface_height_at_start_m": 5.492781958777356
+      },
+      {
+        "center": {
+          "x": 3.5146448262332846,
+          "y": 2.4994330025961538
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.28818686539600724,
+        "ends_at_s": 3.0,
+        "expires_at_s": 3.08584993356788,
+        "radius_m": 0.22587966921700503,
+        "started_at_s": 2.5,
+        "surface_height_at_start_m": 2.859081306339033
+      },
+      {
+        "center": {
+          "x": 3.7497112116432763,
+          "y": 4.224014833791346
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.2602561111380152,
+        "ends_at_s": 3.5,
+        "expires_at_s": 3.996891793376891,
+        "radius_m": 0.1575575609280955,
+        "started_at_s": 3.0,
+        "surface_height_at_start_m": 2.455285312802822
+      },
+      {
+        "center": {
+          "x": 0.38172729974432684,
+          "y": 0.5495710789144342
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.13575062495242107,
+        "ends_at_s": 3.5,
+        "expires_at_s": 3.776606490190839,
+        "radius_m": 0.17770052313488288,
+        "started_at_s": 3.0,
+        "surface_height_at_start_m": 6.33263042199996
+      },
+      {
+        "center": {
+          "x": 2.5571704176396275,
+          "y": 2.034126154643139
+        },
+        "cycle_index": 0,
+        "distance_increase_m": 0.2671438847737304,
+        "ends_at_s": 4.0,
+        "expires_at_s": 4.0,
+        "radius_m": 0.22425725025248358,
+        "started_at_s": 3.5,
+        "surface_height_at_start_m": 4.95041004752318
+      },
+      {
+        "center": {
+          "x": 3.113060951036577,
+          "y": 0.5040998621787972
+        },
+        "cycle_index": 1,
+        "distance_increase_m": 0.16061906401445414,
+        "ends_at_s": 6.396574928947616,
+        "expires_at_s": 6.396574928947616,
+        "radius_m": 0.17901066987510167,
+        "started_at_s": 5.5,
+        "surface_height_at_start_m": 0.555250938232283
+      },
+      {
+        "center": {
+          "x": 2.0053793451751307,
+          "y": 1.1708855796972049
+        },
+        "cycle_index": 1,
+        "distance_increase_m": 0.23977557830724594,
+        "ends_at_s": 6.040078405540079,
+        "expires_at_s": 6.040078405540079,
+        "radius_m": 0.19500570173246173,
+        "started_at_s": 5.5,
+        "surface_height_at_start_m": 1.3766294166273716
+      }
+    ]
+  }
+}
