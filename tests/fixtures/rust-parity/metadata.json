@@ -10,12 +10,13 @@
   "comparison": {
     "float_absolute_tolerance": 1e-10,
     "float_relative_tolerance": 1e-12,
-    "float_rule": "abs(actual-expected) <= max(atol, rtol*max(abs(actual),abs(expected)))",
+    "float_rule": "abs(actual-expected) <= max(class_atol, rtol*max(abs(actual),abs(expected)))",
     "hq_ticks_and_decoded_wire_values": "exact",
     "integers_booleans_strings_shapes": "exact",
     "protobuf_hex": "exact fixture integrity only; not a cross-language canonical form",
-    "python-seeded-reference": "Python replay reference; Rust RNG sequence equality not required",
-    "regeneration": "source and stored file hashes exact; finite floats use stated tolerances",
+    "python-seeded-reference": "Python replay reference with host-libm tolerance; Rust RNG sequence equality not required",
+    "python_seeded_float_absolute_tolerance": 1e-08,
+    "regeneration": "source and stored file hashes exact; rng-independent floats use the default tolerance and Python-seeded floats use their stated tolerance",
     "rng-independent": "Rust parity required; includes deterministic hash-derived angles",
     "rust_random_acceptance": "same model version, configuration and seed reproduce output; distributions and event invariants remain required"
   },
@@ -109,7 +110,7 @@
     "src/scrap_monitoring_lidar_generator/scenario/simulator.py": "22964277065d59a09888073bb34744b61af3397b95cdaf5b4b63eb012635e0a9",
     "src/scrap_monitoring_lidar_generator/scenario/snapshot.py": "8334598e19591f967d5b63ed5fe5d17f1dd0fdfe5f664056894d8d64259da137",
     "src/scrap_monitoring_lidar_generator/scenario/time_scale.py": "656c76856589416c000cbdaa6e92d595a568c2c1911da5a13de167942a3ecbd6",
-    "tools/generate_rust_parity_fixtures.py": "5a06a4a52b4b56468de832bef8ab20fef872b607d83347b0edbb403ff7cd3ea6",
+    "tools/generate_rust_parity_fixtures.py": "4cbfcd3b5876741f90aa5473d9c6cc6603f2014491067aa98c921c78381fd385",
     "uv.lock": "34cb9e843c4f3939b0954d6842cc636b521b5790ae86ebd82f2493c6a4793c24"
   }
 }
