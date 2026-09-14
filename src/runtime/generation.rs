@@ -25,6 +25,7 @@ use crate::{
 };
 
 const SENSOR_WORKER_QUEUE_CAPACITY: usize = 1;
+const MAX_SPATIAL_EVENTS_PER_BATCH: usize = 100_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GenerationRuntimeError {
@@ -44,6 +45,10 @@ pub enum GenerationRuntimeError {
     WorkerResponse,
     #[error("sensor worker panicked")]
     WorkerPanic,
+    #[error("sensor worker returned a response for a different scan")]
+    WorkerResponseMismatch,
+    #[error("generation runtime cannot be reused after a terminal failure or shutdown")]
+    Terminal,
     #[error("generation runtime requires exactly two unique sensors")]
     SensorSet,
     #[error("generation runtime sensor configuration is inconsistent")]
@@ -71,8 +76,21 @@ struct SensorCoordinator {
     scheduler: SensorRotationScheduler,
     pending: Option<ScheduledScan>,
     request: SyncSender<WorkerCommand>,
-    response: Receiver<std::result::Result<MeasurementResult, MeasurementError>>,
+    response: Receiver<WorkerResponse>,
     worker: Option<JoinHandle<()>>,
+}
+
+struct WorkerResponse {
+    scan_id: u64,
+    completed_at_bits: u64,
+    result: std::result::Result<MeasurementResult, MeasurementError>,
+}
+
+#[derive(Clone, Copy)]
+struct DispatchedScan {
+    sensor_index: usize,
+    scan_id: u64,
+    completed_at_bits: u64,
 }
 
 enum WorkerCommand {
@@ -90,6 +108,8 @@ pub struct GenerationRuntime {
     spatial: Option<SpatialDistortionTimeline>,
     sensors: Vec<SensorCoordinator>,
     stats: GenerationRuntimeStats,
+    terminal: bool,
+    shutdown: bool,
 }
 
 impl GenerationRuntime {
@@ -106,13 +126,14 @@ impl GenerationRuntime {
         let scene = Arc::new(build_environment_scene(inputs)?);
         let spatial = build_spatial_timeline(inputs, scene.as_ref().clone())?;
         let mut sensors = Vec::with_capacity(2);
-        for sensor in &inputs.environment.sensors {
-            sensors.push(start_sensor_worker(
-                inputs,
-                sensor,
-                Arc::clone(&scene),
-                &snapshots,
-            )?);
+        for (ordinal, sensor) in inputs.environment.sensors.iter().enumerate() {
+            match start_sensor_worker(inputs, sensor, ordinal, Arc::clone(&scene), &snapshots) {
+                Ok(worker) => sensors.push(worker),
+                Err(error) => {
+                    shutdown_sensor_workers(&mut sensors);
+                    return Err(error);
+                }
+            }
         }
 
         Ok(Self {
@@ -121,6 +142,8 @@ impl GenerationRuntime {
             spatial,
             sensors,
             stats: GenerationRuntimeStats::default(),
+            terminal: false,
+            shutdown: false,
         })
     }
 
@@ -157,6 +180,17 @@ impl GenerationRuntime {
     }
 
     pub fn next_completed_scans(&mut self) -> Result<GenerationBatch> {
+        if self.terminal || self.shutdown {
+            return Err(GenerationRuntimeError::Terminal);
+        }
+        let result = self.try_next_completed_scans();
+        if result.is_err() {
+            self.terminal = true;
+        }
+        result
+    }
+
+    fn try_next_completed_scans(&mut self) -> Result<GenerationBatch> {
         let completion_s = self.next_completion_elapsed_s();
         if !completion_s.is_finite() {
             return Err(GenerationRuntimeError::SensorConfiguration);
@@ -168,38 +202,98 @@ impl GenerationRuntime {
             .spatial
             .as_ref()
             .map(|timeline| Arc::new(timeline.resolver().clone()));
-        let mut requested = Vec::with_capacity(self.sensors.len());
-        for (index, sensor) in self.sensors.iter_mut().enumerate() {
-            let pending = sensor
-                .pending
-                .as_ref()
-                .ok_or(GenerationRuntimeError::SensorConfiguration)?;
-            if pending.completed_at_s().to_bits() != completion_s.to_bits() {
-                continue;
-            }
-            let next = sensor.scheduler.next_scan()?;
+        let requested_indices: Vec<_> = self
+            .sensors
+            .iter()
+            .enumerate()
+            .filter_map(|(index, sensor)| {
+                sensor
+                    .pending
+                    .as_ref()
+                    .filter(|pending| pending.completed_at_s().to_bits() == completion_s.to_bits())
+                    .map(|_| index)
+            })
+            .collect();
+        if requested_indices.is_empty()
+            || self.sensors.iter().any(|sensor| sensor.pending.is_none())
+        {
+            return Err(GenerationRuntimeError::SensorConfiguration);
+        }
+
+        // Dispatch every due scan before calculating any following schedule so both
+        // fixed workers can start the CPU-heavy ray casting at the same time.
+        let mut dispatched = Vec::with_capacity(requested_indices.len());
+        let mut first_error = None;
+        for &index in &requested_indices {
+            let sensor = &mut self.sensors[index];
             let schedule = sensor
                 .pending
-                .replace(next)
-                .ok_or(GenerationRuntimeError::SensorConfiguration)?;
-            sensor
+                .take()
+                .expect("pending schedules were validated above");
+            let metadata = DispatchedScan {
+                sensor_index: index,
+                scan_id: schedule.scan_id(),
+                completed_at_bits: schedule.completed_at_s().to_bits(),
+            };
+            if sensor
                 .request
                 .send(WorkerCommand::Generate {
                     schedule,
                     snapshots: Arc::clone(&snapshots),
                     spatial: spatial.as_ref().map(Arc::clone),
                 })
-                .map_err(|_| GenerationRuntimeError::WorkerRequest)?;
-            requested.push(index);
+                .is_err()
+            {
+                record_first_error(&mut first_error, GenerationRuntimeError::WorkerRequest);
+            } else {
+                dispatched.push(metadata);
+            }
         }
 
-        let mut scans = Vec::with_capacity(requested.len());
-        for index in requested {
-            let result = self.sensors[index]
-                .response
-                .recv()
-                .map_err(|_| GenerationRuntimeError::WorkerResponse)??;
-            scans.push(result);
+        // Scheduling is independent of worker execution and overlaps it. Any
+        // scheduler failure is terminal, but all in-flight responses are still
+        // drained below before the error is returned.
+        for dispatched_scan in &dispatched {
+            let sensor = &mut self.sensors[dispatched_scan.sensor_index];
+            match sensor.scheduler.next_scan() {
+                Ok(next) => sensor.pending = Some(next),
+                Err(error) => record_first_error(&mut first_error, error.into()),
+            }
+        }
+
+        let mut scans = Vec::with_capacity(dispatched.len());
+        for expected in dispatched {
+            match receive_worker_response(&mut self.sensors[expected.sensor_index]) {
+                Ok(response)
+                    if response.scan_id == expected.scan_id
+                        && response.completed_at_bits == expected.completed_at_bits =>
+                {
+                    match response.result {
+                        Ok(result)
+                            if result.sensor_id()
+                                == self.sensors[expected.sensor_index].sensor_id
+                                && result.scan_id() == expected.scan_id
+                                && result.reference().completed_at_s().to_bits()
+                                    == expected.completed_at_bits =>
+                        {
+                            scans.push(result);
+                        }
+                        Ok(_) => record_first_error(
+                            &mut first_error,
+                            GenerationRuntimeError::WorkerResponseMismatch,
+                        ),
+                        Err(error) => record_first_error(&mut first_error, error.into()),
+                    }
+                }
+                Ok(_) => record_first_error(
+                    &mut first_error,
+                    GenerationRuntimeError::WorkerResponseMismatch,
+                ),
+                Err(error) => record_first_error(&mut first_error, error),
+            }
+        }
+        if let Some(error) = first_error {
+            return Err(error);
         }
         if scans.is_empty() {
             return Err(GenerationRuntimeError::SensorConfiguration);
@@ -223,44 +317,91 @@ impl GenerationRuntime {
     }
 
     fn advance_scenario_and_distortions(&mut self, through_s: f64) -> Result<()> {
-        while self.scenario.elapsed_s() < through_s {
-            let started_at_s = self.scenario.elapsed_s();
-            let ends_at_s = self.scenario.next_surface_event_elapsed_s()?.min(through_s);
-            if let Some(spatial) = &mut self.spatial {
-                let surface = self.scenario.surface().surface_snapshot()?;
+        let mut scenario = self.scenario.clone();
+        let mut snapshots = self.snapshots.clone();
+        let mut spatial = self.spatial.clone();
+        let scenario_event_limit = scenario.event_output_limit()?;
+        let initial_spatial_events = spatial
+            .as_ref()
+            .map(|timeline| timeline.resolver().retained_event_count())
+            .unwrap_or(0);
+        let mut scenario_events = 0_usize;
+
+        while scenario.elapsed_s() < through_s {
+            let started_at_s = scenario.elapsed_s();
+            let ends_at_s = scenario.next_surface_event_elapsed_s()?.min(through_s);
+            if let Some(spatial) = &mut spatial {
+                let surface = scenario.surface().surface_snapshot()?;
                 spatial.advance_to(DistortionInterval {
                     started_at_s,
                     ends_at_s,
-                    phase: self.scenario.active_phase()?.into(),
+                    phase: scenario.active_phase()?.into(),
                     surface: &surface,
                 })?;
+                let generated = spatial
+                    .resolver()
+                    .retained_event_count()
+                    .saturating_sub(initial_spatial_events);
+                if generated > MAX_SPATIAL_EVENTS_PER_BATCH {
+                    return Err(MeasurementError::Exhausted(
+                        "spatial event count exceeds the generation batch limit",
+                    )
+                    .into());
+                }
             }
-            let advance = self.scenario.advance_to(ends_at_s)?;
+            let advance = scenario.advance_to(ends_at_s)?;
+            scenario_events = scenario_events.saturating_add(advance.events.len());
+            if scenario_events > scenario_event_limit {
+                return Err(ScenarioError::Resource(
+                    "scenario advance exceeds the event output limit",
+                )
+                .into());
+            }
             for event in advance.events {
-                self.snapshots
-                    .push_event(event.elapsed_s, event.model.surface)?;
+                snapshots.push_event(event.elapsed_s, event.model.surface)?;
             }
         }
+
+        self.scenario = scenario;
+        self.snapshots = snapshots;
+        self.spatial = spatial;
         Ok(())
+    }
+
+    pub fn shutdown(&mut self) -> Result<()> {
+        if self.shutdown {
+            return Ok(());
+        }
+        self.terminal = true;
+        self.shutdown = true;
+        let mut first_error = None;
+        for sensor in &self.sensors {
+            if sensor.worker.is_some() && sensor.request.send(WorkerCommand::Stop).is_err() {
+                record_first_error(&mut first_error, GenerationRuntimeError::WorkerRequest);
+            }
+        }
+        for sensor in &mut self.sensors {
+            let Some(worker) = sensor.worker.take() else {
+                continue;
+            };
+            if worker.join().is_err() {
+                first_error = Some(GenerationRuntimeError::WorkerPanic);
+            }
+        }
+        first_error.map_or(Ok(()), Err)
     }
 }
 
 impl Drop for GenerationRuntime {
     fn drop(&mut self) {
-        for sensor in &self.sensors {
-            let _ = sensor.request.send(WorkerCommand::Stop);
-        }
-        for sensor in &mut self.sensors {
-            if let Some(worker) = sensor.worker.take() {
-                let _ = worker.join();
-            }
-        }
+        let _ = self.shutdown();
     }
 }
 
 fn start_sensor_worker(
     inputs: &GeneratorInputs,
     sensor: &SensorConfig,
+    ordinal: usize,
     scene: Arc<EnvironmentScene>,
     snapshots: &SnapshotEventCoordinator,
 ) -> Result<SensorCoordinator> {
@@ -284,7 +425,7 @@ fn start_sensor_worker(
     let (request, requests) = sync_channel(SENSOR_WORKER_QUEUE_CAPACITY);
     let (responses, response) = sync_channel(SENSOR_WORKER_QUEUE_CAPACITY);
     let sensor_id = sensor.sensor_id.clone();
-    let worker_name = format!("lidar-sensor-{}", sensor.sensor_id);
+    let worker_name = format!("lidar-sensor-{}", ordinal + 1);
     let worker = thread::Builder::new()
         .name(worker_name)
         .spawn(move || {
@@ -297,10 +438,19 @@ fn start_sensor_worker(
                 else {
                     return;
                 };
+                let scan_id = schedule.scan_id();
+                let completed_at_bits = schedule.completed_at_s().to_bits();
                 let result = scanner
                     .generate_with_snapshots(scene.as_ref(), snapshots.as_ref(), schedule)
                     .and_then(|reference| generator.generate(reference, spatial.as_deref()));
-                if responses.send(result).is_err() {
+                if responses
+                    .send(WorkerResponse {
+                        scan_id,
+                        completed_at_bits,
+                        result,
+                    })
+                    .is_err()
+                {
                     return;
                 }
             }
@@ -314,6 +464,40 @@ fn start_sensor_worker(
         response,
         worker: Some(worker),
     })
+}
+
+fn receive_worker_response(sensor: &mut SensorCoordinator) -> Result<WorkerResponse> {
+    match sensor.response.recv() {
+        Ok(response) => Ok(response),
+        Err(_) => {
+            let panicked = sensor
+                .worker
+                .take()
+                .is_some_and(|worker| worker.join().is_err());
+            if panicked {
+                Err(GenerationRuntimeError::WorkerPanic)
+            } else {
+                Err(GenerationRuntimeError::WorkerResponse)
+            }
+        }
+    }
+}
+
+fn record_first_error(slot: &mut Option<GenerationRuntimeError>, error: GenerationRuntimeError) {
+    if slot.is_none() {
+        *slot = Some(error);
+    }
+}
+
+fn shutdown_sensor_workers(sensors: &mut [SensorCoordinator]) {
+    for sensor in sensors.iter() {
+        let _ = sensor.request.send(WorkerCommand::Stop);
+    }
+    for sensor in sensors {
+        if let Some(worker) = sensor.worker.take() {
+            let _ = worker.join();
+        }
+    }
 }
 
 fn build_environment_scene(inputs: &GeneratorInputs) -> Result<EnvironmentScene> {
@@ -468,4 +652,67 @@ fn boundary(inputs: &GeneratorInputs) -> Result<Polygon2> {
             .map(Vec2::try_from)
             .collect::<std::result::Result<Vec<_>, _>>()?,
     )?)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{path::Path, sync::mpsc::TryRecvError};
+
+    use crate::configuration::load_generator_inputs;
+
+    use super::{GenerationRuntime, GenerationRuntimeError, WorkerCommand};
+
+    fn inputs() -> crate::configuration::GeneratorInputs {
+        load_generator_inputs(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/generator.v2.json"),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn worker_failure_drains_other_responses_and_poison_runtime() {
+        let mut runtime = GenerationRuntime::from_inputs(&inputs()).unwrap();
+        runtime.sensors[0]
+            .request
+            .send(WorkerCommand::Stop)
+            .unwrap();
+        runtime.sensors[0].worker.take().unwrap().join().unwrap();
+
+        assert!(matches!(
+            runtime.next_completed_scans(),
+            Err(GenerationRuntimeError::WorkerRequest)
+        ));
+        assert!(matches!(
+            runtime.sensors[1].response.try_recv(),
+            Err(TryRecvError::Empty)
+        ));
+        assert!(matches!(
+            runtime.next_completed_scans(),
+            Err(GenerationRuntimeError::Terminal)
+        ));
+        runtime.shutdown().unwrap();
+    }
+
+    #[test]
+    fn one_batch_enforces_the_scenario_event_limit_atomically() {
+        let mut inputs = inputs();
+        inputs.generator.scenario.surface.cell_size_m = 1.0;
+        inputs.generator.scenario.surface.update_interval_s = 1.0 / 4_097.0;
+        inputs.generator.measurement.sample_rate_hz = 4_096.0;
+        inputs.generator.measurement.rotation_rate_hz = 1.0;
+        let mut runtime = GenerationRuntime::from_inputs(&inputs).unwrap();
+
+        assert!(matches!(
+            runtime.next_completed_scans(),
+            Err(GenerationRuntimeError::Scenario(
+                crate::scenario::ScenarioError::Resource(_)
+            ))
+        ));
+        assert_eq!(runtime.elapsed_s(), 0.0);
+        assert!(matches!(
+            runtime.next_completed_scans(),
+            Err(GenerationRuntimeError::Terminal)
+        ));
+        runtime.shutdown().unwrap();
+    }
 }

@@ -422,7 +422,7 @@ impl ScenarioSimulator {
         })
     }
 
-    fn event_output_limit(&self) -> Result<usize> {
+    pub(crate) fn event_output_limit(&self) -> Result<usize> {
         let bytes_per_snapshot = self
             .surface
             .heights_m()
