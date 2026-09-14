@@ -69,9 +69,6 @@ jobs:
           uv run --locked pytest
           uv run --locked python -m tools.generate_lidar_wire --check
 
-      - name: Build package
-        run: uv build --no-sources
-
       - name: Check out pinned edge platform contract
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -87,6 +84,7 @@ jobs:
 
       - name: Package edge platform integration contract
         run: |
+          mkdir -p dist
           tar \
             --create \
             --gzip \
@@ -192,8 +190,7 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
-            dist/*.whl
-            dist/*.tar.gz
+            dist/edge-platform-integration-v1.tar.gz
             dist/oci-image.txt
           fail_on_unmatched_files: true
           generate_release_notes: true

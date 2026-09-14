@@ -1,7 +1,8 @@
-"""Tests for the ajin edge processing configuration bridge."""
+"""Tests for the ajin edge synthetic processing configuration bridge."""
 
 import json
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 import numpy as np
 import pytest
@@ -9,7 +10,7 @@ import pytest
 from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
 from scrap_monitoring_lidar_generator.edge_integration import (
     ProcessingConfigError,
-    build_processing_config,
+    build_synthetic_processing_config,
 )
 from scrap_monitoring_lidar_generator.edge_integration.cli import main
 
@@ -17,8 +18,8 @@ _ROOT = Path(__file__).parents[2]
 _GENERATOR_CONFIG = _ROOT / "examples" / "generator.v2.json"
 
 
-def _config() -> dict[str, object]:
-    return build_processing_config(
+def _config() -> dict[str, Any]:
+    return build_synthetic_processing_config(
         load_generator_inputs(_GENERATOR_CONFIG),
         socket_directory=PurePosixPath("/sockets"),
         site_id="synthetic-site",
@@ -27,9 +28,19 @@ def _config() -> dict[str, object]:
     )
 
 
-def test_processing_config_derives_two_usable_sensor_sections() -> None:
+def test_synthetic_processing_config_derives_two_usable_sensor_sections() -> None:
     config = _config()
 
+    assert set(config) == {
+        "schema_version",
+        "site_id",
+        "edge_id",
+        "config_revision",
+        "allow_demo_calibration",
+        "calibration",
+        "processing",
+        "sensors",
+    }
     assert config["schema_version"] == "1.0"
     assert config["allow_demo_calibration"] is True
     assert config["calibration"] == {
@@ -60,77 +71,49 @@ def test_processing_config_derives_two_usable_sensor_sections() -> None:
         assert np.linalg.det(rotation) == pytest.approx(1.0)
 
 
-def test_processing_config_is_deterministic_and_preserves_base_deployment_fields() -> None:
-    base = {
-        "schema_version": "1.0",
-        "site_id": "synthetic-site",
-        "edge_id": "synthetic-edge",
-        "config_revision": "synthetic-r1",
-        "deployment_revision": "deployment-r1",
-        "camera_id": "camera-a",
-        "service_versions": {
-            "lidar-driver-a": "1.0.0",
-            "lidar-driver-b": "1.0.0",
-            "lidar-processing": "0.1.0",
-            "measurement-uplink": "0.1.0",
-            "camera-edge": "0.1.0",
-            "edge-orchestrator": "0.1.0",
-        },
-        "unrelated": {"retained": True},
-    }
-
-    first = build_processing_config(
-        load_generator_inputs(_GENERATOR_CONFIG),
-        socket_directory=PurePosixPath("/sockets"),
-        site_id="synthetic-site",
-        edge_id="synthetic-edge",
-        config_revision="synthetic-r1",
-        base_config=base,
-        driver_service_version="0.8.0",
-    )
-    second = build_processing_config(
-        load_generator_inputs(_GENERATOR_CONFIG),
-        socket_directory=PurePosixPath("/sockets"),
-        site_id="synthetic-site",
-        edge_id="synthetic-edge",
-        config_revision="synthetic-r1",
-        base_config=base,
-        driver_service_version="0.8.0",
-    )
-
-    assert first == second
-    assert first["deployment_revision"] == "deployment-r1"
-    assert first["camera_id"] == "camera-a"
-    assert first["unrelated"] == {"retained": True}
-    assert first["service_versions"] == {
-        "lidar-processing": "0.1.0",
-        "lidar-driver-a": "0.8.0",
-        "lidar-driver-b": "0.8.0",
-        "measurement-uplink": "0.1.0",
-        "camera-edge": "0.1.0",
-        "edge-orchestrator": "0.1.0",
-    }
-    assert base.get("sensors") is None
+def test_synthetic_processing_config_is_deterministic() -> None:
+    assert _config() == _config()
 
 
-def test_processing_config_rejects_identity_mismatch() -> None:
-    with pytest.raises(ProcessingConfigError, match="does not match"):
-        build_processing_config(
-            load_generator_inputs(_GENERATOR_CONFIG),
-            socket_directory=PurePosixPath("/sockets"),
-            site_id="synthetic-site",
-            edge_id="synthetic-edge",
-            config_revision="synthetic-r1",
-            base_config={
-                "schema_version": "1.0",
-                "site_id": "another-site",
-            },
+def test_synthetic_processing_transform_preserves_rays() -> None:
+    inputs = load_generator_inputs(_GENERATOR_CONFIG)
+    processing_sensors = {sensor["sensor_id"]: sensor for sensor in _config()["sensors"]}
+
+    for sensor in inputs.environment.sensors:
+        calibration = processing_sensors[sensor.sensor_id]["calibration"]
+        rotation = np.asarray(calibration["rotation"], dtype=np.float64)
+        translation = np.asarray(calibration["translation_mm"], dtype=np.float64)
+        u0 = np.asarray(sensor.u0, dtype=np.float64)
+        u90 = np.asarray(sensor.u90, dtype=np.float64)
+        origin = np.asarray(sensor.p0_m, dtype=np.float64) * 1_000.0
+        section_axes = np.vstack(
+            (
+                -u90,
+                np.cross(np.asarray((0.0, 0.0, 1.0)), -u90),
+                np.asarray((0.0, 0.0, 1.0)),
+            )
         )
+        for angle_deg in (0.0, 30.0, 90.0, 180.0, 270.0, 330.0):
+            angle_rad = np.deg2rad(angle_deg)
+            distance_mm = 1_234.5
+            world_point = origin + distance_mm * (np.cos(angle_rad) * u0 + np.sin(angle_rad) * u90)
+            sdk_point = np.asarray(
+                (
+                    distance_mm * np.cos(-angle_rad),
+                    distance_mm * np.sin(-angle_rad),
+                    0.0,
+                )
+            )
+
+            assert rotation @ sdk_point + translation == pytest.approx(
+                section_axes @ world_point,
+                abs=1e-9,
+            )
 
 
-def test_processing_config_rejects_driver_identity_over_64_bytes() -> None:
+def test_synthetic_processing_config_rejects_driver_identity_over_64_bytes() -> None:
     with pytest.raises(ProcessingConfigError, match="driver-compatible"):
-        build_processing_config(
+        build_synthetic_processing_config(
             load_generator_inputs(_GENERATOR_CONFIG),
             socket_directory=PurePosixPath("/sockets"),
             site_id="synthetic-site",
@@ -139,7 +122,7 @@ def test_processing_config_rejects_driver_identity_over_64_bytes() -> None:
         )
 
 
-def test_export_cli_uses_deployment_environment(tmp_path: Path) -> None:
+def test_export_cli_uses_environment_identity_values(tmp_path: Path) -> None:
     output = tmp_path / "processing.json"
 
     assert (

@@ -10,11 +10,11 @@
 | `contracts/lidar/v1/upstream.json`의 `ajin-edge-platform` commit | SDK 호출, 정수 변환, 시각과 gRPC 계약 |
 
 생성기는 제조사 UDP packet과 SDK 수신기를 구현하지 않는다. 장면의 합성 측정값을 HQ node가
-표현할 수 있는 값으로 양자화한 뒤 담당자 driver가 SDK 결과에 적용하는 변환을 그대로 수행한다.
+표현할 수 있는 값으로 양자화한 뒤 `ajin-edge-platform` driver가 SDK 결과에 적용하는 변환을 그대로 수행한다.
 
 ## 장비 mode와 생성 빈도
 
-담당자 driver는 S2E에 UDP channel로 연결하고 `getTypicalScanMode`가 반환한 mode를
+`ajin-edge-platform` driver는 S2E에 UDP channel로 연결하고 `getTypicalScanMode`가 반환한 mode를
 `startScan(false, true, 0, &used_mode)`로 시작한다. scan mode와 motor speed를 별도로
 덮어쓰지 않는다.
 
@@ -22,9 +22,9 @@
 센서당 회전당 3,200 point다. 이 값은 생성 프로파일의 빈도 비율이며 SDK 반환 배열이나
 `ScanFrame.samples`의 고정 길이 계약이 아니다.
 
-## 담당자 SDK 수집 순서
+## 외부 driver의 SDK 수집 순서
 
-담당자 driver의 한 회전 처리 순서는 5단계다.
+`ajin-edge-platform` driver의 한 회전 처리 순서는 5단계다.
 
 1. `grabScanDataHq`로 HQ node 배열 수집.
 2. `ascendScanData`로 각도 오름차순 정렬.
@@ -32,7 +32,7 @@
 4. HQ node별 각도, 거리와 quality 정수 변환.
 5. 첫 scan을 `scan_hz` 계산 기준으로만 사용하고 다음 scan부터 frame 게시.
 
-SDK 배열의 첫 node 시각을 요청하는 `grabScanDataHqWithTimeStamp`는 담당자 구현에서 사용하지
+SDK 배열의 첫 node 시각을 요청하는 `grabScanDataHqWithTimeStamp`는 `ajin-edge-platform`에서 사용하지
 않는다. 외부 frame 시각은 첫 측정점 시각이 아니라 수집 완료 시각이다. 생성기도 이 의미를
 따른다.
 
@@ -42,7 +42,7 @@ SDK 배열의 첫 node 시각을 요청하는 `grabScanDataHqWithTimeStamp`는 �
 
 ## HQ node와 ScanSample 변환
 
-SDK HQ node의 주요 필드는 `angle_z_q14`, `dist_mm_q2`, `quality`, `flag`다. 담당자 driver는
+SDK HQ node의 주요 필드는 `angle_z_q14`, `dist_mm_q2`, `quality`, `flag`다. `ajin-edge-platform` driver는
 다음 정수식을 사용한다.
 
 ```text
@@ -55,14 +55,14 @@ quality = quality_byte >> 2
 생성기는 합성 실수 각도와 거리를 가장 가까운 HQ 값으로 먼저 양자화한 뒤 위 변환을 적용한다.
 거리 0은 `distance_mm == 0`으로 유지된다.
 
-외부 `quality`는 SDK의 원래 8-bit byte가 아니다. 담당자 driver가 상위 6 bit로 정규화한
+외부 `quality`는 SDK의 원래 8-bit byte가 아니다. `ajin-edge-platform` driver가 상위 6 bit로 정규화한
 0-63 값이다. 생성기의 quality profile은 양자화 전 HQ byte 분포를 정의하고 wire 변환에서
 오른쪽으로 2 bit 이동한다. 거리 유효 여부와 quality 값은 서로 다른 필드이며 소비자는
 `distance_mm > 0`과 quality filter를 각각 적용한다.
 
 ## Frame 시각과 순서
 
-담당자 호환 frame은 scan 완료 시각을 다음 필드로 함께 기록한다.
+외부 계약 호환 frame은 scan 완료 시각을 다음 필드로 함께 기록한다.
 
 | 필드 | clock과 단위 |
 | --- | --- |
@@ -85,9 +85,9 @@ sequence gap으로 확인한다.
 - sensor별 독립 회전과 가변 길이 scan
 - 적재 표면, 바닥, 외벽과 허공의 광선 교차 결과
 - HQ Q14 각도와 Q2 거리 양자화
-- 담당자 정수 변환과 angle 정렬
+- 외부 driver 정수 변환과 angle 정렬
 - 완료 시각, 첫 scan 생략, scan rate와 instance sequence 의미
-- 담당자 Proto의 필드와 gRPC 구독 경계
+- 외부 Proto의 필드와 gRPC 구독 경계
 
 생성기가 재현하지 않는 항목은 다음과 같다.
 
@@ -102,11 +102,11 @@ sequence gap으로 확인한다.
 
 ## 의존성과 검증
 
-운영 생성기는 RPLIDAR SDK에 link하지 않는다. SDK source, compiler와 build 산출물도 운영
-image에 포함하지 않는다. 외부 SDK는 BSD-2-Clause license를 따른다.
+생성기는 RPLIDAR SDK에 link하지 않는다. SDK source, compiler와 build 산출물도 생성기 image에
+포함하지 않는다. 외부 SDK는 BSD-2-Clause license를 따른다.
 
 자동 검증은 HQ 표현 가능성, 정수 변환 경계, 0 거리, quality 이동, 안정 angle 정렬, 첫 scan
-생략, sensor별 sequence와 담당자 `ProcessingEngine`의 수락을 확인한다. 담당자 source와의
+생략, sensor별 sequence와 `lidar-processing`의 `ProcessingEngine` 수락을 확인한다. 외부 source와의
 직접 검증 명령은 다음과 같다.
 
 ```bash

@@ -38,13 +38,13 @@ gRPC(Google Remote Procedure Call) server이고 `lidar-processing`이 server-str
 | `geometry/` | 좌표계, 다각형과 광선 교차 |
 | `scenario/` | 적재 및 수거 상태와 2.5D 표면 |
 | `measurement/` | 센서 회전, 광선 측정과 합성 오차 |
-| `scan_stream/` | 담당자 ScanFrame 변환, sensor별 gRPC UDS server와 상태 파일 |
+| `scan_stream/` | 외부 ScanFrame 변환, sensor별 gRPC UDS server와 상태 파일 |
 | `observation/` | 읽기 전용 적재 모델 관찰 snapshot과 latest-only TCP publisher |
-| `edge_integration/` | 합성 환경에서 담당자 처리 설정으로의 결정론적 변환 |
-| `wire/` | 고정한 담당자 Proto의 생성 Python binding |
+| `edge_integration/` | 합성 환경에서 `lidar-processing` 설정으로의 결정론적 변환 |
+| `wire/` | 고정한 외부 Proto의 생성 Python binding |
 | `runtime/` | 생성, 출력, 진단과 종료 생명주기 조립 |
 | `_cli_settings.py` | CLI와 환경변수 계층 검증 |
-| `cli.py` | 운영 CLI 진입점 |
+| `cli.py` | 생성기 CLI 진입점 |
 
 의존 방향은 다음과 같다.
 
@@ -62,7 +62,7 @@ scenario -> geometry
 ```
 
 `geometry`는 다른 프로젝트 패키지를 참조하지 않는다. `scenario`와 `measurement`는 외부 출력
-형식을 알지 않는다. `scan_stream`은 측정 결과를 담당자 wire 표현으로만 바꾸며 적재 모델을
+형식을 알지 않는다. `scan_stream`은 측정 결과를 외부 wire 표현으로만 바꾸며 적재 모델을
 변경하지 않는다. `edge_integration`은 실행 중 scan 경로에 참여하지 않는다.
 
 ## 설정과 계약
@@ -74,19 +74,20 @@ scenario -> geometry
 | `contracts/environment/v1/` | 합성 공간과 센서 설치 schema |
 | `contracts/v2/` | 생성 실행 schema |
 | `contracts/quality/v1/` | 합성 quality 분포 schema |
-| `contracts/lidar/v1/` | 담당자 scan Proto와 고정 출처 |
+| `contracts/lidar/v1/` | `ajin-edge-platform` scan Proto와 고정 출처 |
 | `contracts/observation/v1/` | 시각화 관찰 stream schema와 fixture |
 | `examples/` | 공개 합성 환경과 실행 입력 정본 |
 | `edge-platform-integration/` | 다른 Repository에 전달할 자기완결 통합 묶음 |
 
-생성기의 JSON은 적재 환경, 센서 설치, 시나리오와 합성 측정만 정의한다. 담당자
+생성기의 JSON은 적재 환경, 센서 설치, 시나리오와 합성 측정만 정의한다.
 `lidar-processing`은 이 JSON을 직접 읽지 않는다. `edge_integration` exporter가 센서 설치를
-담당자 좌표 변환, 50 mm 단면 ROI(Region of Interest), 측정 범위와 융합 설정으로 변환한다.
-scan frame에는 환경 정의를 포함하지 않는다.
+처리 좌표 변환, 50 mm 단면 ROI(Region of Interest)와 측정 범위로 변환하고 처리기가 요구하는
+데모 calibration을 채운다. exporter는 실제 현장 설정이나 적재율 보정을 만들지 않는다. scan
+frame에는 환경 정의를 포함하지 않는다.
 
-담당자 scan 계약의 정본은 `ajin-edge-platform`의 고정 commit이다. 로컬 Proto와 생성 binding은
+scan 계약의 정본은 `ajin-edge-platform`의 고정 commit이다. 로컬 Proto와 생성 binding은
 출처 commit과 SHA-256으로 검증한다. `tools/generate_lidar_wire.py --check`는 binding이 고정
-Proto와 일치하는지 검사하고, `tools/verify_edge_platform_contract.py`는 실제 담당자 loader와
+Proto와 일치하는지 검사하고, `tools/verify_edge_platform_contract.py`는 실제 `lidar-processing` loader와
 높이 계산 engine이 합성 설정과 frame을 수락하는지 검사한다.
 
 ## 적재 모델과 측정
@@ -107,12 +108,12 @@ Proto와 일치하는지 검사하고, `tools/verify_edge_platform_contract.py`�
 
 ## ScanFrame 변환
 
-`scan_stream.ScanFrameFactory`는 담당자 SDK(Software Development Kit) adapter의 출력 규칙을
+`scan_stream.ScanFrameFactory`는 `ajin-edge-platform` SDK(Software Development Kit) adapter의 출력 규칙을
 그대로 적용한다.
 
 | 필드 | 생성 규칙 |
 | --- | --- |
-| `angle_mdeg` | HQ Q14 각도를 담당자 정수식으로 millidegree 변환 후 안정 정렬 |
+| `angle_mdeg` | HQ Q14 각도를 외부 driver 정수식으로 millidegree 변환 후 안정 정렬 |
 | `distance_mm` | HQ Q2 거리를 정수 나눗셈으로 millimeter 변환 |
 | `quality` | 합성 8-bit HQ quality를 오른쪽으로 2 bit 이동 |
 | `acquired_at_unix_ms` | scan 완료 시점의 wall clock |
@@ -122,7 +123,7 @@ Proto와 일치하는지 검사하고, `tools/verify_edge_platform_contract.py`�
 | `instance_id` | 생성기 process 시작마다 sensor별 새 UUID |
 
 내부 `scan_id`와 wire `sequence`는 책임이 다르다. 내부 값은 시뮬레이션 회전 식별자이고 wire
-값은 담당자 driver instance의 공개 순서다. 생성기 재시작은 새 `instance_id`와 sequence 1로
+값은 외부 driver instance의 공개 순서다. 생성기 재시작은 새 `instance_id`와 sequence 1로
 시작한다.
 
 ## gRPC 출력과 상태
@@ -133,11 +134,11 @@ Proto와 일치하는지 검사하고, `tools/verify_edge_platform_contract.py`�
 유실을 식별한다. 구독자 연결, 종료와 재연결은 생성과 적재 모델을 중단하거나 초기화하지 않는다.
 
 빈 `consumer_id`와 128 byte 초과 값은 gRPC `INVALID_ARGUMENT`, 구독자 상한 초과는
-`RESOURCE_EXHAUSTED`로 응답한다. 이 값과 메시지는 담당자 구현을 따른다. UDS는 생성기가
+`RESOURCE_EXHAUSTED`로 응답한다. 이 값과 메시지는 `ajin-edge-platform` 구현을 따른다. UDS는 생성기가
 시작할 때 mode `0660`으로 만들고 종료할 때 제거한다. 기존 경로가 socket이 아니면 덮어쓰지
 않고 시작에 실패한다.
 
-상태 파일은 담당자 상태 schema, service 이름과 orchestrator directory 구조를 따른다. 첫
+상태 파일은 `ajin-edge-platform` 상태 schema, service 이름과 orchestrator directory 구조를 따른다. 첫
 sensor는 `lidar-driver-a`, 둘째 sensor는 `lidar-driver-b`다. 각 파일은 상태 root 아래의
 `<service>/<service>.json`에 있다. 생성기는 2초마다 임시 파일을 같은 하위 directory에서
 원자적으로 교체한다. 첫 frame 전 상태는 `STARTING`, 게시 후 상태는 `HEALTHY`다.
@@ -146,7 +147,7 @@ sensor는 `lidar-driver-a`, 둘째 sensor는 `lidar-driver-b`다. 각 파일은 
 
 관찰 publisher는 연결마다 정적 scene header를 1회 보내고 기본 1초마다 동적 적재 모델
 snapshot을 보낸다. 최신 대기 snapshot 1개만 유지하며 연결 실패와 느린 수신기는 scan 생성과
-gRPC 출력을 막지 않는다. 관찰 stream은 scan 계약, 담당자 처리 설정과 상태 파일을 변경하지
+gRPC 출력을 막지 않는다. 관찰 stream은 scan 계약, `lidar-processing` 설정과 상태 파일을 변경하지
 않는다. 세부 형식은 [`observation.md`](observation.md)가 정본이다.
 
 ## 생명주기와 검증
@@ -165,7 +166,7 @@ server를 닫은 뒤 집계를 기록한다. gRPC 구독자가 없어도 생성�
 | `tests/performance/` | 생성 단계, 변환과 local gRPC 전달 부하 |
 | `tests/edge/` | digest image의 두 UDS, 관찰과 상태 출력 |
 
-단위 및 통합 검증은 외부 네트워크에 의존하지 않는다. 담당자 직접 호환 검증은 별도 고정
+단위 및 통합 검증은 외부 네트워크에 의존하지 않는다. 외부 구현 직접 호환 검증은 별도 고정
 checkout을 입력으로 사용한다. pixel 전체를 고정하는 시각 snapshot 검증은 이 Repository의
 범위가 아니다.
 

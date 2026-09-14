@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.edge_integration import build_processing_config
+from scrap_monitoring_lidar_generator.edge_integration import build_synthetic_processing_config
 from scrap_monitoring_lidar_generator.runtime import (
     build_measurement_generation_runtime,
 )
@@ -62,7 +62,7 @@ def _load_upstream_modules(edge_root: Path) -> tuple[Any, Any]:
 def _validate_with_upstream(edge_root: Path) -> dict[str, object]:
     load_config, processing_engine = _load_upstream_modules(edge_root)
     inputs = load_generator_inputs(_GENERATOR_CONFIG)
-    processing_config = build_processing_config(
+    processing_config = build_synthetic_processing_config(
         inputs,
         socket_directory=PurePosixPath("/sockets"),
         site_id="synthetic-site",

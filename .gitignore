@@ -13,6 +13,9 @@ dist/
 build/
 *.egg-info/
 
+# Local dtach control socket.
+/lidar
+
 # Deployment environment files can contain private endpoints.
 .env
 .env.*

@@ -1,6 +1,5 @@
-"""Derive ajin edge processing calibration from the synthetic environment."""
+"""Derive the ajin edge processing fixture from the synthetic environment."""
 
-import copy
 import json
 import math
 import re
@@ -28,30 +27,22 @@ class ProcessingConfigError(ValueError):
     """An environment cannot be represented by the processing contract."""
 
 
-def build_processing_config(
+def build_synthetic_processing_config(
     inputs: GeneratorInputs,
     *,
     socket_directory: PurePosixPath,
     site_id: str,
     edge_id: str,
     config_revision: str,
-    base_config: Mapping[str, Any] | None = None,
-    driver_service_version: str | None = None,
 ) -> JsonObject:
-    """Build a deterministic synthetic processing configuration."""
+    """Build a complete processing configuration for the synthetic environment."""
     _require_absolute_posix_directory(socket_directory)
     identities = {
         "site_id": _require_identifier(site_id, "site_id"),
         "edge_id": _require_driver_identifier(edge_id, "edge_id"),
         "config_revision": _require_driver_identifier(config_revision, "config_revision"),
     }
-    result = _copy_base_config(base_config)
-    for name, value in identities.items():
-        existing = result.get(name)
-        if existing is not None and existing != value:
-            raise ProcessingConfigError(f"base configuration {name} does not match {value!r}")
-        result[name] = value
-    _replace_driver_service_versions(result, driver_service_version)
+    result: JsonObject = dict(identities)
 
     environment = inputs.environment
     quality_by_sensor = {quality.sensor_id: quality for quality in inputs.quality_profile.sensors}
@@ -91,8 +82,8 @@ def build_processing_config(
     return result
 
 
-def write_processing_config(path: Path, config: Mapping[str, Any]) -> None:
-    """Write one stable UTF-8 JSON deployment artifact."""
+def write_synthetic_processing_config(path: Path, config: Mapping[str, Any]) -> None:
+    """Write one stable UTF-8 JSON integration fixture."""
     payload = json.dumps(config, ensure_ascii=True, allow_nan=False, indent=2) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(payload, encoding="utf-8")
@@ -250,33 +241,6 @@ def _section_column_is_inside(
         if not boundary.contains(Vec2(float(point[0]), float(point[1]))):
             return False
     return True
-
-
-def _copy_base_config(base_config: Mapping[str, Any] | None) -> JsonObject:
-    if base_config is None:
-        return {}
-    copied = copy.deepcopy(dict(base_config))
-    if copied.get("schema_version") != "1.0":
-        raise ProcessingConfigError("base configuration schema_version must be '1.0'")
-    return copied
-
-
-def _replace_driver_service_versions(
-    config: JsonObject,
-    driver_service_version: str | None,
-) -> None:
-    manifest = config.get("service_versions")
-    if manifest is None:
-        return
-    if not isinstance(manifest, dict) or any(
-        not isinstance(name, str) or not isinstance(value, str) for name, value in manifest.items()
-    ):
-        raise ProcessingConfigError("base configuration service_versions must map strings")
-    if driver_service_version is None:
-        raise ProcessingConfigError("driver_service_version is required for a service manifest")
-    version = _require_identifier(driver_service_version, "driver_service_version")
-    manifest["lidar-driver-a"] = version
-    manifest["lidar-driver-b"] = version
 
 
 def _minimum_valid_quality(frequencies: Sequence[int]) -> int:

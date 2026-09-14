@@ -8,7 +8,7 @@
 | --- | --- |
 | `scene_update` | 적재 표면과 시나리오 상태 갱신 |
 | `scan_generation` | 광선 교차, 측정 왜곡과 quality 생성 |
-| `serialization` | 담당자 Proto ScanFrame 생성과 직렬화 |
+| `serialization` | 외부 Proto ScanFrame 생성과 직렬화 |
 | `transport_wait` | local gRPC UDS 게시와 구독 완료 |
 
 benchmark는 생성 pacing을 제거하고 설정된 scan 수를 가능한 빠르게 처리한다. 생성기 process
@@ -68,19 +68,18 @@ tests/edge/run.sh \
 
 검증은 두 sensor의 gRPC UDS frame, sequence, observation과 상태 파일을 확인한다. 생성기와
 test double의 `docker stats`는 결과 directory에 남는다. CPU 2 core는 자동 검증을 안정적으로
-완료하기 위한 시작값이고 운영 할당 기준이 아니다.
+완료하기 위한 시작값이고 자원 상한이 아니다.
 
-## 운영 성능 판정
+## 통합 검증 성능 판정
 
-운영 성능 검증 구성 요소는 5개다.
+통합 성능 검증 구성 요소는 4개다.
 
 1. 합성 생성기.
-2. SDK 변환기 2개를 대체하거나 함께 비교하는 검증 경로.
-3. `lidar-processing`.
-4. edge platform의 나머지 상시 process.
-5. 관찰 수신기가 연결된 router 경로.
+2. `lidar-processing`.
+3. edge platform의 나머지 검증 대상 process.
+4. 관찰 수신기가 연결된 router 경로.
 
-Raspberry Pi 5 8GB에서 다섯 조건의 장기 실행을 함께 측정하기 전에는 운영 CPU와 memory
+Raspberry Pi 5 8GB에서 네 조건의 장기 실행을 함께 측정하기 전에는 검증 환경의 CPU와 memory
 상한을 확정하지 않는다. 측정 항목은 다음과 같다.
 
 - 생성기와 각 process의 CPU 및 RSS.
@@ -90,6 +89,6 @@ Raspberry Pi 5 8GB에서 다섯 조건의 장기 실행을 함께 측정하기 �
 - 관찰 publisher의 연결 실패와 폐기 수.
 - Docker restart와 OOM(Out Of Memory) 발생 여부.
 
-0.8.0의 운영 상한은 아직 확정되지 않았다. gRPC UDS와 실제 담당자 처리 process를 사용한
-장기 공유 부하 결과가 운영 상한의 정본이 된다. 원시 로그, 사설 주소와 실제 sensor 자료는
+0.9.0의 자원 상한은 아직 확정되지 않았다. gRPC UDS와 실제 `lidar-processing` process를 사용한
+장기 공유 부하 결과가 검증 기준의 정본이 된다. 원시 로그, 사설 주소와 실제 sensor 자료는
 Git에 추가하지 않는다.
