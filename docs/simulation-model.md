@@ -2,15 +2,15 @@
 
 ## 적용 범위
 
-이 문서는 Rust model version 1의 stream seed, 난수 sampling, smooth rate profile과 적재 시나리오
-event 계약의 정본이다. `randomness`, `rate_profile`과 `scenario`는 외부 출력과 독립적인 library
-경계다. 공개 JSON version과 simulation model version은 별개이며 기존 version 2 입력 schema를
-변경하지 않는다.
+이 문서는 Rust model version 1의 stream seed, 난수 sampling, smooth rate profile, 적재 시나리오
+event와 LiDAR 측정 결정론 계약의 정본이다. `randomness`, `rate_profile`, `scenario`와
+`measurement`는 network 출력과 독립적인 library 경계다. 공개 JSON version과 simulation model
+version은 별개이며 기존 version 2 입력 schema를 변경하지 않는다.
 
-계약의 구성 요소는 seed 파생, PRNG(Pseudorandom Number Generator), sampling, rate profile과
-시나리오 event의 5개다. 난수 word, sampling과 생성된 segment의 bit pattern은 Rust exact vector로
-검증한다. Python 난수 byte열은 비교하지 않고 scripted rate 및 시나리오 계산은 Python 수치 기준과
-비교한다.
+계약의 구성 요소는 seed 파생, PRNG(Pseudorandom Number Generator), sampling, rate profile,
+시나리오 event, sensor 회전 및 HQ 변환과 최종 측정의 7개다. 난수 word, sampling과 생성된 segment의
+bit pattern은 Rust exact vector로 검증한다. Python 난수 byte열은 비교하지 않고 scripted rate,
+시나리오, 좌표, 왜곡과 SDK 변환은 Python 기준 fixture와 비교한다.
 
 ## Stream seed
 
@@ -103,10 +103,6 @@ Factor 범위 한쪽이 정확히 1이거나 segment 쌍을 만들 시간이 없
 profile을 반환한다. 생성과 직접 구성 모두 segment 최대 100,000개를 허용한다. 유한한 종료 시각을
 만들 수 없거나 양수 길이를 더해도 float 시각이 진행하지 않으면 오류를 반환한다.
 
-같은 model version, 설정과 seed는 같은 지원 architecture에서 동일한 난수 소비와 profile을 만든다.
-`sin`을 포함한 rate 조회와 적분은 Python scripted oracle의 tolerance로 검증한다. 기존 word 전이,
-seed layout, sampling 소비량이나 profile 생성 규칙을 바꾸면 새 model version이 필요하다.
-
 ## 시나리오 난수 stream
 
 시나리오 난수 stream은 4개다.
@@ -168,3 +164,86 @@ sample은 이 새 snapshot을 사용하고 더 이른 sample은 직전 snapshot�
 경사 이완의 공개 호출 상한은 256회다. Index overflow, 유한한 다음 시각을
 만들 수 없는 phase와 표면 schedule, 적용하지 못한 계획 부피는 오류다. 같은 model version, 설정과
 seed를 사용한 실행은 같은 지원 architecture에서 동일한 event 상태와 표면을 만든다.
+
+## Sensor 회전과 HQ 변환
+
+Sensor별 초기 각도는 model RNG와 독립적인 SHA-256 값이다. Payload는 ASCII
+`sensor-rotation`과 NUL 1 byte, big-endian `u64` root seed, 정규화하지 않은 sensor identifier
+UTF-8 bytes를 순서대로 연결한다. Digest를 unsigned 256-bit 정수로 해석하고 360을 곱한 뒤
+`2^256`으로 나눈 각도를 HQ Q14 tick으로 반올림한다.
+
+회전 scheduler는 sample rate와 rotation rate의 입력 decimal 값을 정수 비율로 보존한다. Rotation
+종료까지의 누적 sample 수는 비율의 올림값이며 sample index는 scan 경계에서 초기화하지 않는다.
+따라서 sample rate 5 Hz와 rotation rate 2 Hz의 연속 scan 길이는 `[3, 2, 3, 2]`이고 sample 시각은
+전역 sample index를 sample rate로 나눈 연속 시각이다. Sample 시각은 rotation 시작 이상이고 완료
+시각 미만이다. `lidar-processing` 입력 계약에 따라 한 rotation의 최대 sample 수는 32,768개다.
+`ceil(sample_rate_hz / rotation_rate_hz)`가 이 상한을 넘는 설정은 scheduler 생성 전에 거부한다.
+Decimal 비율과 rotation 완료 시각은 임의 정밀도 정수로 계산한 뒤 `f64`에 한 번만 반올림하며
+부동소수점 나눗셈으로 대체하지 않는다. Scan ID와 sample index는 signed 64-bit 양수 범위를 넘기
+전에 오류를 반환하고, 해당 index의 완료 시각이 유한한 `f64` 범위를 벗어나면 오류를 반환한다.
+
+각도와 거리는 half-up 방식으로 각각 HQ Q14와 HQ Q2 tick에 양자화한다. 광선과 정적 교차 cache는
+입력 배열 위치가 아니라 양자화된 실제 HQ angle tick을 key로 사용한다. Millidegree 변환의 곱셈은
+`u64`에서 수행하며 같은 millidegree로 변환된 sample은 입력 순서를 유지하는 안정 정렬을 사용한다.
+
+## 측정 난수 stream
+
+측정 난수 stream은 7개다.
+
+| Scope | Domain | 책임 |
+| --- | --- | --- |
+| Global | `falling-material` | 적재 중 낙하물 event |
+| Global | `voids` | 적재 표면 빈틈 event |
+| Global | `collection-occlusion` | 수거 중 가림 event |
+| Sensor | `reflection-error` | 반사 경로 오류 선택과 거리 감소 |
+| Sensor | `dropout` | dropout 간격과 지속 시간 |
+| Sensor | `distance-noise` | 절단 정규분포 거리 noise |
+| Sensor | `quality` | 유효 및 무효 sample quality |
+
+각 stream은 다른 현상의 활성화 여부와 소비량에 영향을 받지 않는다. 공간 event는 두 sensor가
+공유하는 simulation timeline에서 한 번 생성하고 sensor별 측정기는 같은 event history를 읽는다.
+모든 event 수명과 dropout 구간은 `[start, end)`다. Event 시각의 표면 sample은 event 이후의 새
+snapshot을 사용한다.
+
+반사 오류가 활성화되면 sample 수만큼 선택 word를 먼저 소비하고 같은 수만큼 거리 감소 word를
+소비한다. Dropout scheduler는 최초 간격, 각 event의 지속 시간, 다음 간격 순서로 소비한다. 거리
+noise는 sample별 rejection sampling을 사용한다. Noise 표준편차나 제한이 0이면 noise word를
+소비하지 않는다. Quality는 최종 거리의 유효 여부와 관계없이 sample마다 word 1개를 소비한다.
+Quality 빈도 누적합과 합계는 checked `u128`로 계산한다. 각 누적 경계는
+`ceil(cumulative * 2^64 / total)`의 정수값이며 raw `u64` word가 이 경계보다 작을 때 해당 quality를
+선택한다. 이 방식은 sample마다 word 1개를 소비하고 각 누적 확률을 최대 `1 / 2^64`만큼 위로
+양자화한다.
+
+## 측정 처리 순서
+
+한 sample의 최종 측정 처리 순서는 8단계다.
+
+1. 표면, 바닥, 외벽과 고정 표면의 기준 광선 교차 및 공간 왜곡.
+2. 반사 경로 오류의 거리 감소.
+3. Dropout의 거리 0 대입.
+4. 절단 정규분포 거리 noise 적용.
+5. 음수 거리의 0 clamp.
+6. HQ Q2 거리 양자화.
+7. 최소 및 최대 측정 거리 유효성 판정.
+8. 유효 또는 무효 분포의 quality 선택.
+
+낙하물과 수거 가림은 기존 표면보다 가까운 후보만 선택한다. 빈틈은 기존 표면보다 먼 후보만
+선택하되 같은 광선의 정적 교차 거리와 최대 측정 거리를 넘지 않는다. 바닥과 빈 동적 표면처럼
+후보 거리가 같으면 먼저 평가한 정적 후보를 유지한다.
+
+기준 scan은 광선 및 정적 교차 cache의 장면과 최소 및 최대 측정 거리 metadata를 공유한다. 공간
+왜곡은 이 장면과 거리 범위가 생성기 설정과 정확히 일치할 때만 적용한다. 각 공개 event resolver는
+적용 가능한 동적 표면 sample이 없어도 입력 event 전체를 먼저 검증한다.
+
+ScanFrame factory는 sample 정규화 전체가 성공한 뒤 monotonic clock과 wall clock을 읽는다. 첫
+완료 scan은 sensor별 scan rate 기준만 만들고 frame을 내보내지 않는다. 이후 frame은 sensor별
+완료 monotonic 시각 차이로 scan rate를 계산하고 sequence를 1부터 증가시킨다. UUID(Universally
+Unique Identifier)와 두 clock source는 fixture에서 주입할 수 있다.
+
+Dropout scheduler와 sensor별 측정기는 한 호출이 실패하면 해당 호출에서 소비한 난수와 진행 상태를
+복원한다. 같은 입력을 수정해 재시도한 결과는 실패 호출 없이 실행한 같은 seed의 결과와 같다.
+
+같은 model version, 설정과 seed는 같은 지원 architecture에서 동일한 난수 소비, profile, 공간
+event와 sensor별 측정을 만든다. `sin`을 포함한 rate 조회와 적분은 Python scripted oracle의
+tolerance로 검증한다. 기존 word 전이, seed layout, sampling 소비량, profile 생성, event 생성이나
+측정 처리 순서를 바꾸면 새 model version이 필요하다.

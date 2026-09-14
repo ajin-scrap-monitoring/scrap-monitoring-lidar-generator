@@ -65,6 +65,7 @@ fn expected_error_kind(name: &str) -> ErrorKind {
         "seed-overflow"
         | "boolean-version"
         | "sampling-under-rotation"
+        | "sampling-over-frame-limit"
         | "wrong-unit"
         | "noncanonical-quality-key" => ErrorKind::Range,
         "boolean-seed" | "fractional-seed" | "boolean-quality-frequency" | "non-object-root" => {
@@ -315,6 +316,19 @@ fn public_inputs_load_without_a_fixed_sample_array_contract() {
     )
     .unwrap();
     assert_eq!(uneven.measurement.sample_rate_hz, 32_000.5);
+}
+
+#[test]
+fn generator_rejects_frames_above_the_processing_contract_limit() {
+    let mut document: Value = serde_json::from_str(GENERATOR).unwrap();
+    document["measurement"]["rotation_rate_hz"] = json!(1.0);
+    document["measurement"]["sample_rate_hz"] = json!(32_768.0);
+    assert!(parse_generator_config(&document.to_string(), ".").is_ok());
+
+    document["measurement"]["sample_rate_hz"] = json!(32_768.000_000_000_01);
+    let error = parse_generator_config(&document.to_string(), ".").unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Range);
+    assert_eq!(error.path, "$.measurement.sample_rate_hz");
 }
 
 #[test]

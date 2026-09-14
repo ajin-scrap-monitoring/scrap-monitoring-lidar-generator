@@ -114,6 +114,21 @@
     },
     {
       "expected": {
+        "accepted": false,
+        "error": "$.measurement.sample_rate_hz must produce at most 32768 points per rotation"
+      },
+      "name": "sampling-over-frame-limit",
+      "replace": {
+        "path": [
+          "measurement",
+          "sample_rate_hz"
+        ],
+        "value": 327680.0000000001
+      },
+      "source": "examples/generator.v2.json"
+    },
+    {
+      "expected": {
         "accepted": true
       },
       "name": "large-noise",

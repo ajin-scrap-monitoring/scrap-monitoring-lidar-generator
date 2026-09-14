@@ -11,8 +11,11 @@ use super::{
     polygon, python_float_sum,
     strict_json::{self as json, Object},
 };
-use crate::MAX_INLET_POSITIONS;
-use crate::error::{ConfigurationError, ErrorKind, Result};
+use crate::{
+    MAX_INLET_POSITIONS,
+    error::{ConfigurationError, ErrorKind, Result},
+    measurement::validate_scan_point_limit,
+};
 
 pub fn load_generator_config(path: impl AsRef<Path>) -> Result<GeneratorConfig> {
     let source = path.as_ref();
@@ -267,6 +270,13 @@ fn measurement(value: &Value) -> Result<MeasurementConfig> {
             ErrorKind::Range,
             config.at("sample_rate_hz"),
             "must be at least rotation_rate_hz",
+        ));
+    }
+    if validate_scan_point_limit(sample_rate_hz, rotation_rate_hz).is_err() {
+        return Err(ConfigurationError::new(
+            ErrorKind::Range,
+            config.at("sample_rate_hz"),
+            "must produce at most 32768 points per rotation",
         ));
     }
     let min_distance_m = contract_distance(&config, "min_distance_m")?;

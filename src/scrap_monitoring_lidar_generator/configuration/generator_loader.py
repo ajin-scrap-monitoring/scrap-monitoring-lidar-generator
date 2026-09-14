@@ -2,10 +2,14 @@
 
 import math
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from scrap_monitoring_lidar_generator._limits import MAX_INLET_POSITIONS
+from scrap_monitoring_lidar_generator._limits import (
+    MAX_INLET_POSITIONS,
+    MAX_SCAN_POINTS_PER_ROTATION,
+)
 from scrap_monitoring_lidar_generator.configuration._json import (
     parse_document,
     read_document,
@@ -334,6 +338,13 @@ def _parse_measurement(value: Any, path: str) -> MeasurementConfig:
     )
     if sample_rate_hz < rotation_rate_hz:
         raise ConfigurationError(f"{path}.sample_rate_hz must be at least {path}.rotation_rate_hz")
+    if Decimal(str(sample_rate_hz)) > (
+        Decimal(str(rotation_rate_hz)) * MAX_SCAN_POINTS_PER_ROTATION
+    ):
+        raise ConfigurationError(
+            f"{path}.sample_rate_hz must produce at most "
+            f"{MAX_SCAN_POINTS_PER_ROTATION} points per rotation"
+        )
     min_distance_m = _require_contract_distance(
         measurement["min_distance_m"],
         f"{path}.min_distance_m",

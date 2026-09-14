@@ -201,7 +201,8 @@
       ],
       "properties": {
         "sample_rate_hz": {
-          "$ref": "#/$defs/positiveNumber"
+          "$ref": "#/$defs/positiveNumber",
+          "description": "The loader also validates the processing frame limit documented in docs/configuration.md."
         },
         "rotation_rate_hz": {
           "$ref": "#/$defs/positiveNumber"
