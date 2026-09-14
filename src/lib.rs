@@ -2,6 +2,7 @@
 
 pub mod cli;
 pub mod configuration;
+pub mod edge_integration;
 pub mod error;
 pub mod geometry;
 pub mod measurement;

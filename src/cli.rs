@@ -9,6 +9,7 @@ use clap::{Args, Parser, Subcommand};
 
 use crate::{
     configuration::{GeneratorInputs, load_generator_inputs},
+    edge_integration::{build_synthetic_processing_config, write_synthetic_processing_config},
     error::{ConfigurationError, ErrorKind, Result},
 };
 
@@ -48,6 +49,25 @@ pub enum Command {
         #[command(flatten)]
         overrides: Box<RuntimeSettingOverrides>,
     },
+    /// Export the public synthetic environment for pinned lidar-processing.
+    #[command(name = "export-synthetic-processing-config")]
+    ExportSyntheticProcessingConfig(ExportSyntheticProcessingConfigArgs),
+}
+
+#[derive(Clone, Debug, Args)]
+pub struct ExportSyntheticProcessingConfigArgs {
+    #[arg(long = "generator-config", value_parser = cli_path)]
+    pub generator_config: Option<String>,
+    #[arg(long, value_parser = cli_path)]
+    pub output: String,
+    #[arg(long, default_value = "/sockets", value_parser = cli_absolute_path)]
+    pub socket_dir: String,
+    #[arg(long, value_parser = cli_identity)]
+    pub site_id: Option<String>,
+    #[arg(long, value_parser = cli_driver_identity)]
+    pub edge_id: Option<String>,
+    #[arg(long, value_parser = cli_driver_identity)]
+    pub config_revision: Option<String>,
 }
 
 /// Raw values are resolved before parsing so valid CLI values hide invalid environment values.
@@ -265,7 +285,65 @@ pub fn check(command: &Command, environment: &Environment) -> Result<GeneratorIn
             };
             load_overridden_inputs(&settings)
         }
+        Command::ExportSyntheticProcessingConfig(_) => Err(invalid(
+            "command",
+            "export command cannot be used as a configuration check",
+        )),
     }
+}
+
+pub fn export_synthetic_processing_config(
+    arguments: &ExportSyntheticProcessingConfigArgs,
+    environment: &Environment,
+) -> std::result::Result<(), crate::edge_integration::ProcessingConfigError> {
+    let config_path = required_export_value(
+        arguments
+            .generator_config
+            .as_deref()
+            .or_else(|| environment.get(CONFIG_ENV).map(String::as_str)),
+        "--generator-config or SCRAP_LIDAR_GENERATOR_CONFIG",
+    )?;
+    let site_id = required_export_value(
+        arguments
+            .site_id
+            .as_deref()
+            .or_else(|| environment.get("SITE_ID").map(String::as_str)),
+        "--site-id or SITE_ID",
+    )?;
+    let edge_id = required_export_value(
+        arguments
+            .edge_id
+            .as_deref()
+            .or_else(|| environment.get("EDGE_ID").map(String::as_str)),
+        "--edge-id or EDGE_ID",
+    )?;
+    let config_revision = required_export_value(
+        arguments
+            .config_revision
+            .as_deref()
+            .or_else(|| environment.get("CONFIG_REVISION").map(String::as_str)),
+        "--config-revision or CONFIG_REVISION",
+    )?;
+    let inputs = load_generator_inputs(config_path).map_err(|error| {
+        crate::edge_integration::ProcessingConfigError::Invalid(error.to_string())
+    })?;
+    let output = build_synthetic_processing_config(
+        &inputs,
+        Path::new(&arguments.socket_dir),
+        site_id,
+        edge_id,
+        config_revision,
+    )?;
+    write_synthetic_processing_config(Path::new(&arguments.output), &output)
+}
+
+fn required_export_value<'a>(
+    value: Option<&'a str>,
+    source: &str,
+) -> std::result::Result<&'a str, crate::edge_integration::ProcessingConfigError> {
+    value.filter(|value| !value.is_empty()).ok_or_else(|| {
+        crate::edge_integration::ProcessingConfigError::Invalid(format!("set {source}"))
+    })
 }
 
 fn resolve<T>(
