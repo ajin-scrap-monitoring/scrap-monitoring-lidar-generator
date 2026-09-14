@@ -25,7 +25,7 @@ use crate::{
 };
 
 const SENSOR_WORKER_QUEUE_CAPACITY: usize = 1;
-const MAX_SPATIAL_EVENTS_PER_BATCH: usize = 100_000;
+const MAX_RETAINED_SPATIAL_EVENTS: usize = 100_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GenerationRuntimeError {
@@ -321,10 +321,6 @@ impl GenerationRuntime {
         let mut snapshots = self.snapshots.clone();
         let mut spatial = self.spatial.clone();
         let scenario_event_limit = scenario.event_output_limit()?;
-        let initial_spatial_events = spatial
-            .as_ref()
-            .map(|timeline| timeline.resolver().retained_event_count())
-            .unwrap_or(0);
         let mut scenario_events = 0_usize;
 
         while scenario.elapsed_s() < through_s {
@@ -338,13 +334,9 @@ impl GenerationRuntime {
                     phase: scenario.active_phase()?.into(),
                     surface: &surface,
                 })?;
-                let generated = spatial
-                    .resolver()
-                    .retained_event_count()
-                    .saturating_sub(initial_spatial_events);
-                if generated > MAX_SPATIAL_EVENTS_PER_BATCH {
+                if spatial.resolver().retained_event_count() > MAX_RETAINED_SPATIAL_EVENTS {
                     return Err(MeasurementError::Exhausted(
-                        "spatial event count exceeds the generation batch limit",
+                        "retained spatial event count exceeds the generation runtime limit",
                     )
                     .into());
                 }
