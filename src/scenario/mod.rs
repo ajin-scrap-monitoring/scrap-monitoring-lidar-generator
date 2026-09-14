@@ -14,8 +14,8 @@ pub use height_field::{
     VolumeChange,
 };
 pub use simulator::{
-    MAX_EVENT_SNAPSHOT_BYTES, MAX_EVENTS_PER_ADVANCE, ScenarioAdvance, ScenarioEvent,
-    ScenarioModelSnapshot, ScenarioPhase, ScenarioSettings, ScenarioSimulator, ScenarioSnapshot,
-    build_scenario_simulator,
+    ActiveScenarioPhase, MAX_EVENT_SNAPSHOT_BYTES, MAX_EVENTS_PER_ADVANCE, ScenarioAdvance,
+    ScenarioEvent, ScenarioModelSnapshot, ScenarioPhase, ScenarioSettings, ScenarioSimulator,
+    ScenarioSnapshot, build_scenario_simulator,
 };
 pub use time_scale::{REFERENCE_MEAN_FILL_DURATION_S, scale_duration_range, scenario_time_scale};

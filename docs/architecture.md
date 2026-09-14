@@ -91,8 +91,8 @@ Cargo 빌드 출력에만 두며 고정 Proto 원문과 Python binding을 변경
 식별자와 관찰 endpoint도 요구한다. 두 명령은 scan 생성, socket 생성과 상태 출력을 하지
 않으며 성공 시 0, 설정 오류 시 2로 종료한다.
 
-`cargo test --locked`는 Rust 단위 테스트와 `tests/`의 설정, CLI, wire, 기하, 난수, rate profile,
-높이장 및 시나리오 회귀 검증을 실행한다.
+`cargo test --locked`는 Rust 단위 테스트와 설정, CLI, wire, 기하, 난수, rate profile, 높이장,
+시나리오, 회전, 광선 교차, 합성 왜곡과 ScanFrame 회귀 검증을 실행한다.
 `cargo fmt --check`와 `cargo clippy --locked --all-targets -- -D warnings`는 Rust 정적 검증이다.
 
 ## Rust 시뮬레이션 계산 경계
@@ -123,6 +123,41 @@ network 실행은 이 경계에 포함하지 않는다.
 않는다. `scenario` 계산은 `geometry`, `randomness`와 `rate_profile`을 참조하며 공개 설정을 계산
 자료형으로 조립하는 adapter만 `configuration`을 참조한다. Model version, 난수 소비와 상태 event
 계약은 [`simulation-model.md`](simulation-model.md)가 정본이다.
+
+## Rust LiDAR 측정 경계
+
+Rust LiDAR 측정 경계는 8개다.
+
+| 경로 | 책임 |
+| --- | --- |
+| `src/measurement/rotation.rs` | sensor별 회전, 전역 sample index와 sample 시각 |
+| `src/measurement/sdk.rs` | HQ 각도 및 거리 양자화와 driver 정수 변환 |
+| `src/measurement/scene.rs` | sensor frame, 정적 장면과 동적 표면의 광선 교차 |
+| `src/measurement/reference.rs` | 기준 scan, HQ 각도별 광선 및 정적 교차 cache |
+| `src/measurement/snapshots.rs` | event 구간별 불변 표면 이력과 보존 경계 |
+| `src/measurement/spatial.rs` | 낙하물, 빈틈과 수거 가림 event 및 거리 해석 |
+| `src/measurement/generation.rs` | 반사 오류, dropout, 거리 noise와 quality 생성 |
+| `src/measurement/frame.rs` | SDK 정수 변환, 완료 clock과 외부 ScanFrame 생성 |
+
+`frame`은 `generation`과 `wire`, `generation`은 `reference`, `spatial`과 `randomness`,
+`reference`는 `scene`, `snapshots`와 `scenario`, `scene`은 `geometry`와 `scenario`에 의존한다.
+측정 경계는 설정 loader, network server와 runtime 생명주기를 참조하지 않는다.
+
+`ReferenceScanner`는 실제 HQ angle tick별 광선과 정적 장면 교차 결과를 보관한다. 같은 거리에
+정적 후보가 여러 개면 바닥, 입력 순서의 외벽, 고정 표면 순서에서 먼저 확인한 후보를 유지한다.
+동적 표면만 표면 event snapshot에 맞춰 다시 계산한다. 기준 scan은 cache에 사용한 정적 장면과
+최소 및 최대 측정 거리를 공유 metadata로 보관한다. 공간 왜곡 resolver는 이 metadata가 자신의
+정적 장면 및 측정 범위와 일치하지 않으면 scan을 거부한다. Event 시각의 sample은 새 snapshot을
+사용하고 coordinator는 미완료 scan 중 가장 이른 sample을 포함하는 이력까지 보존한다.
+
+공간 왜곡 event의 수명은 `[start, end)` 구간이다. 빈틈은 기존 표면보다 먼 후보를 만들 수 있지만
+바닥, 외벽이나 고정 표면을 통과시키지 않는다. 최종 거리는 공간 왜곡, 반사 오류, dropout,
+절단 정규분포 noise, 0 clamp, HQ 거리 양자화, 유효 범위 판정, quality 순서로 생성한다.
+
+`tests/rotation.rs`, `tests/scan_core.rs`, `tests/measurement_generation.rs`와
+`tests/scan_frame.rs`는 Python 기준 fixture와 Rust 경계 조건을 검증한다. 좌표와 광선 거리는
+명시한 float tolerance로 비교하고 HQ 정수, ScanFrame field, sample 순서와 Protobuf byte fixture는
+정확히 비교한다.
 
 ## 설정과 계약
 

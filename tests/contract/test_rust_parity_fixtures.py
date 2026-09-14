@@ -77,6 +77,9 @@ def test_configuration_cases_capture_strict_integer_and_json_behavior() -> None:
     for name in ("boolean-seed", "fractional-seed", "seed-overflow", "boolean-version"):
         assert not cases[name]["accepted"]
     assert cases["duplicate-field"]["error"] == "duplicate JSON field: seed"
+    assert cases["sampling-over-frame-limit"]["error"] == (
+        "$.measurement.sample_rate_hz must produce at most 32768 points per rotation"
+    )
     assert not cases["unknown-nested-field"]["accepted"]
     assert not cases["noncanonical-quality-key"]["accepted"]
 

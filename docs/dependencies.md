@@ -39,7 +39,7 @@ Release에 사용한다.
 
 ## Rust 의존성
 
-Rust library와 설정 검증은 toolchain 1개와 직접 crate 11개를 사용한다. `rust-toolchain.toml`은
+Rust library와 설정 검증은 toolchain 1개와 직접 crate 12개를 사용한다. `rust-toolchain.toml`은
 compiler, rustfmt와 Clippy를 고정하고 `Cargo.toml`과 `Cargo.lock`은 직접 및 전이 crate를
 고정한다. `build.rs`는 vendored `protoc` 31.1을 사용하며 시스템 `protoc`에 의존하지 않는다.
 
@@ -47,6 +47,7 @@ compiler, rustfmt와 Clippy를 고정하고 `Cargo.toml`과 `Cargo.lock`은 직�
 | --- | --- | --- | --- | --- |
 | Rust | `1.96.0` | compiler, Cargo, rustfmt와 Clippy | [Rust](https://github.com/rust-lang/rust) | MIT OR Apache-2.0 |
 | `clap` | `4.6.6` | 별도 설정 검증 CLI | [clap](https://docs.rs/crate/clap/4.6.6) | MIT OR Apache-2.0 |
+| `num-bigint` | `0.4.8` | 큰 10진 rate의 정확한 회전 및 sample 비율 계산 | [num-bigint](https://docs.rs/crate/num-bigint/0.4.8) | MIT OR Apache-2.0 |
 | `serde` | `1.0.229` | 중복 key 보존 검증을 위한 JSON visitor | [Serde](https://docs.rs/crate/serde/1.0.229) | MIT OR Apache-2.0 |
 | `serde_json` | `1.0.151` | 정수 정밀도와 raw JSON을 보존하는 설정 parser | [Serde JSON](https://docs.rs/crate/serde_json/1.0.151) | MIT OR Apache-2.0 |
 | `thiserror` | `2.0.20` | 분류와 입력 경로를 가진 설정 오류 | [thiserror](https://docs.rs/crate/thiserror/2.0.20) | MIT OR Apache-2.0 |

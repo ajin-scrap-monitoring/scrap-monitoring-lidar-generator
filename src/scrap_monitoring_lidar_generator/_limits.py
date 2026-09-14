@@ -1,4 +1,5 @@
 """Shared engine resource limits."""
 
 MAX_INLET_POSITIONS = 64
+MAX_SCAN_POINTS_PER_ROTATION = 32_768
 MAX_POLYGON_VERTICES = 256

@@ -89,6 +89,9 @@ impl SurfaceSnapshot {
     pub fn height_at(&self, point: Vec2) -> Result<f64> {
         self.grid.height_at(&self.heights, point)
     }
+    pub(crate) fn shares_grid_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.grid, &other.grid)
+    }
 }
 
 impl HeightField {

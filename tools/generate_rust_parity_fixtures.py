@@ -205,6 +205,12 @@ def _configuration_cases() -> dict[str, Any]:
         ("boolean-version", "generator.v2.json", ["config_version"], True),
         ("unknown-nested-field", "generator.v2.json", ["scenario", "extra"], 1),
         ("sampling-under-rotation", "generator.v2.json", ["measurement", "sample_rate_hz"], 1),
+        (
+            "sampling-over-frame-limit",
+            "generator.v2.json",
+            ["measurement", "sample_rate_hz"],
+            327_680.000_000_000_1,
+        ),
         ("large-noise", "generator.v2.json", ["measurement", "distance_noise", "limit_m"], 20),
         ("wrong-unit", "environment.v1.json", ["length_unit"], "mm"),
         ("non-unit-frame", "environment.v1.json", ["sensors", 0, "u0"], [0, 0, -2]),

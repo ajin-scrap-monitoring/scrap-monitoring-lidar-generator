@@ -134,7 +134,9 @@ config_revision
 
 명목 측정량은 센서당 회전당 3,200 point, 초당 10 scan과 32,000 point다. 두 센서 합계는
 초당 20 scan과 64,000 point다. scan 배열 길이는 wire 고정값이 아니며 scheduler가 회전
-경계로 나눈 실제 측정점 수를 사용한다. SDK 이후 정수 변환은
+경계로 나눈 실제 측정점 수를 사용한다. 생성기 loader는 `lidar-processing`의 frame 수락 상한에
+맞춰 `ceil(sample_rate_hz / rotation_rate_hz) <= 32768`을 검증한다. JSON Schema는 두 field의
+비율을 표현하지 못하므로 이 교차 field 조건은 Python과 Rust loader가 동일하게 검증한다. SDK 이후 정수 변환은
 [`sdk-compatibility.md`](sdk-compatibility.md)가 정본이다.
 
 ## 합성 시나리오와 측정 오차

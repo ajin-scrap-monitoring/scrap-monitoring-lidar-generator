@@ -23,6 +23,22 @@ pub enum ScenarioPhase {
     Collecting,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ActiveScenarioPhase<'a> {
+    Filling {
+        cycle_index: u64,
+        started_at_s: f64,
+        ends_at_s: f64,
+        inlet_index: usize,
+        rate_profile: &'a SmoothRateProfile,
+    },
+    Collecting {
+        cycle_index: u64,
+        started_at_s: f64,
+        ends_at_s: f64,
+    },
+}
+
 impl ScenarioPhase {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -253,6 +269,29 @@ impl ScenarioSimulator {
 
     pub fn elapsed_s(&self) -> f64 {
         self.elapsed_s
+    }
+
+    pub fn active_phase(&self) -> Result<ActiveScenarioPhase<'_>> {
+        match self.phase {
+            ScenarioPhase::Filling => Ok(ActiveScenarioPhase::Filling {
+                cycle_index: self.cycle_index,
+                started_at_s: self.fill_plan.started_at_s,
+                ends_at_s: self.fill_plan.ends_at_s(),
+                inlet_index: self.current_inlet_index,
+                rate_profile: &self.fill_plan.rate_profile,
+            }),
+            ScenarioPhase::Collecting => {
+                let plan = self
+                    .collection_plan
+                    .as_ref()
+                    .ok_or(ScenarioError::State("collection phase has no active plan"))?;
+                Ok(ActiveScenarioPhase::Collecting {
+                    cycle_index: self.cycle_index,
+                    started_at_s: plan.started_at_s,
+                    ends_at_s: plan.ends_at_s(),
+                })
+            }
+        }
     }
 
     pub fn next_surface_event_elapsed_s(&self) -> Result<f64> {
