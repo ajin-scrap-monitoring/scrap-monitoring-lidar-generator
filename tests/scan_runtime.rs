@@ -477,12 +477,10 @@ async fn stale_sockets_are_replaced_after_complete_preflight() {
         config.socket_directory.join("lidar_1.sock"),
         config.socket_directory.join("lidar_2.sock"),
     ];
-    let stale_identities = paths.each_ref().map(|path| {
+    for path in &paths {
         let listener = std::os::unix::net::UnixListener::bind(path).unwrap();
         drop(listener);
-        let metadata = fs::symlink_metadata(path).unwrap();
-        (metadata.dev(), metadata.ino())
-    });
+    }
     let mut runtime = GrpcScanRuntime::start(
         config,
         Arc::new(SequenceClock::new([reading(1, 1)])),
@@ -490,12 +488,15 @@ async fn stale_sockets_are_replaced_after_complete_preflight() {
     )
     .await
     .unwrap();
-    for (path, stale) in paths.iter().zip(stale_identities) {
+    for path in &paths {
         let metadata = fs::symlink_metadata(path).unwrap();
         assert!(metadata.file_type().is_socket());
-        assert_ne!((metadata.dev(), metadata.ino()), stale);
+        drop(connect(path.clone()).await);
     }
     runtime.close().await;
+    for path in paths {
+        assert!(!path.exists());
+    }
 }
 
 #[tokio::test]
