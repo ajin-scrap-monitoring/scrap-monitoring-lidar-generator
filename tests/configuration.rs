@@ -64,6 +64,7 @@ fn expected_error_kind(name: &str) -> ErrorKind {
     match name {
         "seed-overflow"
         | "boolean-version"
+        | "diagnostics-limit-overflow"
         | "sampling-under-rotation"
         | "sampling-over-frame-limit"
         | "wrong-unit"
@@ -379,26 +380,28 @@ fn large_integer_and_float_types_remain_distinct() {
 }
 
 #[test]
-fn diagnostic_limit_retains_unbounded_non_negative_integer_acceptance() {
-    let large: Value = serde_json::from_str("184467440737095516160").unwrap();
-    let generator = parse_generator_config(
-        &generator_with("/diagnostics/sample_scan_limit_per_sensor", large),
+fn diagnostic_limit_enforces_the_public_resource_bound() {
+    let maximum = parse_generator_config(
+        &generator_with("/diagnostics/sample_scan_limit_per_sensor", json!(16)),
         ".",
     )
     .unwrap();
-    assert_eq!(
-        generator
-            .diagnostics
-            .sample_scan_limit_per_sensor
-            .to_string(),
-        "184467440737095516160"
-    );
-    assert!(
-        generator
-            .diagnostics
-            .sample_scan_limit_per_sensor
-            .allows(u64::MAX)
-    );
+    assert_eq!(maximum.diagnostics.sample_scan_limit_per_sensor.get(), 16);
+    assert!(maximum.diagnostics.sample_scan_limit_per_sensor.allows(15));
+    assert!(!maximum.diagnostics.sample_scan_limit_per_sensor.allows(16));
+
+    for invalid in [
+        json!(17),
+        serde_json::from_str("184467440737095516160").unwrap(),
+    ] {
+        let error = parse_generator_config(
+            &generator_with("/diagnostics/sample_scan_limit_per_sensor", invalid),
+            ".",
+        )
+        .unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Range);
+        assert_eq!(error.path, "$.diagnostics.sample_scan_limit_per_sensor");
+    }
     let zero = parse_generator_config(
         &generator_with("/diagnostics/sample_scan_limit_per_sensor", json!(0)),
         ".",

@@ -144,6 +144,35 @@
     },
     {
       "expected": {
+        "accepted": true
+      },
+      "name": "maximum-diagnostics-limit",
+      "replace": {
+        "path": [
+          "diagnostics",
+          "sample_scan_limit_per_sensor"
+        ],
+        "value": 16
+      },
+      "source": "examples/generator.v2.json"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "error": "$.diagnostics.sample_scan_limit_per_sensor must be at most 16"
+      },
+      "name": "diagnostics-limit-overflow",
+      "replace": {
+        "path": [
+          "diagnostics",
+          "sample_scan_limit_per_sensor"
+        ],
+        "value": 17
+      },
+      "source": "examples/generator.v2.json"
+    },
+    {
+      "expected": {
         "accepted": false,
         "error": "$.length_unit must be 'm'"
       },

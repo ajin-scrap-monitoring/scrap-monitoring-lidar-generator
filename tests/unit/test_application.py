@@ -56,7 +56,7 @@ class _ScanServer(_RecordingSink):
 
 
 class _ObservationPublisher:
-    endpoint = "127.0.0.1:9100"
+    endpoint = "127.0.0.1:17000"
 
     def __init__(self, *, raises: bool = False) -> None:
         self.snapshots: list[object] = []

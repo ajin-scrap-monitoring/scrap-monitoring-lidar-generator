@@ -10,6 +10,7 @@ import pytest
 from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
 from scrap_monitoring_lidar_generator.geometry import Vec2
 from scrap_monitoring_lidar_generator.observation import (
+    DEFAULT_OBSERVATION_PORT,
     ObservationFormatError,
     ObservationRecord,
     ObservationScene,
@@ -32,6 +33,10 @@ from scrap_monitoring_lidar_generator.scenario import (
 _ROOT = Path(__file__).parents[2]
 _INPUTS = load_generator_inputs(_ROOT / "examples" / "generator.v2.json")
 _SCENE = ObservationScene.from_inputs(_INPUTS)
+
+
+def test_public_default_observation_port_is_17000() -> None:
+    assert DEFAULT_OBSERVATION_PORT == 17_000
 
 
 def _header() -> ObservationStreamHeader:

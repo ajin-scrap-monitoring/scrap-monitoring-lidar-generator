@@ -78,6 +78,7 @@ def test_loads_generator_and_resolves_relative_paths() -> None:
     assert config.observation_transport.reconnect_initial_delay_s == 0.5
     assert config.observation_transport.reconnect_max_delay_s == 5.0
     assert config.diagnostics.output_path == _ROOT / "examples" / "diagnostics"
+    assert config.diagnostics.sample_scan_limit_per_sensor == 2
 
 
 def test_rejects_unknown_nested_field(valid_generator: dict[str, Any]) -> None:
@@ -111,6 +112,7 @@ def test_rejects_missing_nested_field(valid_generator: dict[str, Any]) -> None:
         (("observation_transport", "send_timeout_s"), 0),
         (("observation_transport", "reconnect_initial_delay_s"), 0),
         (("observation_transport", "reconnect_max_delay_s"), 0),
+        (("diagnostics", "sample_scan_limit_per_sensor"), 17),
     ],
 )
 def test_rejects_invalid_generator_values(
@@ -125,6 +127,12 @@ def test_rejects_invalid_generator_values(
 
     with pytest.raises(ConfigurationError):
         _parse(valid_generator)
+
+
+def test_accepts_maximum_diagnostics_sample_limit(valid_generator: dict[str, Any]) -> None:
+    valid_generator["diagnostics"]["sample_scan_limit_per_sensor"] = 16
+
+    _parse(valid_generator)
 
 
 def test_rejects_distance_range_without_width(valid_generator: dict[str, Any]) -> None:

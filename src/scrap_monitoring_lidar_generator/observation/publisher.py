@@ -17,7 +17,7 @@ from scrap_monitoring_lidar_generator.observation.format import (
 from scrap_monitoring_lidar_generator.scenario import ScenarioModelSnapshot
 
 DEFAULT_OBSERVATION_HOST = "127.0.0.1"
-DEFAULT_OBSERVATION_PORT = 9100
+DEFAULT_OBSERVATION_PORT = 17_000
 DEFAULT_OBSERVATION_INTERVAL_S = 1.0
 MAX_OBSERVATION_INTERVAL_S = 86_400.0
 _TIME_TOLERANCE_S = 1e-12

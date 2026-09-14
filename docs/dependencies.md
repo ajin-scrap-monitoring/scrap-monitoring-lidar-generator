@@ -2,8 +2,8 @@
 
 ## 적용 범위
 
-현재 직접 사용하는 외부 의존성은 38개다. Python 및 문서 실행 경계는 26개, Rust library와
-실행 기반은 toolchain 1개와 직접 crate 11개를 사용한다. NumPy, `grpcio`와 `protobuf`는 애플리케이션
+현재 직접 사용하는 외부 의존성은 39개다. Python 및 문서 실행 경계는 26개, Rust library와
+실행 기반은 toolchain 1개와 직접 crate 12개를 사용한다. NumPy, `grpcio`와 `protobuf`는 애플리케이션
 runtime의 수치 연산과 외부 gRPC(Google Remote Procedure Call) 계약에 사용한다. 나머지
 항목은 Python 실행, wire binding 생성, 빌드, 개발 검증, CI(Continuous Integration)와
 Release에 사용한다.
@@ -57,6 +57,7 @@ compiler, rustfmt와 Clippy를 고정하고 `Cargo.toml`과 `Cargo.lock`은 직�
 | `prost-build` | `0.14.4` | 명시적 compiler 경로를 사용한 message 생성 | [prost-build](https://docs.rs/crate/prost-build/0.14.4) | Apache-2.0 |
 | `tonic-prost-build` | `0.14.6` | 빌드 시 고정 Proto의 service binding 생성 | [tonic-prost-build](https://docs.rs/crate/tonic-prost-build/0.14.6) | MIT |
 | `protoc-bin-vendored` | `3.2.0`, 포함 compiler `31.1` | host별 고정 Protocol Buffers compiler | [crate](https://docs.rs/crate/protoc-bin-vendored/3.2.0), [compiler](https://github.com/protocolbuffers/protobuf/blob/v31.1/LICENSE) | wrapper MIT, compiler BSD-3-Clause |
-| `sha2` | `0.11.0` | model stream seed 파생과 테스트의 고정 Proto SHA-256 검증 | [RustCrypto](https://docs.rs/crate/sha2/0.11.0) | MIT OR Apache-2.0 |
+| `sha2` | `0.11.0` | model stream seed, 진단 fingerprint와 고정 Proto SHA-256 검증 | [RustCrypto](https://docs.rs/crate/sha2/0.11.0) | MIT OR Apache-2.0 |
+| `tokio` | `1.53.1` | 관찰 TCP publisher와 진단 종료 기한의 비동기 실행 | [Tokio](https://docs.rs/crate/tokio/1.53.1) | MIT |
 
 애플리케이션 또는 개발 의존성을 추가하거나 버전을 변경하면 같은 Pull Request에서 해당 표와 잠금 파일을 갱신한다.

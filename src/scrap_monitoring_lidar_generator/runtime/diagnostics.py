@@ -8,6 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Protocol, TextIO
 
+from scrap_monitoring_lidar_generator._limits import MAX_DIAGNOSTIC_SCANS_PER_SENSOR
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
 from scrap_monitoring_lidar_generator.measurement import MeasurementResult
 from scrap_monitoring_lidar_generator.runtime.timestamps import (
@@ -83,9 +84,9 @@ class JsonLinesDiagnosticsWriter:
         if (
             isinstance(sample_scan_limit_per_sensor, bool)
             or not isinstance(sample_scan_limit_per_sensor, int)
-            or sample_scan_limit_per_sensor < 0
+            or not 0 <= sample_scan_limit_per_sensor <= MAX_DIAGNOSTIC_SCANS_PER_SENSOR
         ):
-            raise ValueError("diagnostics sample limit must be a non-negative integer")
+            raise ValueError("diagnostics sample limit must be an integer from 0 through 16")
 
         self._output_directory = Path(output_directory)
         self._environment_id = environment_id

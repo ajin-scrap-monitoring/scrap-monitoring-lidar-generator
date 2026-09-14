@@ -7,30 +7,32 @@ pub type Coordinate3 = [f64; 3];
 pub type FloatRange = [f64; 2];
 pub type QualityFrequencies = [u64; 256];
 
-/// A non-negative diagnostic count without an artificial JSON integer upper bound.
+/// A diagnostic sample count constrained by the public resource bound.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SampleScanLimit(pub(super) String);
+pub struct SampleScanLimit(u64);
 
 impl SampleScanLimit {
-    pub fn allows(&self, recorded_count: u64) -> bool {
-        let count = recorded_count.to_string();
-        count.len() < self.0.len() || (count.len() == self.0.len() && count < self.0)
+    pub(super) fn from_validated(value: u64) -> Self {
+        debug_assert!(value <= crate::MAX_DIAGNOSTIC_SCANS_PER_SENSOR);
+        Self(value)
     }
-}
 
-impl From<u64> for SampleScanLimit {
-    fn from(value: u64) -> Self {
-        Self(value.to_string())
+    pub fn allows(&self, recorded_count: u64) -> bool {
+        recorded_count < self.0
+    }
+
+    pub fn get(&self) -> u64 {
+        self.0
     }
 }
 
 impl std::fmt::Display for SampleScanLimit {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
+        self.0.fmt(formatter)
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct SensorConfig {
     pub sensor_id: String,
     pub p0_m: Coordinate3,
@@ -38,7 +40,7 @@ pub struct SensorConfig {
     pub u90: Coordinate3,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct EnvironmentConfig {
     pub environment_id: String,
     pub boundary_xy_m: Vec<Coordinate2>,
@@ -47,7 +49,7 @@ pub struct EnvironmentConfig {
     pub sensors: Vec<SensorConfig>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct SurfaceConfig {
     pub cell_size_m: f64,
     pub update_interval_s: f64,
@@ -56,7 +58,7 @@ pub struct SurfaceConfig {
     pub roughness_radius_range_m: FloatRange,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct ScenarioConfig {
     pub mean_fill_duration_s: f64,
     pub fill_duration_factor_range: FloatRange,
@@ -73,14 +75,14 @@ pub struct ScenarioConfig {
     pub surface: SurfaceConfig,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct DistanceNoiseConfig {
     pub enabled: bool,
     pub standard_deviation_m: f64,
     pub limit_m: f64,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct FallingMaterialConfig {
     pub enabled: bool,
     pub event_rate_per_s: f64,
@@ -89,7 +91,7 @@ pub struct FallingMaterialConfig {
     pub distance_reduction_m_range: FloatRange,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct VoidsConfig {
     pub enabled: bool,
     pub surface_area_ratio: f64,
@@ -99,7 +101,7 @@ pub struct VoidsConfig {
     pub distance_increase_m_range: FloatRange,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct CollectionOcclusionConfig {
     pub enabled: bool,
     pub event_interval_s_range: FloatRange,
@@ -108,21 +110,21 @@ pub struct CollectionOcclusionConfig {
     pub distance_reduction_m_range: FloatRange,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct ReflectionErrorConfig {
     pub enabled: bool,
     pub probability: f64,
     pub distance_reduction_m_range: FloatRange,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct DropoutConfig {
     pub enabled: bool,
     pub event_interval_s_range: FloatRange,
     pub duration_s_range: FloatRange,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct DistortionConfig {
     pub falling_material: FallingMaterialConfig,
     pub voids: VoidsConfig,
@@ -131,7 +133,7 @@ pub struct DistortionConfig {
     pub dropout: DropoutConfig,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct MeasurementConfig {
     pub sample_rate_hz: f64,
     pub rotation_rate_hz: f64,

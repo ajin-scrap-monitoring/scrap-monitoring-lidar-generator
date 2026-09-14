@@ -21,8 +21,12 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "raw_value"] }
 sha2 = "=0.11.0"
 thiserror = "=2.0.20"
+tokio = { version = "=1.53.1", features = ["io-util", "net", "rt", "sync", "time"] }
 tonic = "=0.14.6"
 tonic-prost = "=0.14.6"
+
+[dev-dependencies]
+tokio = { version = "=1.53.1", features = ["macros"] }
 
 [build-dependencies]
 prost-build = "=0.14.4"
