@@ -13,6 +13,7 @@ from tools.generate_rust_parity_fixtures import (
     FLOAT_ABSOLUTE_TOLERANCE,
     FLOAT_RELATIVE_TOLERANCE,
     MAX_FIXTURE_BYTES,
+    PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE,
     _compare,
     _require_public_references,
     build_fixtures,
@@ -55,6 +56,10 @@ def test_manifest_separates_scripted_parity_from_python_random_baseline() -> Non
     assert "not a cross-language canonical form" in metadata["comparison"]["protobuf_hex"]
     assert metadata["comparison"]["float_absolute_tolerance"] == FLOAT_ABSOLUTE_TOLERANCE
     assert metadata["comparison"]["float_relative_tolerance"] == FLOAT_RELATIVE_TOLERANCE
+    assert (
+        metadata["comparison"]["python_seeded_float_absolute_tolerance"]
+        == PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE
+    )
     for source, fingerprint in metadata["source_sha256"].items():
         assert not Path(source).is_absolute()
         assert ".." not in Path(source).parts
@@ -288,3 +293,54 @@ def test_parity_comparison_uses_tolerance_only_for_floats() -> None:
         _compare(1_800_000_000_000_000_000, 1_800_000_000_000_000_001, "timestamp_ns")
     with pytest.raises(ValueError, match="value type changed"):
         _compare(1, True, "sequence")
+
+
+def test_python_seeded_comparison_allows_only_the_host_libm_tolerance() -> None:
+    _compare(
+        1.0,
+        1.0 + PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE / 2.0,
+        "height_m",
+        abs_tol=PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE,
+    )
+    with pytest.raises(ValueError, match="float changed"):
+        _compare(
+            1.0,
+            1.0 + PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE * 2.0,
+            "height_m",
+            abs_tol=PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE,
+        )
+
+
+def test_fixture_check_routes_float_tolerance_by_comparison_class(
+    tmp_path: Path,
+    regenerated: dict[str, bytes],
+) -> None:
+    def write_fixture_set(
+        directory: Path,
+        name: str,
+        document: dict[str, Any],
+    ) -> None:
+        directory.mkdir()
+        for fixture_name, data in regenerated.items():
+            (directory / fixture_name).write_bytes(data)
+        encoded = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
+        (directory / name).write_bytes(encoded)
+        metadata = json.loads(regenerated["metadata.json"])
+        metadata["fixtures"][name]["sha256"] = hashlib.sha256(encoded).hexdigest()
+        metadata["fixtures"][name]["bytes"] = len(encoded)
+        (directory / "metadata.json").write_text(json.dumps(metadata))
+
+    seeded_name = "scenario-seeded-baseline.json"
+    seeded = json.loads(regenerated[seeded_name])
+    seeded["records"][2]["inlet_heights_m"][0] += PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE / 2.0
+    seeded_directory = tmp_path / "seeded"
+    write_fixture_set(seeded_directory, seeded_name, seeded)
+    check_fixtures(seeded_directory, regenerated)
+
+    independent_name = "scenario-scripted.json"
+    independent = json.loads(regenerated[independent_name])
+    independent["states"][0]["snapshot"]["phase_duration_s"] += FLOAT_ABSOLUTE_TOLERANCE * 2.0
+    independent_directory = tmp_path / "independent"
+    write_fixture_set(independent_directory, independent_name, independent)
+    with pytest.raises(ValueError, match="float changed"):
+        check_fixtures(independent_directory, regenerated)

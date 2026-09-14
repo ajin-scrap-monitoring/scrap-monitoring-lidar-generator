@@ -63,6 +63,7 @@ FIXTURE_DIRECTORY = ROOT / "tests" / "fixtures" / "rust-parity"
 MAX_FIXTURE_BYTES = 256 * 1024
 FLOAT_ABSOLUTE_TOLERANCE = 1e-10
 FLOAT_RELATIVE_TOLERANCE = 1e-12
+PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE = 1e-8
 
 _EXAMPLE_NAMES = ("environment.v1.json", "generator.v2.json", "quality-profile.v1.json")
 _SCRIPTED_OVERRIDES: dict[str, Any] = {
@@ -1000,14 +1001,15 @@ def build_fixtures() -> dict[str, bytes]:
         "comparison": {
             "float_absolute_tolerance": FLOAT_ABSOLUTE_TOLERANCE,
             "float_relative_tolerance": FLOAT_RELATIVE_TOLERANCE,
-            "float_rule": "abs(actual-expected) <= max(atol, rtol*max(abs(actual),abs(expected)))",
+            "python_seeded_float_absolute_tolerance": PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE,
+            "float_rule": "abs(actual-expected) <= max(class_atol, rtol*max(abs(actual),abs(expected)))",
             "integers_booleans_strings_shapes": "exact",
             "hq_ticks_and_decoded_wire_values": "exact",
             "protobuf_hex": "exact fixture integrity only; not a cross-language canonical form",
             "rng-independent": "Rust parity required; includes deterministic hash-derived angles",
-            "python-seeded-reference": "Python replay reference; Rust RNG sequence equality not required",
+            "python-seeded-reference": "Python replay reference with host-libm tolerance; Rust RNG sequence equality not required",
             "rust_random_acceptance": "same model version, configuration and seed reproduce output; distributions and event invariants remain required",
-            "regeneration": "source and stored file hashes exact; finite floats use stated tolerances",
+            "regeneration": "source and stored file hashes exact; rng-independent floats use the default tolerance and Python-seeded floats use their stated tolerance",
         },
         "fixtures": {
             name: {
@@ -1025,30 +1027,42 @@ def build_fixtures() -> dict[str, bytes]:
     return fixtures
 
 
-def _compare(expected: Any, actual: Any, path: str) -> None:
+def _compare(
+    expected: Any,
+    actual: Any,
+    path: str,
+    *,
+    abs_tol: float = FLOAT_ABSOLUTE_TOLERANCE,
+    rel_tol: float = FLOAT_RELATIVE_TOLERANCE,
+) -> None:
     if type(actual) is not type(expected):
         raise ValueError(f"stale Rust parity fixture at {path}: value type changed")
     if isinstance(expected, float):
-        if not math.isclose(
-            expected, actual, rel_tol=FLOAT_RELATIVE_TOLERANCE, abs_tol=FLOAT_ABSOLUTE_TOLERANCE
-        ):
+        if not math.isclose(expected, actual, rel_tol=rel_tol, abs_tol=abs_tol):
             raise ValueError(f"stale Rust parity fixture at {path}: float changed")
     elif isinstance(expected, dict):
         if expected.keys() != actual.keys():
             raise ValueError(f"stale Rust parity fixture at {path}: fields changed")
         for key in expected:
-            _compare(expected[key], actual[key], f"{path}.{key}")
+            _compare(expected[key], actual[key], f"{path}.{key}", abs_tol=abs_tol, rel_tol=rel_tol)
     elif isinstance(expected, list):
-        _compare_lists(expected, actual, path)
+        _compare_lists(expected, actual, path, abs_tol=abs_tol, rel_tol=rel_tol)
     elif expected != actual:
         raise ValueError(f"stale Rust parity fixture at {path}: value changed")
 
 
-def _compare_lists(expected: list[Any], actual: list[Any], path: str) -> None:
+def _compare_lists(
+    expected: list[Any],
+    actual: list[Any],
+    path: str,
+    *,
+    abs_tol: float,
+    rel_tol: float,
+) -> None:
     if len(expected) != len(actual):
         raise ValueError(f"stale Rust parity fixture at {path}: array length changed")
     for index, (left, right) in enumerate(zip(expected, actual, strict=True)):
-        _compare(left, right, f"{path}[{index}]")
+        _compare(left, right, f"{path}[{index}]", abs_tol=abs_tol, rel_tol=rel_tol)
 
 
 def check_fixtures(directory: Path, generated: dict[str, bytes] | None = None) -> None:
@@ -1080,7 +1094,19 @@ def check_fixtures(directory: Path, generated: dict[str, bytes] | None = None) -
         )
         if info["sha256"] != hashlib.sha256(saved).hexdigest() or info["bytes"] != len(saved):
             raise ValueError(f"Rust parity fixture integrity mismatch: {name}")
-        _compare(json.loads(data), json.loads(saved), name)
+        comparison_class = expected_metadata["fixtures"][name]["comparison_class"]
+        absolute_tolerance = (
+            PYTHON_SEEDED_FLOAT_ABSOLUTE_TOLERANCE
+            if comparison_class == "python-seeded-reference"
+            else FLOAT_ABSOLUTE_TOLERANCE
+        )
+        _compare(
+            json.loads(data),
+            json.loads(saved),
+            name,
+            abs_tol=absolute_tolerance,
+            rel_tol=FLOAT_RELATIVE_TOLERANCE,
+        )
     saved_metadata.pop("fixtures")
     expected_metadata.pop("fixtures")
     _compare(expected_metadata, saved_metadata, "metadata.json")
