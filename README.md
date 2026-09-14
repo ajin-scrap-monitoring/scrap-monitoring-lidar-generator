@@ -25,17 +25,17 @@ scan 생성과 gRPC 구독을 중단시키지 않는다.
 | 용도 | 요구 사항 |
 |---|---|
 | 개발 | Python 3.14.4, uv 0.12.12 |
-| 운영 | 64-bit ARM Linux, Docker Engine |
+| 엣지 검증 | 64-bit ARM Linux, Docker Engine |
 | 배포 검증 | Docker Engine, Git, GitHub CLI, Bash |
 
-운영 장비는 Python, uv, compiler와 이미지 빌드 도구를 설치하지 않는다. GitHub Container
+엣지 검증 장비는 Python, uv, compiler와 이미지 빌드 도구를 설치하지 않는다. GitHub Container
 Registry에 게시된 `linux/arm64` 이미지를 digest로 받아 실행한다.
 
-다음 명령은 새 checkout의 잠금 환경을 구성하고 담당자 처리 설정을 처음 생성한다.
+다음 명령은 새 checkout의 잠금 환경을 구성하고 `lidar-processing`용 합성 처리 설정을 생성한다.
 
 ```bash
 uv sync --locked --all-groups
-uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
+uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -45,8 +45,8 @@ uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
 uv run --locked pytest tests/integration/test_grpc_scan_server.py
 ```
 
-첫 명령은 `/tmp/processing.synthetic.json`을 만들고 두 번째 명령은 sensor별 UDS(Unix Domain
-Socket) 구독과 상태 출력을 검증한다.
+두 번째 명령은 `/tmp/processing.synthetic.json`을 만들고 세 번째 명령은 sensor별 UDS(Unix
+Domain Socket) 구독과 상태 출력을 검증한다.
 
 ## 설정
 
@@ -106,14 +106,15 @@ Git에 추가하지 않는다.
 JSON Lines 파일로 남기는 개발 검증 기능이다. 일반 scan 전송과 관찰 stream을 대체하지 않으며
 운영 로그나 Git 추적 대상으로 사용하지 않는다.
 
-### 담당자 처리 설정 생성
+### 합성 검증용 처리 설정 생성
 
 `lidar-processing`은 생성기의 환경 JSON을 직접 읽지 않는다. 다음 exporter가 공개 합성
-환경을 담당자의 센서별 강체 변환, 50 mm 단면 ROI(Region of Interest), 높이 범위, 측정
-필터와 융합 보정 형식으로 변환한다.
+환경을 `lidar-processing`의 센서별 강체 변환, 50 mm 단면 ROI(Region of Interest), 높이 범위,
+측정 필터 형식으로 변환한다. `lidar-processing`이 요구하는 calibration 항목에는 합성 검증용 데모
+값만 넣는다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
+uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -122,22 +123,19 @@ uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
   --output processing.synthetic.json
 ```
 
-담당자 전체 배포 설정이 있으면 `--base-config`를 추가한다. exporter는 camera, deployment
-revision과 다른 service version을 유지한다. 생성기가 대체하는 `lidar-driver-a`와
-`lidar-driver-b`의 version은 현재 생성기 package version으로 갱신한다. 다른 생성기 image
-version을 지정할 때만 `--driver-service-version`을 사용한다. `site_id`, `edge_id` 또는
-`config_revision`이 다르면 실패한다. 생성된 calibration은 공개 합성 환경 전용 `demo`다.
-실제 현장 calibration으로 사용하지 않는다.
+출력은 공개 합성 환경 전용이며 실제 현장 설정을 읽거나 병합하지 않는다. 실제 장비의 설치값,
+처리 보정과 적재율 계산은 이 Repository의 책임이 아니다. `site_id`, `edge_id`와
+`config_revision`은 합성 검증 실행에서 frame과 처리 설정의 식별자를 일치시키는 값이다.
 
-`lidar-processing`에는 출력 파일을 read-only로 mount하고 같은 `SITE_ID`, `EDGE_ID`,
-`CONFIG_REVISION`, `DEPLOYMENT_REVISION`을 주입한다. 담당자 설정 checksum은 최종 출력 파일에서
-계산한다.
+합성 검증용 `lidar-processing`에는 출력 파일을 read-only로 mount하고 같은 `SITE_ID`,
+`EDGE_ID`, `CONFIG_REVISION`, `DEPLOYMENT_REVISION`을 주입한다. 처리 설정 checksum은 최종
+출력 파일에서 계산한다.
 
 ```bash
 CONFIG_SHA256="$(sha256sum processing.synthetic.json | awk '{print $1}')"
 ```
 
-계약 필드, 변환 기준, 처리 설정과 담당자 수락 명령은
+계약 필드, 변환 기준, 처리 설정과 소비자 수락 명령은
 [`edge-platform-integration/`](edge-platform-integration/)이 정본이다.
 
 ## 개발 및 검증
@@ -154,139 +152,38 @@ uv run --locked python -m tools.generate_lidar_wire --check
 uv build --no-sources
 ```
 
-담당자 구현과의 직접 호환성은 고정한 `ajin-edge-platform` checkout으로 확인한다.
+`ajin-edge-platform` 구현과의 직접 호환성은 고정한 source checkout으로 확인한다.
 
 ```bash
 uv run --locked python -m tools.verify_edge_platform_contract \
   --edge-platform-root /path/to/ajin-edge-platform
 ```
 
-검증기는 담당자 Proto와 로컬 계약의 일치, 담당자 설정 loader의 수락, 두 sensor frame의
+검증기는 외부 Proto와 로컬 계약의 일치, `lidar-processing` 설정 loader의 수락, 두 sensor frame의
 ingest, 단면 coverage와 최종 `GOOD` 측정을 확인한다.
 
 ## 배포
 
-### Release 이미지 선택
+배포 대상은 실제 센서 운영 환경이 아니라 Raspberry Pi 5에서 `lidar-processing`과 연동하는 개발 및
+검증 환경이다. Release는 `linux/arm64` OCI(Open Container Initiative) image와 digest 참조를
+제공한다.
 
-다음 명령은 최신 GitHub Release의 source와 ARM64 이미지 digest를 함께 고정한다.
+배포 입력은 다음 4개 경로로 구분한다.
 
-```bash
-git clone https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-generator.git
-cd scrap-monitoring-lidar-generator
+| Host 입력 | Container 경로 | 역할 |
+|---|---|---|
+| `/opt/ajin/config/lidar-generator/` | `/config/` | 공개 합성 JSON 3개 |
+| `/etc/scrap-monitoring-lidar-generator.env` | `--env-file` | 실행 경로와 검증 식별자 |
+| `/opt/ajin/runtime/sockets/lidar-generator/` | `/run/lidar/` | sensor별 gRPC UDS |
+| `/opt/ajin/runtime/status/` | `/status/` | driver 호환 상태 파일 |
 
-RELEASE_TAG="$(gh release view \
-  --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
-  --json tagName --jq .tagName)"
-git switch --detach "$RELEASE_TAG"
+`.env`의 `SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v2.json`은 container 경로다. Host의
+`examples/environment.v1.json`, `examples/generator.v2.json`과
+`examples/quality-profile.v1.json`을 첫 번째 경로에 복사한 뒤 directory 전체를 read-only로
+mount한다.
 
-RELEASE_DIR="$(mktemp -d)"
-gh release download "$RELEASE_TAG" \
-  --repo ajin-scrap-monitoring/scrap-monitoring-lidar-generator \
-  --pattern oci-image.txt \
-  --dir "$RELEASE_DIR"
-IMAGE_REF="$(sed -n '1p' "$RELEASE_DIR/oci-image.txt")"
-docker image pull "$IMAGE_REF"
-```
-
-`latest` tag는 사용하지 않는다. Release의 `oci-image.txt`가 기록한 digest를 배포 입력으로
-사용한다.
-
-### 배포 파일 준비
-
-다음 4개 host 디렉토리를 준비한다.
-
-```bash
-CONFIG_DIR=/opt/ajin/config/lidar-generator
-SOCKET_DIR=/opt/ajin/runtime/sockets/lidar-generator
-STATUS_DIR=/opt/ajin/runtime/status
-DIAGNOSTICS_DIR=/opt/ajin/runtime/diagnostics/lidar-generator
-
-sudo install -d -m 0755 "$CONFIG_DIR"
-sudo install -m 0644 \
-  examples/environment.v1.json \
-  examples/generator.v2.json \
-  examples/quality-profile.v1.json \
-  "$CONFIG_DIR/"
-sudo install -d -m 0755 "$STATUS_DIR"
-sudo install -d -o 10001 -g 10001 -m 0770 \
-  "$SOCKET_DIR" \
-  "$STATUS_DIR/lidar-driver-a" \
-  "$STATUS_DIR/lidar-driver-b" \
-  "$DIAGNOSTICS_DIR"
-sudo install -o root -g root -m 0600 \
-  .env.example /etc/scrap-monitoring-lidar-generator.env
-sudoedit /etc/scrap-monitoring-lidar-generator.env
-```
-
-환경변수 파일 안의 컨테이너 경로는 다음 실행 명령의 mount 대상과 일치해야 한다.
-
-```text
-SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v2.json
-SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR=/run/lidar
-SCRAP_LIDAR_GENERATOR_STATUS_DIR=/status
-SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics
-```
-
-### 생성기 컨테이너 실행
-
-```bash
-sudo docker run --detach \
-  --name scrap-monitoring-lidar-generator \
-  --restart unless-stopped \
-  --read-only \
-  --cap-drop ALL \
-  --security-opt no-new-privileges=true \
-  --init \
-  --log-opt max-size=10m \
-  --log-opt max-file=3 \
-  --env-file /etc/scrap-monitoring-lidar-generator.env \
-  --mount type=bind,src="$CONFIG_DIR",dst=/config,readonly \
-  --mount type=bind,src="$SOCKET_DIR",dst=/run/lidar \
-  --mount type=bind,src="$STATUS_DIR/lidar-driver-a",dst=/status/lidar-driver-a \
-  --mount type=bind,src="$STATUS_DIR/lidar-driver-b",dst=/status/lidar-driver-b \
-  --mount type=bind,src="$DIAGNOSTICS_DIR",dst=/data/diagnostics \
-  "$IMAGE_REF"
-```
-
-`lidar-processing` 컨테이너는 같은 host `SOCKET_DIR`을 자신의 `/sockets`에 mount하고, exporter가
-만든 처리 JSON의 `unix:/sockets/lidar_1.sock`과 `unix:/sockets/lidar_2.sock`을 구독한다.
-UDS 통신에는 Docker network와 TCP port가 필요하지 않다. 관찰 TCP 연결만 별도 시각화
-장비까지의 router 경로를 사용한다.
-
-### 이미지 검증
-
-검증한 Release checkout에서 다음 명령을 실행한다.
-
-```bash
-VALIDATION_DIR="$(mktemp -d)"
-tests/edge/run.sh \
-  --image "$IMAGE_REF" \
-  --config-dir examples \
-  --duration-s 30 \
-  --cpus 2 \
-  --output-dir "$VALIDATION_DIR"
-```
-
-성공 출력은 `edge_validation=passed sensors=2`로 시작한다. 검증기는 센서별 gRPC 구독,
-sequence 연속성, Proto 정규화 범위, observation 전달과 두 driver 상태 파일을 검사한다.
-`VALIDATION_DIR`에는 로그, Docker 통계, container inspect와 상태 snapshot이 남는다. 이
-산출물은 운영 정보를 포함할 수 있으므로 Git에 추가하지 않는다. CPU 2 core는 검증 시작값이며
-운영 자원 상한이 아니다.
-
-### 운영 확인
-
-```bash
-sudo docker container inspect scrap-monitoring-lidar-generator \
-  --format '{{.State.Status}} {{.State.ExitCode}} {{.Image}}'
-sudo docker logs --tail 20 scrap-monitoring-lidar-generator
-sudo docker image inspect "$IMAGE_REF" --format '{{index .RepoDigests 0}}'
-sudo find "$SOCKET_DIR" "$STATUS_DIR" -maxdepth 2 \( -type f -o -type s \)
-```
-
-정상 실행은 센서별 첫 scan을 `scan_hz` 기준으로 사용한 뒤 초당 약 10 frame을 각 UDS에
-게시한다. 프로그램 재시작은 새 센서별 `instance_id`와 sequence 1로 구분한다. 구독 연결의
-중단과 재연결은 적재 모델을 초기화하지 않으며 생성기 프로세스 재시작은 빈 적재 공간에서 새
-실행을 시작한다.
+Release 선택, Host 준비, 전체 Docker 명령과 반복 가능한 image 검증은
+[`docs/deployment.md`](docs/deployment.md)를 따른다.
 
 ## 문서
 
@@ -295,11 +192,11 @@ sudo find "$SOCKET_DIR" "$STATUS_DIR" -maxdepth 2 \( -type f -o -type s \)
 | [`docs/project-spec.md`](docs/project-spec.md) | 제품 범위와 완료 조건 |
 | [`docs/architecture.md`](docs/architecture.md) | 패키지와 외부 경계 |
 | [`docs/configuration.md`](docs/configuration.md) | 설정 정본과 값 분류 |
-| [`docs/sdk-compatibility.md`](docs/sdk-compatibility.md) | 담당자 driver와 SDK 출력 정합성 |
-| [`edge-platform-integration/`](edge-platform-integration/) | 담당자 Proto, 처리 설정과 수락 기준 |
+| [`docs/sdk-compatibility.md`](docs/sdk-compatibility.md) | `ajin-edge-platform` driver와 SDK 출력 정합성 |
+| [`edge-platform-integration/`](edge-platform-integration/) | 외부 Proto, 처리 설정과 수락 기준 |
 | [`docs/observation.md`](docs/observation.md) | 적재 모델 관찰 stream |
 | [`docs/visualizer-requirements.md`](docs/visualizer-requirements.md) | 별도 시각화 프로그램 요구사항 |
-| [`docs/deployment.md`](docs/deployment.md) | 이미지, 배포와 검증 상세 |
+| [`docs/deployment.md`](docs/deployment.md) | 검증 image 배포와 실행 |
 | [`docs/performance.md`](docs/performance.md) | 부하 측정 범위와 기준 |
 | [`docs/dependencies.md`](docs/dependencies.md) | 직접 의존성과 라이선스 |
 | [`docs/development-plan.md`](docs/development-plan.md) | 현재 완료 상태와 후속 검증 |

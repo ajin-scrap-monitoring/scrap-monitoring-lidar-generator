@@ -81,7 +81,7 @@ jobs:
       - name: Smoke test CLI
         run: |
           uv run --locked scrap-monitoring-lidar-generator --help
-          uv run --locked scrap-monitoring-lidar-generator-export-processing-config --help
+          uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config --help
 
       - name: Build package
         run: uv build --no-sources
@@ -93,10 +93,12 @@ jobs:
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Build ARM64 OCI image
-        run: docker buildx build --platform linux/arm64 --output type=cacheonly .
-
-      - name: Build OCI image
-        run: docker build --tag scrap-monitoring-lidar-generator:ci .
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            --load \
+            --tag scrap-monitoring-lidar-generator:ci \
+            .
 
       - name: Smoke test OCI image
-        run: docker run --rm scrap-monitoring-lidar-generator:ci --help
+        run: docker run --rm --platform linux/arm64 scrap-monitoring-lidar-generator:ci --help

@@ -8,7 +8,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.edge_integration import build_processing_config
+from scrap_monitoring_lidar_generator.edge_integration import build_synthetic_processing_config
 from scrap_monitoring_lidar_generator.observation import (
     decode_observation_header_line,
     decode_observation_line,
@@ -86,7 +86,7 @@ def test_pinned_proto_and_handoff_copy_match_source_metadata() -> None:
 
 
 def test_handoff_processing_fixture_is_current_exporter_output() -> None:
-    expected = build_processing_config(
+    expected = build_synthetic_processing_config(
         load_generator_inputs(_ROOT / "examples" / "generator.v2.json"),
         socket_directory=PurePosixPath("/sockets"),
         site_id="synthetic-site",

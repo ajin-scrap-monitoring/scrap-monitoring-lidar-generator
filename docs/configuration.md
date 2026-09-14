@@ -7,12 +7,12 @@
 | 설정 | 정본 | 소비자 |
 | --- | --- | --- |
 | 합성 환경과 생성 모델 | `examples/`의 versioned JSON 3개 | 생성기와 processing config exporter |
-| 생성기 배포 실행 | CLI(Command-Line Interface) 인자와 환경변수 | 생성기 |
-| 높이 계산 처리 | exporter가 만든 담당자 형식 JSON | `lidar-processing` |
+| 생성기 실행 | CLI(Command-Line Interface) 인자와 환경변수 | 생성기 |
+| 합성 높이 처리 | exporter가 만든 외부 형식 JSON | 검증용 `lidar-processing` |
 
 `lidar-processing`은 생성기의 환경 JSON을 직접 읽지 않는다. 생성기는 환경 정의를 scan
-frame에 포함하지 않는다. exporter가 공개 합성 환경의 센서 위치와 방향을 담당자 처리 설정의
-강체 변환과 ROI(Region of Interest)로 변환한다.
+frame에 포함하지 않는다. exporter가 공개 합성 환경의 센서 위치와 방향을 `lidar-processing` 설정의
+강체 변환과 ROI(Region of Interest)로 변환한다. 이 설정은 합성 검증 전용이다.
 
 ## 공개 합성 입력
 
@@ -67,9 +67,9 @@ JSON에 넣지 않는다.
 | `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED` | `--diagnostics-enabled` | `diagnostics.enabled` |
 | `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH` | `--diagnostics-output-path` | `diagnostics.output_path` |
 
-`SITE_ID`, `EDGE_ID`, `CONFIG_REVISION`은 담당자 처리 설정과 같아야 한다.
+`SITE_ID`, `EDGE_ID`, `CONFIG_REVISION`은 `lidar-processing` 설정과 같아야 한다.
 `DEPLOYMENT_REVISION`은 상태 snapshot에 기록한다. 식별자는 영문자 또는 숫자로 시작하고
-영문자, 숫자, `_`, `.`, `-`만 사용한다. sensor ID, `EDGE_ID`와 `CONFIG_REVISION`은 담당자
+영문자, 숫자, `_`, `.`, `-`만 사용한다. sensor ID, `EDGE_ID`와 `CONFIG_REVISION`은 외부
 driver 기준 최대 64자다. `SITE_ID`와 `DEPLOYMENT_REVISION`은 최대 128자다.
 
 `SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR`은 두 UDS 파일을 만드는 container 내부 절대 경로다.
@@ -85,20 +85,19 @@ snapshot 기본 주기는 1초다. 주기는 0초 초과 86,400초 이하만 허
 `true` 또는 `false`다. 상대 진단 경로는 generator JSON directory를 기준으로 해석한다.
 
 현재 계약에는 자격 증명이 없다. `.env`에 자격 증명을 넣지 않고 Docker secret도 구성하지
-않는다. 장비별 `.env`는 운영 경로와 주소를 포함하므로 Git에 추가하지 않는다.
+않는다. 장비별 `.env`는 실행 경로와 주소를 포함하므로 Git에 추가하지 않는다.
 
 진단 기록은 sensor별 앞쪽 일부 scan의 기준 광선 교차, 당시 적재 표면과 시나리오 상태를
 owner-only JSON Lines 파일로 보존하는 개발 검증 기능이다. `diagnostics.sample_scan_limit_per_sensor`
-개수까지만 기록하므로 무제한 로그가 아니다. 담당자 gRPC frame, 운영 처리 결과와 시각화
-관찰 기록을 대신하지 않는다. 실제 운영 관측으로 사용하면 환경 형상을 포함할 수 있으므로
-외부 전송이나 Git 추적 대상이 아니다.
+개수까지만 기록하므로 무제한 로그가 아니다. 외부 gRPC frame, 처리 결과와 시각화 관찰
+기록을 대신하지 않는다. 환경 형상을 포함할 수 있으므로 외부 전송이나 Git 추적 대상이 아니다.
 
-## 담당자 처리 설정
+## 합성 검증용 처리 설정
 
-다음 명령은 공개 합성 환경에서 담당자 형식 처리 설정을 만든다.
+다음 명령은 공개 합성 환경에서 `lidar-processing` 형식의 처리 설정을 만든다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
+uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -108,14 +107,10 @@ uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
 ```
 
 출력의 sensor별 endpoint는 `unix:/sockets/<sensor_id>.sock`이다. exporter는 환경 좌표계에서
-담당자 scan 좌표계로의 강체 변환, 50 mm 단면, 내부 경계와 측정 범위를 계산한다. 합성
-calibration은 `demo: true`이고 운영 현장 calibration으로 사용하지 않는다.
-
-담당자 전체 edge 설정을 보존해야 하면 `--base-config`에 해당 JSON을 전달한다. exporter는
-camera와 다른 구성 요소 설정을 유지한다. `service_versions`가 있으면 `lidar-driver-a`와
-`lidar-driver-b`를 현재 생성기 package version으로 갱신하고 나머지 version은 유지한다. 다른
-생성기 image version을 대상으로 할 때는 `--driver-service-version`을 명시한다. 다음 세
-식별자가 인자와 다르면 실패한다.
+`lidar-processing` 좌표계로의 강체 변환, 50 mm 단면, 내부 경계와 측정 범위를 계산한다. 합성
+calibration은 `demo: true`다. exporter는 실제 현장 설정을 입력받거나 병합하지 않으며 실제
+장비의 설치 보정과 적재율 계산 설정을 만들지 않는다. 다음 세 식별자는 합성 검증의 생성기
+frame과 처리 설정에서 같은 값을 사용한다.
 
 ```text
 site_id
@@ -171,12 +166,12 @@ config_revision
 | 상한 | 값 | 책임 |
 | --- | --- | --- |
 | gRPC send message | 4 MiB | frame 크기 안전 상한 |
-| sensor별 구독자 | 8 | 담당자 driver 호환 상한 |
+| sensor별 구독자 | 8 | 외부 driver 호환 상한 |
 | sensor별 대기 frame | 2 | latest-two 유실 제한 정책 |
 | gRPC UDS endpoint | UTF-8 100 byte 이하 | Unix socket 경로 안전성 |
 | 관찰 대기 snapshot | 1 | latest-only 비차단 정책 |
-| 상태 갱신 | 2초 | 담당자 상태 snapshot 주기 |
+| 상태 갱신 | 2초 | `ajin-edge-platform` 상태 snapshot 주기 |
 
-실행 경로는 loader가 반환한 명시적 JSON과 배포 입력을 사용한다. 하드웨어 기준 또는 담당자
+실행 경로는 loader가 반환한 명시적 JSON과 배포 입력을 사용한다. 하드웨어 기준 또는 외부
 계약이 바뀌면 공개 입력, exporter, 고정 Proto metadata와 자동 검증을 같은 변경에서 갱신한다.
 `docs/project-spec.md`와 기존 `docs/internal/**`은 이 절차의 변경 대상이 아니다.

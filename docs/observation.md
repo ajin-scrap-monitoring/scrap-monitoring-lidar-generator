@@ -6,7 +6,7 @@
 계속 전송한다. 일반 scan 데이터로 표면을 재구성하지 않고 생성기 내부의 읽기 전용
 snapshot을 사용한다.
 
-## 운영 경계
+## 실행 경계
 
 관찰 publisher는 생성기와 함께 항상 실행한다. 기본 주기는 시뮬레이션 시각 1초이며
 전송 시각에만 현재 적재물 표면을 복사한다. 수신기 연결 실패, 느린 수신기와 관찰 전송
@@ -17,7 +17,7 @@ publisher는 전송 대기 중인 최신 레코드 1개만 보관한다. 새 레
 재연결하고 과거 상태를 누적하거나 재전송하지 않는다. 엣지 장비는 관찰 파일과 영상을
 생성하지 않는다.
 
-운영 이미지에는 관찰 JSON Lines(JavaScript Object Notation Lines) producer만 포함한다.
+생성기 image에는 관찰 JSON Lines(JavaScript Object Notation Lines) producer만 포함한다.
 FFmpeg와 3D rendering 코드 및 의존성은 포함하지 않는다.
 
 ## 전송 계약

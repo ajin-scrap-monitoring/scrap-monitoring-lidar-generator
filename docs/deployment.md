@@ -1,14 +1,15 @@
 # 배포와 실행
 
+이 문서의 배포 대상은 합성 LiDAR 생성기를 사용하는 개발 및 검증 환경이다. 실제 LiDAR를
+사용하는 운영 환경에는 이 생성기 image와 합성 처리 설정을 배포하지 않는다.
+
 ## 배포 산출물
 
-Release 산출물은 4개다.
+Release 산출물은 2개다.
 
 | 산출물 | 용도 |
 | --- | --- |
-| Python wheel | Python 3.14 설치 |
-| Python source distribution | source 배포 |
-| `edge-platform-integration-v1.tar.gz` | 담당자 Repository 통합 인계 |
+| `edge-platform-integration-v1.tar.gz` | `ajin-edge-platform` 통합 인계 |
 | `oci-image.txt` | ARM64 OCI image의 digest 고정 참조 |
 
 OCI(Open Container Initiative) image는 Raspberry Pi 5용 `linux/arm64` 단일 실행 platform이다.
@@ -100,33 +101,29 @@ SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics
 환경변수 전체 목록과 역할은 [`configuration.md`](configuration.md)가 정본이다. 현재 생성기
 계약에는 자격 증명이 없으므로 `.env`와 Docker secret에 자격 증명을 추가하지 않는다.
 
-## 처리 설정 준비
+## 합성 검증용 처리 설정 준비
 
-`lidar-processing`은 생성기 JSON을 직접 읽지 않는다. 배포 제어 장비에서 exporter를 실행해
-담당자 처리 JSON을 만든다.
+`lidar-processing`은 생성기의 합성 환경 JSON을 직접 읽지 않는다. 검증 제어 장비에서
+exporter를 실행해 공개 합성 환경에 대응하는 `lidar-processing` JSON을 만든다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
+uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config \
   --generator-config "$CONFIG_DIR/generator.v2.json" \
-  --base-config /path/to/edge-base.json \
   --socket-dir /sockets \
   --site-id "$SITE_ID" \
   --edge-id "$EDGE_ID" \
   --config-revision "$CONFIG_REVISION" \
-  --output /path/to/edge.json
+  --output /path/to/processing.synthetic.json
 ```
 
-생성기와 처리 설정의 `SITE_ID`, `EDGE_ID`, `CONFIG_REVISION`은 같아야 한다. 합성 exporter
-출력은 `demo` calibration이고 실제 현장 calibration을 대체하지 않는다. exporter는 base
-설정의 `lidar-driver-a`와 `lidar-driver-b` service version을 실행 중인 생성기 package version으로
-바꾼다. exporter source와 배포 image version이 다르면 `--driver-service-version`에 image
-version을 지정한다.
+생성기와 처리 설정의 `SITE_ID`, `EDGE_ID`, `CONFIG_REVISION`은 같아야 한다. 출력은 공개 합성
+환경의 검증에만 사용한다. exporter는 실제 현장 설정을 입력받거나 운영 보정값을 만들지 않는다.
 
-최종 `edge.json`을 read-only로 `lidar-processing`에 mount한다. 처리 container의
-`CONFIG_SHA256`은 exporter 입력이 아니라 최종 파일에서 계산한다.
+최종 `processing.synthetic.json`을 read-only로 검증용 `lidar-processing`에 mount한다. 처리
+container의 `CONFIG_SHA256`은 최종 파일에서 계산한다.
 
 ```bash
-CONFIG_SHA256="$(sha256sum /path/to/edge.json | awk '{print $1}')"
+CONFIG_SHA256="$(sha256sum /path/to/processing.synthetic.json | awk '{print $1}')"
 ```
 
 ## 생성기 실행
@@ -152,13 +149,13 @@ sudo docker run --detach \
 
 진단을 사용하지 않으면 `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED=false`로 지정하고 진단
 mount를 생략할 수 있다. Docker Engine의 `--cpus`와 `--memory`는 장비 검증에서 확정한 값만
-적용한다. Repository는 다른 edge process와 함께 측정하기 전에 운영 자원 상한을 정하지 않는다.
+적용한다. Repository는 다른 edge process와 함께 측정하기 전에 검증 자원 상한을 정하지 않는다.
 
 `lidar-processing` container는 같은 host `SOCKET_DIR`을 `/sockets`에 mount한다. 처리 JSON의
 endpoint는 `unix:/sockets/lidar_1.sock`과 `unix:/sockets/lidar_2.sock`이다. 같은 UID와 GID를
 사용하므로 생성기가 mode 0660으로 만든 socket에 연결할 수 있다.
 
-## 생명주기와 운영 확인
+## 생명주기와 실행 확인
 
 생성기는 구독자가 없어도 두 sensor의 scan을 계속 만들고 최신 frame 2개를 갱신한다. 처리
 container가 나중에 연결하면 연결 이후의 최신 frame부터 받는다. gRPC 구독 재연결은 적재
@@ -179,7 +176,7 @@ sudo find "$SOCKET_DIR" "$STATUS_DIR" -maxdepth 2 \( -type f -o -type s \)
 
 정상 실행은 `lidar_1.sock`, `lidar_2.sock`,
 `lidar-driver-a/lidar-driver-a.json`과 `lidar-driver-b/lidar-driver-b.json`을 만든다. 이 하위
-구조는 담당자 orchestrator가 읽는 경로다. driver 상태는 첫 frame 전 `STARTING`, 게시 후
+구조는 `ajin-edge-platform` orchestrator가 읽는 경로다. driver 상태는 첫 frame 전 `STARTING`, 게시 후
 `HEALTHY`다.
 
 ## 반복 가능한 image 검증
@@ -200,14 +197,14 @@ tests/edge/run.sh \
 성공 출력은 `edge_validation=passed sensors=2`로 시작한다. 검증기는 두 구독의 frame 수신,
 sequence, Proto 정규화 범위, 관찰 header와 snapshot, 두 상태 파일을 검사한다. 결과 directory는
 로그, Docker 통계, inspect와 상태 snapshot을 포함할 수 있으므로 Git에 추가하지 않는다. CPU
-2 core는 test double 검증 시작값이며 운영 상한이 아니다.
+2 core는 test double 검증 시작값이며 자원 상한이 아니다.
 
 ## Release workflow
 
 Release workflow는 원격 `main` 이력에 포함된 `vMAJOR.MINOR.PATCH` tag만 처리한다. tag version과
-`pyproject.toml` version이 같아야 한다. workflow는 전체 검증, 담당자 source 직접 검증,
-package와 ARM64 image build를 수행한다. image에는 SBOM(Software Bill of Materials)과 provenance
-attestation을 포함한다.
+`pyproject.toml` version이 같아야 한다. workflow는 전체 검증, 외부 source 직접 검증,
+integration bundle과 ARM64 image build를 수행한다. image에는 SBOM(Software Bill of Materials)과
+provenance attestation을 포함한다.
 
 workflow는 version tag와 `sha-<full-git-sha>` tag가 같은 manifest digest인지, 실행 platform이
 `linux/arm64` 하나인지, GHCR package가 Public인지 확인한 뒤 Release를 게시한다. 게시한 tag,

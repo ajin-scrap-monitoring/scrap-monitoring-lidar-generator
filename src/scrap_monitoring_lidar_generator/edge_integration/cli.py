@@ -1,38 +1,30 @@
-"""Command-line exporter for the ajin edge processing configuration."""
+"""Command-line exporter for the ajin edge synthetic processing fixture."""
 
 import argparse
-import json
 import os
 import sys
 from collections.abc import Mapping, Sequence
-from importlib.metadata import version
 from pathlib import Path, PurePosixPath
-from typing import Any
 
 from scrap_monitoring_lidar_generator.configuration import ConfigurationError, load_generator_inputs
-from scrap_monitoring_lidar_generator.edge_integration.processing_config import (
+from scrap_monitoring_lidar_generator.edge_integration.synthetic_processing_config import (
     ProcessingConfigError,
-    build_processing_config,
-    write_processing_config,
+    build_synthetic_processing_config,
+    write_synthetic_processing_config,
 )
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Create the processing configuration exporter parser."""
     parser = argparse.ArgumentParser(
-        description="Export synthetic calibration for ajin-edge-platform lidar-processing."
+        description="Export the synthetic demo environment for lidar-processing."
     )
     parser.add_argument("--generator-config")
-    parser.add_argument("--base-config")
     parser.add_argument("--output", required=True)
     parser.add_argument("--socket-dir", default="/sockets")
     parser.add_argument("--site-id")
     parser.add_argument("--edge-id")
     parser.add_argument("--config-revision")
-    parser.add_argument(
-        "--driver-service-version",
-        default=version("scrap-monitoring-lidar-generator"),
-    )
     return parser
 
 
@@ -55,29 +47,18 @@ def main(
             args.config_revision or env.get("CONFIG_REVISION"),
             "--config-revision or CONFIG_REVISION",
         )
-        config = build_processing_config(
+        config = build_synthetic_processing_config(
             load_generator_inputs(Path(generator_config)),
             socket_directory=PurePosixPath(args.socket_dir),
             site_id=site_id,
             edge_id=edge_id,
             config_revision=config_revision,
-            base_config=_load_base_config(args.base_config),
-            driver_service_version=args.driver_service_version,
         )
-        write_processing_config(Path(args.output), config)
+        write_synthetic_processing_config(Path(args.output), config)
         return 0
     except (ConfigurationError, OSError, ProcessingConfigError, ValueError) as error:
         print(f"configuration error: {error}", file=sys.stderr)
         return 2
-
-
-def _load_base_config(path: str | None) -> Mapping[str, Any] | None:
-    if path is None:
-        return None
-    value = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(value, dict):
-        raise ProcessingConfigError("base configuration must be a JSON object")
-    return value
 
 
 def _required(value: str | None, source: str) -> str:

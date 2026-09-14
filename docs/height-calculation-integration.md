@@ -1,1 +1,0 @@
-../edge-platform-integration/README.md
