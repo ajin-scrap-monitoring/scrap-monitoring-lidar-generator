@@ -22,8 +22,10 @@ UDS(Unix Domain Socket) endpoint를 제공한다. `lidar-processing`은 생성�
 사용하고 100 ms scan 주기의 여유가 부족했다. 기능 범위는 갖췄지만 공유 edge 장비의 지속 실행
 합격 조건은 충족하지 못한 상태다. 측정 범위와 현재 관측은 `docs/performance.md`가 정본이다.
 
-Rust 전환은 계획 상태이며 제품 코드는 아직 시작하지 않았다. 전환의 목적은 기능 추가가 아니라
-현재 외부 계약과 합성 모델을 유지하면서 계산 여유와 실행 안정성을 확보하는 것이다.
+Rust 전환은 단계 1까지 완료했다. Rust crate는 공개 JSON 3개, 배포 override와 고정 Proto를
+검증하며 별도 binary는 설정 검사만 수행한다. 적재 시뮬레이션, LiDAR 측정과 외부 출력은 아직
+Python 실행 경로가 담당한다. 전환의 목적은 현재 외부 계약과 합성 모델을 유지하면서 계산 여유와
+실행 안정성을 확보하는 것이다.
 
 현재 CI는 Python source의 외부 계약 호환, Python package와 ARM64 image의 `--help` 실행까지
 검증한다. `tests/edge/run.sh`의 UDS, 관찰과 상태 수락 검증은 별도 실행 절차다. 단계 4 이후 CI는
@@ -73,15 +75,15 @@ ID에 포함된 기존 Repository 이름도 version 1에서는 바꾸지 않는�
 
 전환은 7단계다. 각 단계는 앞 단계의 완료 조건을 통과한 뒤 시작한다.
 
-| 단계 | 작업 | 산출물 | 완료 조건 |
-| --- | --- | --- | --- |
-| 0 | 기준선 고정 | Python golden fixture, 좌표 예제, noise 오류 회귀 검증, edge 측정 기록 | 계약 의미와 현재 성능 재현 |
-| 1 | Rust 기반 구성 | package, 설정 loader, 오류 모델, CI와 ARM64 build | 공개 JSON 3개 수락 및 오류 동등성 |
-| 2 | 적재 시뮬레이션 이식 | World 자료형, 표면, 적재 및 수거 상태 전이 | 고정 시각 snapshot과 부피 불변식 통과 |
-| 3 | LiDAR 측정 이식 | 회전, 광선 교차, 합성 왜곡, quality와 SDK 정수 변환 | 무잡음 geometry 및 ScanFrame golden 통과 |
-| 4 | 외부 출력 이식 | UDS gRPC server 2개, 상태 및 진단 writer, 관찰 publisher, exporter CLI | 기존 소비자와 versioned 계약 수락 |
-| 5 | ARM64 병행 검증 | digest image, 장기 공유 부하 보고서 | 기능 및 성능 합격선 통과 |
-| 6 | 기본 구현 전환 | Python runtime 제거, 배포 및 사용자 문서 갱신 | 새 checkout 배포와 rollback 절차 검증 |
+| 단계 | 상태 | 작업 | 산출물 | 완료 조건 |
+| --- | --- | --- | --- | --- |
+| 0 | 완료 | 기준선 고정 | Python golden fixture, 좌표 예제, noise 오류 회귀 검증, edge 측정 기록 | 계약 의미와 현재 성능 재현 |
+| 1 | 완료 | Rust 기반 구성 | package, 설정 loader, 오류 모델, CI와 ARM64 build | 공개 JSON 3개 수락 및 오류 동등성 |
+| 2 | 예정 | 적재 시뮬레이션 이식 | World 자료형, 표면, 적재 및 수거 상태 전이 | 고정 시각 snapshot과 부피 불변식 통과 |
+| 3 | 예정 | LiDAR 측정 이식 | 회전, 광선 교차, 합성 왜곡, quality와 SDK 정수 변환 | 무잡음 geometry 및 ScanFrame golden 통과 |
+| 4 | 예정 | 외부 출력 이식 | UDS gRPC server 2개, 상태 및 진단 writer, 관찰 publisher, exporter CLI | 기존 소비자와 versioned 계약 수락 |
+| 5 | 예정 | ARM64 병행 검증 | digest image, 장기 공유 부하 보고서 | 기능 및 성능 합격선 통과 |
+| 6 | 예정 | 기본 구현 전환 | Python runtime 제거, 배포 및 사용자 문서 갱신 | 새 checkout 배포와 rollback 절차 검증 |
 
 단계 0은 무잡음 scan의 교차 좌표를 명시한 tolerance로 비교하고 SDK 이후 wire 정수는 정확히
 비교한다. Noise와 합성 왜곡은 고정 seed 재현 및 분포 허용범위로 비교한다. Python의
@@ -203,15 +205,13 @@ Rust 기본 전환 전에 `generator.v3.json`은 다음 2개 값을 명시하는
 
 ## Repository 이름 결정
 
-현재 이름은 `scrap-monitoring-lidar-generator`다. Rust 기본 전환 시점의 추천 이름은
-`scrap-monitoring-lidar-simulator`다. 이 프로그램이 단순 frame fixture가 아니라 시간에 따라 변하는
-적재 환경과 LiDAR 측정을 함께 모사하고 실제 S2E network 장비 자체를 구현하지 않는다는 범위를
-가장 정확하게 나타낸다.
+현재 이름은 `scrap-monitoring-lidar-generator`이며 Rust 기본 전환 Release에서
+`scrap-monitoring-lidar-simulator`로 변경한다. 이 프로그램은 시간에 따라 변하는 적재 환경과 LiDAR
+측정을 함께 모사하며 실제 S2E network 장비 자체를 구현하지 않는다.
 
-Repository 이름 변경은 GitHub 경로, GHCR(GitHub Container Registry) image, package 및 CLI 이름,
-문서 링크와 시각화 프로그램의 provenance에 영향을 주므로 사용자 확정 전에는 수행하지 않는다.
-변경을 확정하면 Rust 기본 전환과 같은 Release 경계에서 새 image 이름을 게시하고 version 1 계약의
-기존 schema ID는 그대로 보존한다.
+Repository, GHCR(GitHub Container Registry) image, package 및 CLI 이름과 문서 링크는 기본 전환
+Pull Request 병합 뒤 같은 Release 경계에서 변경한다. Version 1 외부 계약의 schema ID와 하위 호환
+식별자는 그대로 보존한다.
 
 ## 환경 규격 문서 인계
 
