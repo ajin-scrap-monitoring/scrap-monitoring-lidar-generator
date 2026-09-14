@@ -11,6 +11,7 @@ htmlcov/
 .contract/
 dist/
 build/
+target/
 *.egg-info/
 
 # Local dtach control socket.

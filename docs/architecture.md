@@ -32,6 +32,9 @@ gRPC(Google Remote Procedure Call) server이고 `lidar-processing`이 server-str
 
 ## 패키지 경계
 
+기본 생성기 진입점과 container는 Python 구현을 실행한다. Python 패키지는
+`src/scrap_monitoring_lidar_generator/` 아래에 있다.
+
 | 패키지 | 책임 |
 | --- | --- |
 | `configuration/` | versioned JSON loader와 교차 입력 검증 |
@@ -64,6 +67,33 @@ scenario -> geometry
 `geometry`는 다른 프로젝트 패키지를 참조하지 않는다. `scenario`와 `measurement`는 외부 출력
 형식을 알지 않는다. `scan_stream`은 측정 결과를 외부 wire 표현으로만 바꾸며 적재 모델을
 변경하지 않는다. `edge_integration`은 실행 중 scan 경로에 참여하지 않는다.
+
+## Rust 설정 검증 경계
+
+Rust crate의 실행 경계는 5개다. `src/lib.rs`는 설정 및 wire API를 공개하며 별도
+`scrap-monitoring-lidar-generator-rust` binary는 입력 검증만 수행한다.
+
+| 경로 | 책임 |
+| --- | --- |
+| `src/configuration/` | 세 JSON loader, 중복 key와 숫자 type 검증, 설정 자료형과 교차 입력 검증 |
+| `src/cli.rs` | CLI(Command-Line Interface), 환경변수와 JSON override 계층 및 `check` 명령 |
+| `src/error.rs` | 오류 분류, 입력 경로와 메시지 |
+| `src/lib.rs`의 `wire` | 고정 Proto에서 빌드 시 생성한 tonic/prost client, server와 message binding |
+| `src/main.rs` | 별도 검증 binary의 입력, 출력과 종료 코드 |
+
+`cli`는 `configuration`과 `error`에 의존한다. `configuration`의 다각형 검증은 설정 검증
+내부에 있으며 Python 실행 경로와 독립적이다. `build.rs`는
+`contracts/lidar/v1/lidar.proto`를 잠근 compiler와 binding 생성기로 처리한다. 생성 파일은
+Cargo 빌드 출력에만 두며 고정 Proto 원문과 Python binding을 변경하지 않는다.
+
+`cargo run --locked --bin scrap-monitoring-lidar-generator-rust -- check --config examples/generator.v2.json`은
+참조된 세 JSON과 모델 override를 검증한다. `check --runtime`은 UDS 경로, 상태 경로, 배포
+식별자와 관찰 endpoint도 요구한다. 두 명령은 scan 생성, socket 생성과 상태 출력을 하지
+않으며 성공 시 0, 설정 오류 시 2로 종료한다.
+
+`cargo test --locked`는 Rust 단위 테스트와 `tests/configuration.rs`, `tests/cli.rs`,
+`tests/wire.rs`의 공개 입력, override, 오류와 Proto 회귀 검증을 실행한다.
+`cargo fmt --check`와 `cargo clippy --locked --all-targets -- -D warnings`는 Rust 정적 검증이다.
 
 ## 설정과 계약
 
@@ -183,6 +213,16 @@ contracts/
 docs/
 edge-platform-integration/
 examples/
+Cargo.toml
+Cargo.lock
+build.rs
+rust-toolchain.toml
+src/
+  lib.rs
+  main.rs
+  cli.rs
+  error.rs
+  configuration/
 src/scrap_monitoring_lidar_generator/
   configuration/
   edge_integration/
