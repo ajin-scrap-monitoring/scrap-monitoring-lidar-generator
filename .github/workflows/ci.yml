@@ -62,6 +62,11 @@ jobs:
       - name: Test
         run: uv run --locked pytest
 
+      - name: Verify synthetic environment specification
+        run: |
+          uv run --locked --group docs \
+            python docs/synthetic-environment-specification/generate.py --check
+
       - name: Verify generated LiDAR wire modules
         run: uv run --locked python -m tools.generate_lidar_wire --check
 

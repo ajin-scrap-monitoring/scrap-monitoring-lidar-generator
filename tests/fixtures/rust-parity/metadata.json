@@ -1,0 +1,115 @@
+{
+  "baseline": {
+    "implementation": "python",
+    "random_sources": [
+      "random.Random",
+      "numpy.random.PCG64"
+    ],
+    "release": "0.9.0"
+  },
+  "comparison": {
+    "float_absolute_tolerance": 1e-10,
+    "float_relative_tolerance": 1e-12,
+    "float_rule": "abs(actual-expected) <= max(atol, rtol*max(abs(actual),abs(expected)))",
+    "hq_ticks_and_decoded_wire_values": "exact",
+    "integers_booleans_strings_shapes": "exact",
+    "protobuf_hex": "exact fixture integrity only; not a cross-language canonical form",
+    "python-seeded-reference": "Python replay reference; Rust RNG sequence equality not required",
+    "regeneration": "source and stored file hashes exact; finite floats use stated tolerances",
+    "rng-independent": "Rust parity required; includes deterministic hash-derived angles",
+    "rust_random_acceptance": "same model version, configuration and seed reproduce output; distributions and event invariants remain required"
+  },
+  "fixture_version": 1,
+  "fixtures": {
+    "configuration-cases.json": {
+      "bytes": 27262,
+      "comparison_class": "rng-independent",
+      "sha256": "dde5eabb6fbe88b39f90ec2c68780c2f70f29b875eff9da045ceb0efc1b42977"
+    },
+    "coordinates.json": {
+      "bytes": 13837,
+      "comparison_class": "rng-independent",
+      "sha256": "a8789515802cad348707cc83bf36abc0b643a3dacfa421c4ba1371b127f0505e"
+    },
+    "distortion-events.json": {
+      "bytes": 8384,
+      "comparison_class": "rng-independent",
+      "sha256": "6daa9cd3e5605d30bde5c51fd52274c6629ae6e207c41eebf4b314a759ea8a23"
+    },
+    "height-field-operations.json": {
+      "bytes": 63132,
+      "comparison_class": "rng-independent",
+      "sha256": "d5ab0bc6714023fcabbf93e7bf2d9133f1f738ded3e480ef8f488702fbd0ffa4"
+    },
+    "rotation-and-hq.json": {
+      "bytes": 5979,
+      "comparison_class": "rng-independent",
+      "sha256": "78d360243cd94a1dc8c8195713e91c5e981f7f62f5033ef2cc2f011fad9c2729"
+    },
+    "scan-frames.json": {
+      "bytes": 23337,
+      "comparison_class": "rng-independent",
+      "sha256": "bfd7b700cbe41c5cb882476194534eca5f162cfad9d24fccda9dcae0693321f0"
+    },
+    "scenario-scripted.json": {
+      "bytes": 42284,
+      "comparison_class": "rng-independent",
+      "sha256": "1c1557ad959048998e125b397caf4a3b1821dcfdfae4594b8caaafb3c65d9af1"
+    },
+    "scenario-seeded-baseline.json": {
+      "bytes": 41396,
+      "comparison_class": "python-seeded-reference",
+      "sha256": "00db97bb4c9f6a1acffccfcebbf3f349e67e594ad71f489c2d03263b3c077836"
+    }
+  },
+  "maximum_total_bytes": 262144,
+  "provenance": "public examples and explicit synthetic test overrides",
+  "source_sha256": {
+    "contracts/lidar/v1/lidar.proto": "a02672aa5c4548fd73ca2dc1f5ce85ea246bcecc907a64a6a94819c5e64cc516",
+    "examples/environment.v1.json": "9d1253e0ed80a3c2b67609c7397a499bf8e6061cbd7144ff273732e9aa32a33a",
+    "examples/generator.v2.json": "33d21c149410f69e4ac1dcb2fc52caab2aaaffd61a8f4e986fb165ae740efd9f",
+    "examples/quality-profile.v1.json": "a89f33e158c937e727d45523ad103a4b349298041dce1f12630fce6f2b6ee91c",
+    "src/scrap_monitoring_lidar_generator/configuration/__init__.py": "4555f64ebdeb6b0896a08a71bcf42f9f419118a26bf6753b3c0da51d46c0af65",
+    "src/scrap_monitoring_lidar_generator/configuration/_json.py": "60e7601c74e38214a7c8ff6f914808b743613dd5683051dcd39e28bf84e62eca",
+    "src/scrap_monitoring_lidar_generator/configuration/errors.py": "d18c741c20908a496b03713a218c310c123a6006442a0ce028b2f11f5ec5736b",
+    "src/scrap_monitoring_lidar_generator/configuration/generator_loader.py": "f0378ba84b84768ef530a54237e48fd3bf16df5f2e8d10baeb9597a26f3d6220",
+    "src/scrap_monitoring_lidar_generator/configuration/generator_models.py": "6bf589819f465d0fd413778108115c3f4fbc7f1f5b79cc9dcb90d4a1bef4bc90",
+    "src/scrap_monitoring_lidar_generator/configuration/geometry.py": "6dfee08da86d8144a74ef30c74763d8dd2a76b0ee9152c2f154978e6944ee66c",
+    "src/scrap_monitoring_lidar_generator/configuration/loader.py": "ea7df7587e427051e581a613ef5c21e08a41e5180741818207d781591e1f4008",
+    "src/scrap_monitoring_lidar_generator/configuration/models.py": "8f0daa9755c169bd13ff01ee630ddd46624c8f80b76e867e2b804203a1d43191",
+    "src/scrap_monitoring_lidar_generator/configuration/quality_loader.py": "76009063e39353cb3937d9d7cf1e1dddc42343194a097f849148e815df4b2427",
+    "src/scrap_monitoring_lidar_generator/geometry/__init__.py": "208b39c3eccd8fa70e39d7f48dd1b90a23d6cc4052c8bf5071dd3d58ffb210fa",
+    "src/scrap_monitoring_lidar_generator/geometry/batch_intersections.py": "e7cc908d436e3fb08fb0d8c6418f2fb8f08f97378909dbb943fec8bde3f9acd8",
+    "src/scrap_monitoring_lidar_generator/geometry/batches.py": "3c9c85baaca0416b07d51dcdc0a0f93f5d51b40c186bd6faceeb90c33355cb76",
+    "src/scrap_monitoring_lidar_generator/geometry/intersections.py": "c92cb4dd177bc31fe5512aa4290739751ef7df53c179f72c2e7c13abab73f607",
+    "src/scrap_monitoring_lidar_generator/geometry/polygon.py": "fb5547bda08136f6a6426e07c81d63992abfed49d8f6a59e20f6cfc0ddc95785",
+    "src/scrap_monitoring_lidar_generator/geometry/primitives.py": "be5dc7a0a9b39b18dc17b6199b707b716c0ba31ced50785ceb4eef433a8dce9d",
+    "src/scrap_monitoring_lidar_generator/geometry/scene.py": "3903583a67d118a4b87b72cc9ee378427e712b1cd03835ba974fe14b901bb4f4",
+    "src/scrap_monitoring_lidar_generator/geometry/sensor.py": "8393cc99593c9dd5a431995d11dc7cba24d60c832e170c280188baf79b4ff819",
+    "src/scrap_monitoring_lidar_generator/geometry/surfaces.py": "628de08dc40a00e2e4aa6563498bb16a33d2b60a68c21564ad38de38d5396cc6",
+    "src/scrap_monitoring_lidar_generator/measurement/__init__.py": "0d271b456c8803b79adeb7e355f0419bbd66f5344d514a8b018e7389c3ff67d8",
+    "src/scrap_monitoring_lidar_generator/measurement/_randomness.py": "6fb53d22048c3d66ddb8373f50da76fd7bf421cbfec75343d47f6571dd28ae46",
+    "src/scrap_monitoring_lidar_generator/measurement/dropout.py": "d58d888dcf342d5723678be6e5a4a42812825d763c48619778d078583595b683",
+    "src/scrap_monitoring_lidar_generator/measurement/generation.py": "721c77795c64c29fb6cb8e88768b70ca442422f2fe10876311e44b812c97727c",
+    "src/scrap_monitoring_lidar_generator/measurement/models.py": "d330b7b9cfef3ce02b063c40a7ad27974ddd9329f35084b74fd61cbe8a7449a0",
+    "src/scrap_monitoring_lidar_generator/measurement/reference.py": "e7aaa51d26b76fbc1688e61852fc58952d990093342bc509e38dd841f2ed17fa",
+    "src/scrap_monitoring_lidar_generator/measurement/rotation.py": "6a4c178782dc0c2f814e15055ac07a7853212c9c745d1298f71fcadba16f4bcc",
+    "src/scrap_monitoring_lidar_generator/measurement/sdk_compatibility.py": "6bd42b3699fa55e6b39cef0c680fe0c77bf7deb5d41493f4292029ec8a5784fd",
+    "src/scrap_monitoring_lidar_generator/measurement/spatial.py": "afe8a679425db8a233fe683f95add6bcb1068469147fcc9f59d9eede4428d2e0",
+    "src/scrap_monitoring_lidar_generator/runtime/generation.py": "afb83ba3f668fc15de121ca15c7043c2a3ed0ac44af5e548ad23d663b8fdb723",
+    "src/scrap_monitoring_lidar_generator/runtime/measurement.py": "b7681dbc603fb0c0d1a9e30828a8798bd3a21f8369f96ea761c971cefa98b993",
+    "src/scrap_monitoring_lidar_generator/runtime/reference.py": "dab20c64ba0ae372b57b70bc5deae444a2078a8091f2bcdbc89e23e353e80a99",
+    "src/scrap_monitoring_lidar_generator/runtime/scenario.py": "d94088f76a026f86e3d9fd310ca31d50ed971eb28228a2e2f43ba335eed818f7",
+    "src/scrap_monitoring_lidar_generator/scan_stream/frames.py": "c89fc98e68a0e92da4eeb385204547168d02487e3cd2676701c59b51b16145e8",
+    "src/scrap_monitoring_lidar_generator/scenario/__init__.py": "9b7162039177143e014c16ddc6ad1237a2d4c381dbabe8a32a594db7cea8c583",
+    "src/scrap_monitoring_lidar_generator/scenario/_height_field_batch_intersection.py": "04c80e5cecb9b0d9a20bacf496311a32fa6727c63078a44c4125819ab94e693a",
+    "src/scrap_monitoring_lidar_generator/scenario/_height_field_intersection.py": "75b9bc03a53184a153f7ed1529cfe8f998ab7f3296d7373ef9d6fa5eafebd5d8",
+    "src/scrap_monitoring_lidar_generator/scenario/height_field.py": "1500e3a94ef30d67767335c2aa96a8f89573d65f3104bd44d4a74a5f9b9f166c",
+    "src/scrap_monitoring_lidar_generator/scenario/rate_profile.py": "8661bb656c7d4d74b647dc66349afd887d2540f944f7fc81b032a656d5a871e9",
+    "src/scrap_monitoring_lidar_generator/scenario/simulator.py": "22964277065d59a09888073bb34744b61af3397b95cdaf5b4b63eb012635e0a9",
+    "src/scrap_monitoring_lidar_generator/scenario/snapshot.py": "8334598e19591f967d5b63ed5fe5d17f1dd0fdfe5f664056894d8d64259da137",
+    "src/scrap_monitoring_lidar_generator/scenario/time_scale.py": "656c76856589416c000cbdaa6e92d595a568c2c1911da5a13de167942a3ecbd6",
+    "tools/generate_rust_parity_fixtures.py": "5a06a4a52b4b56468de832bef8ab20fef872b607d83347b0edbb403ff7cd3ea6",
+    "uv.lock": "34cb9e843c4f3939b0954d6842cc636b521b5790ae86ebd82f2493c6a4793c24"
+  }
+}
