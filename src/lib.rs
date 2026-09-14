@@ -11,6 +11,7 @@ pub mod observation;
 pub mod randomness;
 pub mod rate_profile;
 pub mod runtime;
+pub mod scan_runtime;
 pub mod scenario;
 
 mod output_format;

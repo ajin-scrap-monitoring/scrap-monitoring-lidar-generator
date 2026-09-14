@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -23,6 +24,7 @@ _SOURCE = _ROOT / "contracts" / "lidar" / "v1" / "upstream.json"
 _PROTO = _ROOT / "contracts" / "lidar" / "v1" / "lidar.proto"
 _GENERATOR_CONFIG = _ROOT / "examples" / "generator.v2.json"
 _PROCESSING_FIXTURE = _ROOT / "edge-platform-integration" / "v1" / "processing.synthetic.json"
+_RUST_STATUS_FIXTURE = _ROOT / "tests" / "fixtures" / "rust-status" / "lidar-driver-a.json"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -56,13 +58,14 @@ def _verify_source(edge_root: Path, source: dict[str, str]) -> None:
         raise RuntimeError("local LiDAR Proto digest differs from its source metadata")
 
 
-def _load_upstream_modules(edge_root: Path) -> tuple[Any, Any]:
+def _load_upstream_modules(edge_root: Path) -> tuple[Any, Any, Any]:
     sys.path.insert(0, str(edge_root / "packages" / "edge-common" / "src"))
     sys.path.insert(0, str(edge_root / "services" / "lidar-processing" / "src"))
     from ajin_edge.config import load_config  # type: ignore[import-not-found]
+    from ajin_edge.status import read_status  # type: ignore[import-not-found]
     from ajin_lidar_processing.engine import ProcessingEngine  # type: ignore[import-not-found]
 
-    return load_config, ProcessingEngine
+    return load_config, ProcessingEngine, read_status
 
 
 def _processing_config(path: Path | None) -> dict[str, Any]:
@@ -88,7 +91,13 @@ def _validate_with_upstream(
     edge_root: Path,
     processing_config_path: Path | None,
 ) -> dict[str, object]:
-    load_config, processing_engine = _load_upstream_modules(edge_root)
+    load_config, processing_engine, read_status = _load_upstream_modules(edge_root)
+    status = read_status(
+        _RUST_STATUS_FIXTURE,
+        now=datetime(2027, 1, 15, 8, 0, 5, tzinfo=UTC),
+    )
+    if status["state"] != "HEALTHY":
+        raise RuntimeError(f"upstream status reader rejected Rust status: {status}")
     inputs = load_generator_inputs(_GENERATOR_CONFIG)
     processing_config = _processing_config(processing_config_path)
     with tempfile.TemporaryDirectory(prefix="edge-contract-") as directory:
@@ -170,6 +179,7 @@ def _validate_with_upstream(
         "frames": len(frames),
         "measurement_state": measurement["quality"]["state"],
         "sensor_ids": [sensor["sensor_id"] for sensor in measurement["sensors"]],
+        "status_state": status["state"],
     }
 
 

@@ -10,13 +10,13 @@ mod spatial;
 pub mod rotation;
 pub mod sdk;
 
-pub use frame::{ClockSample, ScanFrameFactory};
+pub use frame::{ClockSample, ScanFrameFactory, SystemScanFrameFactory};
 pub use generation::{
     DropoutSettings, MeasurementGenerator, MeasurementSettings, QualityDistribution,
     SensorDropoutScheduler,
 };
 pub use reference::{
-    MeasuredScan, MeasurementResult, ReferencePoint, ReferenceScan, ReferenceScanner,
+    HqSample, MeasuredScan, MeasurementResult, ReferencePoint, ReferenceScan, ReferenceScanner,
     TimedReferenceScan,
 };
 pub use rotation::{
