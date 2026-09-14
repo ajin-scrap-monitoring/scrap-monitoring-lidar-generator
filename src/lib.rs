@@ -8,6 +8,7 @@ pub mod geometry;
 pub mod measurement;
 pub mod randomness;
 pub mod rate_profile;
+pub mod runtime;
 pub mod scenario;
 
 /// Engine resource limit for scenario inlet positions.
