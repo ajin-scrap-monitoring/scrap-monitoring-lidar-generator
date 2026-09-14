@@ -1,4 +1,4 @@
-"""Strict loader for generator-only execution configuration version 1."""
+"""Strict loader for generator-only execution configuration version 2."""
 
 import math
 from collections.abc import Callable
@@ -29,10 +29,10 @@ from scrap_monitoring_lidar_generator.configuration.generator_models import (
     GeneratorConfig,
     GeneratorInputs,
     MeasurementConfig,
+    ObservationTransportConfig,
     ReflectionErrorConfig,
     ScenarioConfig,
     SurfaceConfig,
-    TransportConfig,
     VoidsConfig,
 )
 from scrap_monitoring_lidar_generator.configuration.loader import load_environment
@@ -41,8 +41,6 @@ from scrap_monitoring_lidar_generator.configuration.quality_loader import load_q
 from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
 
 _MAX_SEED = 18_446_744_073_709_551_615
-_MAX_UNSIGNED_32_BIT = 4_294_967_295
-_MAX_SIGNED_64_BIT = 9_223_372_036_854_775_807
 _MIN_CONTRACT_DISTANCE_M = 0.05
 _MAX_CONTRACT_DISTANCE_M = 30.0
 
@@ -54,7 +52,7 @@ _GENERATOR_FIELDS = frozenset(
         "quality_profile_path",
         "scenario",
         "measurement",
-        "transport",
+        "observation_transport",
         "diagnostics",
     }
 )
@@ -135,16 +133,10 @@ _COLLECTION_OCCLUSION_FIELDS = frozenset(
 _REFLECTION_ERROR_FIELDS = frozenset({"enabled", "probability", "distance_reduction_m_range"})
 _DROPOUT_FIELDS = frozenset({"enabled", "event_interval_s_range", "duration_s_range"})
 _DIAGNOSTICS_FIELDS = frozenset({"enabled", "output_path", "sample_scan_limit_per_sensor"})
-_TRANSPORT_FIELDS = frozenset(
+_OBSERVATION_TRANSPORT_FIELDS = frozenset(
     {
-        "host",
-        "port",
-        "max_message_body_bytes",
-        "buffer_max_age_s",
-        "buffer_max_bytes",
         "connect_timeout_s",
         "send_timeout_s",
-        "ack_timeout_s",
         "reconnect_initial_delay_s",
         "reconnect_max_delay_s",
     }
@@ -168,12 +160,15 @@ def parse_generator_config(
     """Parse and validate a generator configuration JSON document."""
     root = require_object(parse_document(document), "$")
     require_exact_fields(root, _GENERATOR_FIELDS, "$")
-    require_literal(root["config_version"], 1, "$.config_version")
+    require_literal(root["config_version"], 2, "$.config_version")
     base = Path(base_directory)
 
     scenario = _parse_scenario(root["scenario"], "$.scenario")
     measurement = _parse_measurement(root["measurement"], "$.measurement")
-    transport = _parse_transport(root["transport"], "$.transport")
+    observation_transport = _parse_observation_transport(
+        root["observation_transport"],
+        "$.observation_transport",
+    )
     diagnostics = _parse_diagnostics(root["diagnostics"], "$.diagnostics", base)
     return GeneratorConfig(
         seed=require_integer(root["seed"], "$.seed", minimum=0, maximum=_MAX_SEED),
@@ -185,7 +180,7 @@ def parse_generator_config(
         ),
         scenario=scenario,
         measurement=measurement,
-        transport=transport,
+        observation_transport=observation_transport,
         diagnostics=diagnostics,
     )
 
@@ -205,11 +200,6 @@ def load_generator_inputs(path: str | Path) -> GeneratorInputs:
         raise ConfigurationError(
             "quality profile sensor_id values must exactly match environment sensors"
         )
-    if generator.transport.buffer_max_bytes < len(environment.sensors):
-        raise ConfigurationError(
-            "$.transport.buffer_max_bytes must be at least the environment sensor count"
-        )
-
     boundary = Polygon2(tuple(Vec2(x, y) for x, y in environment.boundary_xy_m))
     if any(not boundary.contains(Vec2(x, y)) for x, y in generator.scenario.inlet_positions_xy_m):
         raise ConfigurationError(
@@ -501,9 +491,9 @@ def _parse_diagnostics(value: Any, path: str, base: Path) -> DiagnosticsConfig:
     )
 
 
-def _parse_transport(value: Any, path: str) -> TransportConfig:
+def _parse_observation_transport(value: Any, path: str) -> ObservationTransportConfig:
     transport = require_object(value, path)
-    require_exact_fields(transport, _TRANSPORT_FIELDS, path)
+    require_exact_fields(transport, _OBSERVATION_TRANSPORT_FIELDS, path)
     initial_delay_s = _require_positive(
         transport["reconnect_initial_delay_s"],
         f"{path}.reconnect_initial_delay_s",
@@ -516,29 +506,11 @@ def _parse_transport(value: Any, path: str) -> TransportConfig:
         raise ConfigurationError(
             f"{path}.reconnect_initial_delay_s must not exceed {path}.reconnect_max_delay_s"
         )
-    return TransportConfig(
-        host=require_non_empty_string(transport["host"], f"{path}.host"),
-        port=require_integer(transport["port"], f"{path}.port", minimum=1, maximum=65_535),
-        max_message_body_bytes=require_integer(
-            transport["max_message_body_bytes"],
-            f"{path}.max_message_body_bytes",
-            minimum=1,
-            maximum=_MAX_UNSIGNED_32_BIT,
-        ),
-        buffer_max_age_s=_require_positive(
-            transport["buffer_max_age_s"], f"{path}.buffer_max_age_s"
-        ),
-        buffer_max_bytes=require_integer(
-            transport["buffer_max_bytes"],
-            f"{path}.buffer_max_bytes",
-            minimum=1,
-            maximum=_MAX_SIGNED_64_BIT,
-        ),
+    return ObservationTransportConfig(
         connect_timeout_s=_require_positive(
             transport["connect_timeout_s"], f"{path}.connect_timeout_s"
         ),
         send_timeout_s=_require_positive(transport["send_timeout_s"], f"{path}.send_timeout_s"),
-        ack_timeout_s=_require_positive(transport["ack_timeout_s"], f"{path}.ack_timeout_s"),
         reconnect_initial_delay_s=initial_delay_s,
         reconnect_max_delay_s=maximum_delay_s,
     )

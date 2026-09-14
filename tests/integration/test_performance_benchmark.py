@@ -30,7 +30,7 @@ def _run_benchmark(config_path: Path) -> dict[str, Any]:
 
 
 def test_benchmark_reports_all_non_empty_stages() -> None:
-    document = _run_benchmark(_ROOT / "examples" / "generator.v1.json")
+    document = _run_benchmark(_ROOT / "examples" / "generator.v2.json")
 
     assert document["workload"]["sensor_count"] == 2
     assert document["workload"]["generated_scans"] == 2
@@ -46,9 +46,9 @@ def test_benchmark_reports_all_non_empty_stages() -> None:
     assert all(stage["samples"] > 0 for stage in document["stages"].values())
 
 
-def test_benchmark_uses_one_transport_connection_per_sensor() -> None:
-    document = _run_benchmark(_ROOT / "examples" / "generator.v1.json")
+def test_benchmark_uses_one_transport_delivery_per_scan() -> None:
+    document = _run_benchmark(_ROOT / "examples" / "generator.v2.json")
 
     assert document["workload"]["sensor_count"] == 2
     assert document["workload"]["generated_scans"] == 2
-    assert document["stages"]["transport_wait"]["samples"] == 4
+    assert document["stages"]["transport_wait"]["samples"] == 2

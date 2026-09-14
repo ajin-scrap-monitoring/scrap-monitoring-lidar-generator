@@ -67,17 +67,31 @@ jobs:
           uv run --locked ruff check .
           uv run --locked mypy
           uv run --locked pytest
+          uv run --locked python -m tools.generate_lidar_wire --check
 
       - name: Build package
         run: uv build --no-sources
 
-      - name: Package height calculation contract proposal
+      - name: Check out pinned edge platform contract
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: ajin-scrap-monitoring/ajin-edge-platform
+          ref: 666ca6067a3bb86833b74140cb659049025d0dae
+          path: .contract/ajin-edge-platform
+          persist-credentials: false
+
+      - name: Verify edge platform processing compatibility
+        run: |
+          uv run --locked python -m tools.verify_edge_platform_contract \
+            --edge-platform-root .contract/ajin-edge-platform
+
+      - name: Package edge platform integration contract
         run: |
           tar \
             --create \
             --gzip \
-            --file dist/height-calculation-contract-proposal-v1.tar.gz \
-            height-calculation-contract-proposal
+            --file dist/edge-platform-integration-v1.tar.gz \
+            edge-platform-integration
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0

@@ -6,6 +6,8 @@ import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
+from importlib.metadata import version
+from pathlib import Path
 from typing import Protocol
 
 from scrap_monitoring_lidar_generator.configuration import GeneratorInputs
@@ -27,24 +29,43 @@ from scrap_monitoring_lidar_generator.runtime.generation import (
     MeasurementGenerationRuntime,
     build_measurement_generation_runtime,
 )
-from scrap_monitoring_lidar_generator.runtime.transport import build_scan_sender
-from scrap_monitoring_lidar_generator.transport import (
-    BufferEnqueueResult,
-    ScanMessage,
-    ScanMessageFactory,
-    SenderHalt,
-    SenderHaltCallback,
-    SenderStats,
+from scrap_monitoring_lidar_generator.scan_stream import (
+    GrpcScanServer,
+    ScanFrameFactory,
+    ScanServerStats,
 )
+from scrap_monitoring_lidar_generator.wire import lidar_pb2
 
 type DeadlineWaiter = Callable[[float, asyncio.Event], Awaitable[bool]]
 
 
-class ScanMessageSink(Protocol):
-    """Accept generated scan messages without blocking on delivery."""
+class ScanFrameSink(Protocol):
+    """Accept generated driver-compatible scan frames."""
 
-    def enqueue_scan(self, message: ScanMessage) -> BufferEnqueueResult:
-        """Retain one generated scan for delivery."""
+    async def publish(self, frame: lidar_pb2.ScanFrame) -> None:
+        """Retain one generated scan for subscribed consumers."""
+        ...
+
+
+class ScanStreamServer(ScanFrameSink, Protocol):
+    """Lifecycle and identity boundary for a multi-sensor scan source."""
+
+    @property
+    def instance_ids(self) -> dict[str, str]:
+        """Return one process-instance identifier per sensor."""
+        ...
+
+    @property
+    def stats(self) -> ScanServerStats:
+        """Return the current server counters."""
+        ...
+
+    async def start(self) -> None:
+        """Start all configured endpoints."""
+        ...
+
+    async def close(self) -> None:
+        """Stop all configured endpoints."""
         ...
 
 
@@ -55,10 +76,7 @@ class GeneratorRunSummary:
     run_id: str
     run_started_at_utc_us: int
     generated_scans: int
-    pending_frames: int
-    pending_bytes: int
-    sender_stats: SenderStats
-    sender_halt: SenderHalt | None
+    scan_server_stats: ScanServerStats
     observation_endpoint: str
     observation_stats: ObservationPublisherStats
 
@@ -66,8 +84,8 @@ class GeneratorRunSummary:
 async def run_scan_generation(
     *,
     runtime: MeasurementGenerationRuntime,
-    message_factory: ScanMessageFactory,
-    sink: ScanMessageSink,
+    frame_factory: ScanFrameFactory,
+    sink: ScanFrameSink,
     stop_event: asyncio.Event,
     run_started_at_monotonic_s: float,
     wait_until: DeadlineWaiter | None = None,
@@ -82,7 +100,9 @@ async def run_scan_generation(
             break
         results = runtime.next_completed_scans()
         for result in results:
-            sink.enqueue_scan(message_factory.build(result))
+            frame = frame_factory.build(result)
+            if frame is not None:
+                await sink.publish(frame)
         if results and observation_publisher is not None:
             with suppress(Exception):
                 if observation_publisher.is_due(runtime.scenario.elapsed_s):
@@ -102,7 +122,13 @@ async def run_generator_application(
     observation_port: int = DEFAULT_OBSERVATION_PORT,
     observation_interval_s: float = DEFAULT_OBSERVATION_INTERVAL_S,
     observation_publisher: ObservationPublisher | None = None,
-    on_sender_halt: SenderHaltCallback | None = None,
+    grpc_socket_dir: Path,
+    status_dir: Path,
+    site_id: str,
+    edge_id: str,
+    config_revision: str,
+    deployment_revision: str,
+    scan_server: ScanStreamServer | None = None,
 ) -> GeneratorRunSummary:
     """Build and run measurement, diagnostics and delivery until stopped."""
     effective_run_id = str(uuid.uuid4()) if run_id is None else run_id
@@ -110,11 +136,6 @@ async def run_generator_application(
         run_started_at_utc_us if run_started_at_utc_us is not None else time.time_ns() // 1_000
     )
     run_started_at_monotonic_s = asyncio.get_running_loop().time()
-    message_factory = ScanMessageFactory(
-        environment_id=inputs.environment.environment_id,
-        run_id=effective_run_id,
-        run_started_at_utc_us=effective_utc_us,
-    )
     diagnostics: JsonLinesDiagnosticsWriter | None = None
     if inputs.generator.diagnostics.enabled:
         diagnostics = build_diagnostics_writer(
@@ -123,7 +144,22 @@ async def run_generator_application(
             run_started_at_utc_us=effective_utc_us,
         )
     runtime = build_measurement_generation_runtime(inputs, diagnostics_sink=diagnostics)
-    sender = build_scan_sender(inputs, on_halt=on_sender_halt)
+    server: ScanStreamServer = scan_server or GrpcScanServer(
+        sensor_ids=(sensor.sensor_id for sensor in inputs.environment.sensors),
+        socket_directory=grpc_socket_dir,
+        status_directory=status_dir,
+        edge_id=edge_id,
+        config_revision=config_revision,
+        site_id=site_id,
+        deployment_revision=deployment_revision,
+        service_version=version("scrap-monitoring-lidar-generator"),
+    )
+    frame_factory = ScanFrameFactory(
+        sensor_ids=(sensor.sensor_id for sensor in inputs.environment.sensors),
+        edge_id=edge_id,
+        config_revision=config_revision,
+        instance_ids=server.instance_ids,
+    )
     publisher = observation_publisher
     if publisher is None:
         publisher = TcpObservationPublisher(
@@ -135,41 +171,38 @@ async def run_generator_application(
             seed=inputs.generator.seed,
             scene=ObservationScene.from_inputs(inputs),
             interval_s=observation_interval_s,
-            connect_timeout_s=inputs.generator.transport.connect_timeout_s,
-            send_timeout_s=inputs.generator.transport.send_timeout_s,
-            reconnect_initial_delay_s=inputs.generator.transport.reconnect_initial_delay_s,
-            reconnect_max_delay_s=inputs.generator.transport.reconnect_max_delay_s,
+            connect_timeout_s=inputs.generator.observation_transport.connect_timeout_s,
+            send_timeout_s=inputs.generator.observation_transport.send_timeout_s,
+            reconnect_initial_delay_s=(
+                inputs.generator.observation_transport.reconnect_initial_delay_s
+            ),
+            reconnect_max_delay_s=inputs.generator.observation_transport.reconnect_max_delay_s,
         )
-    await publisher.start()
     generated_scans = 0
+    await server.start()
     try:
-        async with asyncio.TaskGroup() as tasks:
-            tasks.create_task(sender.run())
-            try:
-                generated_scans = await run_scan_generation(
-                    runtime=runtime,
-                    message_factory=message_factory,
-                    sink=sender,
-                    stop_event=stop_event,
-                    run_started_at_monotonic_s=run_started_at_monotonic_s,
-                    wait_until=wait_until,
-                    observation_publisher=publisher,
-                )
-            finally:
-                sender.request_stop()
+        await publisher.start()
+        try:
+            generated_scans = await run_scan_generation(
+                runtime=runtime,
+                frame_factory=frame_factory,
+                sink=server,
+                stop_event=stop_event,
+                run_started_at_monotonic_s=run_started_at_monotonic_s,
+                wait_until=wait_until,
+                observation_publisher=publisher,
+            )
+        finally:
+            await publisher.close()
     finally:
-        sender.request_stop()
         if diagnostics is not None:
             diagnostics.close()
-        await publisher.close()
+        await server.close()
     return GeneratorRunSummary(
         run_id=effective_run_id,
         run_started_at_utc_us=effective_utc_us,
         generated_scans=generated_scans,
-        pending_frames=sender.pending_frames,
-        pending_bytes=sender.pending_bytes,
-        sender_stats=sender.stats,
-        sender_halt=sender.halt,
+        scan_server_stats=server.stats,
         observation_endpoint=publisher.endpoint,
         observation_stats=publisher.stats,
     )

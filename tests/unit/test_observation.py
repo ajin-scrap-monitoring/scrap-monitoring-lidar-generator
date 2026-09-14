@@ -30,7 +30,7 @@ from scrap_monitoring_lidar_generator.scenario import (
 )
 
 _ROOT = Path(__file__).parents[2]
-_INPUTS = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
+_INPUTS = load_generator_inputs(_ROOT / "examples" / "generator.v2.json")
 _SCENE = ObservationScene.from_inputs(_INPUTS)
 
 
@@ -73,7 +73,7 @@ def _record(elapsed_s: float = 1.0) -> ObservationRecord:
 
 
 def test_model_snapshot_copies_and_freezes_the_surface_grid() -> None:
-    inputs = load_generator_inputs(_ROOT / "examples" / "generator.v1.json")
+    inputs = load_generator_inputs(_ROOT / "examples" / "generator.v2.json")
     simulator = build_scenario_simulator(inputs)
     simulator.advance_to(1.0)
 

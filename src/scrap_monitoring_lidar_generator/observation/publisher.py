@@ -6,6 +6,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import Protocol
 
+from scrap_monitoring_lidar_generator.observation.backoff import ReconnectBackoff
 from scrap_monitoring_lidar_generator.observation.format import (
     ObservationFormatError,
     ObservationRecord,
@@ -14,7 +15,6 @@ from scrap_monitoring_lidar_generator.observation.format import (
     encode_observation_frame,
 )
 from scrap_monitoring_lidar_generator.scenario import ScenarioModelSnapshot
-from scrap_monitoring_lidar_generator.transport import ReconnectBackoff
 
 DEFAULT_OBSERVATION_HOST = "127.0.0.1"
 DEFAULT_OBSERVATION_PORT = 9100
@@ -259,7 +259,7 @@ class TcpObservationPublisher:
                 self._dropped_records += 1
                 raise
             self._sent_records += 1
-            self._backoff.reset_after_ack()
+            self._backoff.reset_after_success()
 
     def _take_latest(self) -> ObservationRecord | None:
         record = self._latest

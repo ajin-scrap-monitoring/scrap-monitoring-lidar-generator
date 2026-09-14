@@ -22,7 +22,7 @@ Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로�
 
 `docs/sdk-compatibility.md`는 RPLIDAR SDK 이후 scan 변환과 생성 데이터 정합성 기준의 정본이다. 실제 장비 관측값은 공개 기본값이나 fixture로 복제하지 않고 `docs/internal/`의 별도 산출물로 관리한다.
 
-`height-calculation-contract-proposal/`은 높이 계산 프로세스에 전달하는 환경 schema, scan, ACK, 오류 계약과 소비자 수락 기준의 정본이다. 공개 합성 환경값의 정본은 계속 `examples/`에 두며 전달 묶음의 환경 fixture는 자동 검증되는 배포 사본이다. `contracts/v1/`의 공유 계약 경로는 이 디렉토리의 파일을 가리키는 호환 진입점이다.
+`edge-platform-integration/`은 `ajin-edge-platform`의 `lidar-processing`과 공유하는 scan Proto, 합성 처리 설정과 소비자 수락 기준의 자기완결 인계 묶음이다. `contracts/lidar/v1/`은 담당자 Repository에서 고정한 Proto 정본과 출처 metadata를 보관한다. 생성기는 환경 정의를 scan에 포함하지 않으며 `edge_integration` exporter가 공개 합성 환경을 담당자 처리 설정으로 변환한다.
 
 새 작업 세션은 `docs/development-plan.md`의 현재 상태와 다음 작업을 확인한 뒤 범위를 정한다. 실제 수신 프로그램과 대상 장비의 공유 부하 검증이 필요한 작업은 문서에 남은 선행 조건을 먼저 충족한다.
 
@@ -32,7 +32,7 @@ Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로�
 
 ## 공개 합성 환경
 
-공개 합성 환경의 정본은 `examples/environment.v1.json`과 이를 참조하는 `examples/generator.v1.json`의 조합이다. 전자는 적재 공간 치수, 경계 형상, 바닥 및 상단 높이와 센서 위치 및 방향을 정의하고, 후자는 투입구 위치와 시나리오 설정을 정의한다.
+공개 합성 환경의 정본은 `examples/environment.v1.json`과 이를 참조하는 `examples/generator.v2.json`의 조합이다. 전자는 적재 공간 치수, 경계 형상, 바닥 및 상단 높이와 센서 위치 및 방향을 정의하고, 후자는 투입구 위치와 시나리오 설정을 정의한다.
 
 환경과 품질 설정은 `lidar_1`, `lidar_2`의 LiDAR 2대를 정확히 포함한다. 생성기와 엣지 검증은 두 센서별 독립 scan 전송 lane을 기준으로 한다.
 
@@ -40,7 +40,9 @@ Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로�
 
 공개 실행 설정의 출처와 분류는 [`docs/configuration.md`](../docs/configuration.md)가 정본이다. `measurement.sample_rate_hz`, `measurement.rotation_rate_hz`와 측정 거리 범위는 RPLIDAR S2E 기준을 반영하고, 시나리오, 측정 noise 및 distortion, 품질 분포, 전송과 진단 값은 프로젝트 합성 또는 개발 정책값으로 구분한다. 실제 센서 출력의 배열 길이는 고정하지 않으며 공개 예시의 측정점 수를 하드웨어 계약으로 해석하지 않는다.
 
-배포 설정 계층은 CLI 인자, 환경변수, version 1 JSON과 코드 기본값 순서로 적용한다. 환경변수는 평균 적재 주기, 설정 파일 경로, scan 및 관찰 endpoint와 진단 출력만 덮어쓴다. 나머지 시나리오, 센서, 측정, 품질, seed와 전송 제한 및 복구 정책은 JSON 정본으로 유지한다.
+배포 설정 계층은 CLI 인자, 환경변수, versioned JSON과 코드 기본값 순서로 적용한다. JSON은 합성 모델, 센서, 측정, 품질, seed와 관찰 복구 정책을 소유한다. 환경변수는 설정 파일과 UDS(Unix Domain Socket) 및 상태 경로, 배포 식별자, 평균 적재 주기, 수거 기준, 관찰 endpoint와 진단 출력을 소유한다. 센서 ID와 설치 형상을 환경변수에 중복하지 않는다.
+
+생성기는 담당자 `LidarScanSource.SubscribeScans` 계약과 같은 sensor별 server-streaming gRPC(Google Remote Procedure Call) over UDS endpoint를 제공한다. 두 endpoint는 하나의 생성기 프로세스와 적재 모델을 공유하며 sensor별 최신 frame 2개만 보관한다. 느린 구독자는 sequence gap으로 유실을 식별하고, 구독 연결 변경은 생성 모델을 초기화하지 않는다. 오류와 상태 표현은 고정한 `ajin-edge-platform` 구현을 따른다.
 
 적재 모델 관찰 기능은 [`docs/observation.md`](../docs/observation.md)와 `contracts/observation/v1/`을 정본으로 사용한다. 생성기는 읽기 전용 적재 모델 snapshot을 기존 scan 전송과 별도 JSON Lines TCP stream으로 계속 전송한다. publisher는 최신 snapshot 1개만 보관하며 연결 실패와 느린 수신기가 생성 및 기존 scan 전송을 막지 않게 한다. 렌더링, 기록과 MP4 생성은 별도 시각화 Repository가 담당하며 운영 이미지와 엣지 실행 경로에 포함하지 않는다. 별도 Repository 구현 인계는 [`docs/visualizer-requirements.md`](../docs/visualizer-requirements.md)를 따른다.
 

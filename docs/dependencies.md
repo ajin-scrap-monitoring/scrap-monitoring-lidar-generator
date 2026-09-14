@@ -2,7 +2,10 @@
 
 ## 적용 범위
 
-현재 직접 사용하는 외부 의존성은 19개다. NumPy와 `msgpack`은 애플리케이션 runtime의 수치 연산과 직렬화에 사용한다. 나머지 항목은 Python 실행, 빌드, 개발 검증, CI(Continuous Integration)와 Release에 사용한다.
+현재 직접 사용하는 외부 의존성은 22개다. NumPy, `grpcio`와 `protobuf`는 애플리케이션
+runtime의 수치 연산과 담당자 gRPC(Google Remote Procedure Call) 계약에 사용한다. 나머지
+항목은 Python 실행, wire binding 생성, 빌드, 개발 검증, CI(Continuous Integration)와
+Release에 사용한다.
 
 | 의존성 | 버전 | 사용 목적 | 출처 | 라이선스 |
 | --- | --- | --- | --- | --- |
@@ -10,12 +13,15 @@
 | `uv` | `0.12.12` | 환경 구성, 의존성 잠금과 명령 실행 | [Astral](https://github.com/astral-sh/uv) | MIT OR Apache-2.0 |
 | `uv_build` | `0.12.12` | Python source distribution과 wheel 빌드 | [Astral](https://docs.astral.sh/uv/concepts/build-backend/) | MIT OR Apache-2.0 |
 | NumPy | `>=2.5.3,<2.6` | 높이장 배열, 부피와 표면 변화 수치 연산 | [NumPy](https://numpy.org/) | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
-| `msgpack` | `>=1.2.2,<1.3` | 스캔 및 응답 본문의 MessagePack 인코딩과 디코딩 | [msgpack-python](https://github.com/msgpack/msgpack-python) | Apache-2.0 |
+| `grpcio` | `>=1.83.1,<1.84` | sensor별 gRPC over UDS server와 구독 stream | [gRPC](https://github.com/grpc/grpc) | Apache-2.0 |
+| `protobuf` | `>=7.36.1,<8` | 담당자 ScanFrame wire message | [Protocol Buffers](https://github.com/protocolbuffers/protobuf) | BSD-3-Clause |
 | jsonschema | `>=4.26.0,<5` | JSON Schema 계약과 합성 fixture 검증 | [Python JSON Schema](https://python-jsonschema.readthedocs.io/) | MIT |
+| `grpcio-tools` | `>=1.83.1,<1.84` | 고정 Proto의 Python binding 재생성 | [gRPC](https://github.com/grpc/grpc) | Apache-2.0 |
 | Ruff | `>=0.16.6,<0.17` | Python 형식 및 정적 검사 | [Astral](https://docs.astral.sh/ruff/) | MIT |
 | mypy | `>=2.3.1,<3` | Python 정적 type 검사 | [mypy](https://www.mypy-lang.org/) | MIT |
 | pytest | `>=9.1.1,<10` | Python 자동 테스트 | [pytest](https://docs.pytest.org/) | MIT |
 | `types-jsonschema` | `>=4.26.0.20260518,<5` | jsonschema 사용 코드의 정적 type 검사 | [typeshed](https://github.com/python/typeshed) | Apache-2.0 |
+| `types-grpcio` | `>=1.83.0.20260730,<1.84` | gRPC 사용 코드의 정적 type 검사 | [typeshed](https://github.com/python/typeshed) | Apache-2.0 |
 | `actions/checkout` | `v6.1.0` | GitHub Actions 실행 환경의 Repository checkout | [GitHub](https://github.com/actions/checkout) | MIT |
 | `actions/setup-python` | `v6.3.0` | GitHub Actions의 Python 3.14.4 설치 | [GitHub](https://github.com/actions/setup-python) | MIT |
 | `astral-sh/setup-uv` | `v10.0.1` | GitHub Actions의 uv 설치 및 cache 구성 | [Astral](https://github.com/astral-sh/setup-uv) | MIT |

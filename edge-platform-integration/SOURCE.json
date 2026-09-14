@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/ajin-scrap-monitoring/ajin-edge-platform",
+  "commit": "666ca6067a3bb86833b74140cb659049025d0dae",
+  "proto_path": "contracts/lidar/v1/lidar.proto",
+  "driver_source_path": "services/lidar-driver/src/main.cpp",
+  "processing_loader_path": "packages/edge-common/src/ajin_edge/config.py",
+  "processing_engine_path": "services/lidar-processing/src/ajin_lidar_processing/engine.py",
+  "status_reader_path": "packages/edge-common/src/ajin_edge/status.py",
+  "orchestrator_runtime_path": "services/edge-orchestrator/src/ajin_edge_orchestrator/runtime.py"
+}

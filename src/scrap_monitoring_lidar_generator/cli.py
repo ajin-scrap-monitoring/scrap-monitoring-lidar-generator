@@ -14,16 +14,20 @@ from scrap_monitoring_lidar_generator._cli_settings import (
     COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE,
     COLLECTION_THRESHOLD_HALF_RANGE,
     CONFIG_ENVIRONMENT_VARIABLE,
+    CONFIG_REVISION_ENVIRONMENT_VARIABLE,
+    DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_ENABLED_ENVIRONMENT_VARIABLE,
     DIAGNOSTICS_OUTPUT_PATH_ENVIRONMENT_VARIABLE,
+    EDGE_ID_ENVIRONMENT_VARIABLE,
+    GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE,
     MAX_COLLECTION_THRESHOLD_CENTER_RATIO,
     MEAN_FILL_DURATION_ENVIRONMENT_VARIABLE,
     MIN_COLLECTION_THRESHOLD_CENTER_RATIO,
     OBSERVATION_HOST_ENVIRONMENT_VARIABLE,
     OBSERVATION_INTERVAL_ENVIRONMENT_VARIABLE,
     OBSERVATION_PORT_ENVIRONMENT_VARIABLE,
-    SCAN_HOST_ENVIRONMENT_VARIABLE,
-    SCAN_PORT_ENVIRONMENT_VARIABLE,
+    SITE_ID_ENVIRONMENT_VARIABLE,
+    STATUS_DIR_ENVIRONMENT_VARIABLE,
     RuntimeSettingOverrides,
     RuntimeSettings,
     RuntimeSettingsError,
@@ -39,7 +43,6 @@ from scrap_monitoring_lidar_generator.observation import (
     MAX_OBSERVATION_INTERVAL_S,
 )
 from scrap_monitoring_lidar_generator.runtime import run_generator_application
-from scrap_monitoring_lidar_generator.transport import SenderHalt
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=_path,
-        help=f"path to the generator v1 JSON configuration; env: {CONFIG_ENVIRONMENT_VARIABLE}",
+        help=f"path to the generator v2 JSON configuration; env: {CONFIG_ENVIRONMENT_VARIABLE}",
     )
     parser.add_argument(
         "--mean-fill-duration-s",
@@ -70,14 +73,34 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--scan-host",
-        type=_host,
-        help=f"override the scan receiver TCP host; env: {SCAN_HOST_ENVIRONMENT_VARIABLE}",
+        "--grpc-socket-dir",
+        type=_absolute_path,
+        help=f"directory for sensor UDS files; env: {GRPC_SOCKET_DIR_ENVIRONMENT_VARIABLE}",
     )
     parser.add_argument(
-        "--scan-port",
-        type=_port,
-        help=f"override the scan receiver TCP port; env: {SCAN_PORT_ENVIRONMENT_VARIABLE}",
+        "--status-dir",
+        type=_absolute_path,
+        help=f"directory for driver-compatible status files; env: {STATUS_DIR_ENVIRONMENT_VARIABLE}",
+    )
+    parser.add_argument(
+        "--site-id",
+        type=_identity,
+        help=f"deployment site identifier; env: {SITE_ID_ENVIRONMENT_VARIABLE}",
+    )
+    parser.add_argument(
+        "--edge-id",
+        type=_driver_identity,
+        help=f"edge identifier; env: {EDGE_ID_ENVIRONMENT_VARIABLE}",
+    )
+    parser.add_argument(
+        "--config-revision",
+        type=_driver_identity,
+        help=f"configuration revision; env: {CONFIG_REVISION_ENVIRONMENT_VARIABLE}",
+    )
+    parser.add_argument(
+        "--deployment-revision",
+        type=_identity,
+        help=f"deployment revision; env: {DEPLOYMENT_REVISION_ENVIRONMENT_VARIABLE}",
     )
     parser.add_argument(
         "--observation-host",
@@ -131,17 +154,6 @@ async def _run_config(settings: RuntimeSettings) -> int:
     handled_signals = (signal.SIGINT, signal.SIGTERM)
     for handled_signal in handled_signals:
         loop.add_signal_handler(handled_signal, stop_event.set)
-    reported_halt: SenderHalt | None = None
-
-    def report_sender_halt(halt: SenderHalt) -> None:
-        nonlocal reported_halt
-        reported_halt = halt
-        sensor = "" if halt.sensor_id is None else f" sensor_id={halt.sensor_id}"
-        print(
-            f"transport halted{sensor}: {halt.code.value}: {halt.detail}",
-            file=sys.stderr,
-        )
-
     try:
         summary = await run_generator_application(
             inputs,
@@ -149,7 +161,12 @@ async def _run_config(settings: RuntimeSettings) -> int:
             observation_host=settings.observation_host,
             observation_port=settings.observation_port,
             observation_interval_s=settings.observation_interval_s,
-            on_sender_halt=report_sender_halt,
+            grpc_socket_dir=settings.grpc_socket_dir,
+            status_dir=settings.status_dir,
+            site_id=settings.site_id,
+            edge_id=settings.edge_id,
+            config_revision=settings.config_revision,
+            deployment_revision=settings.deployment_revision,
         )
     finally:
         for handled_signal in handled_signals:
@@ -157,20 +174,12 @@ async def _run_config(settings: RuntimeSettings) -> int:
 
     print(
         f"run_id={summary.run_id} generated={summary.generated_scans} "
-        f"acknowledged={summary.sender_stats.acknowledged_frames} "
-        f"pending={summary.pending_frames}"
+        f"published={summary.scan_server_stats.published_frames}"
     )
     print(
-        f"transport enqueued={summary.sender_stats.enqueued_frames} "
-        f"sent={summary.sender_stats.sent_frames} "
-        f"acknowledged={summary.sender_stats.acknowledged_frames} "
-        f"rejected={summary.sender_stats.rejected_frames} "
-        f"expired={summary.sender_stats.expired_frames} "
-        f"capacity_discarded={summary.sender_stats.capacity_discarded_frames} "
-        f"oversized={summary.sender_stats.oversized_frames} "
-        f"connection_failures={summary.sender_stats.connection_failures} "
-        f"pending_frames={summary.pending_frames} "
-        f"pending_bytes={summary.pending_bytes}"
+        f"scan_stream published={summary.scan_server_stats.published_frames} "
+        f"frame_loss={summary.scan_server_stats.frame_loss} "
+        f"subscribers={summary.scan_server_stats.subscribers}"
     )
     print(
         "observation=active "
@@ -178,10 +187,6 @@ async def _run_config(settings: RuntimeSettings) -> int:
         f"dropped={summary.observation_stats.dropped_records} "
         f"connection_failures={summary.observation_stats.connection_failures}"
     )
-    if summary.sender_halt is not None:
-        if summary.sender_halt != reported_halt:
-            report_sender_halt(summary.sender_halt)
-        return 1
     return 0
 
 
@@ -207,13 +212,6 @@ def _apply_runtime_overrides(
         )
     if scenario is not generator.scenario:
         generator = replace(generator, scenario=scenario)
-    if settings.scan_host is not None or settings.scan_port is not None:
-        transport = replace(
-            generator.transport,
-            host=(generator.transport.host if settings.scan_host is None else settings.scan_host),
-            port=(generator.transport.port if settings.scan_port is None else settings.scan_port),
-        )
-        generator = replace(generator, transport=transport)
     if settings.diagnostics_enabled is not None or settings.diagnostics_output_path is not None:
         output_path = settings.diagnostics_output_path
         if output_path is not None and not output_path.is_absolute():
@@ -246,8 +244,12 @@ def main(
             environment=os.environ if environment is None else environment,
             overrides=RuntimeSettingOverrides(
                 config_path=arguments.config,
-                scan_host=arguments.scan_host,
-                scan_port=arguments.scan_port,
+                grpc_socket_dir=arguments.grpc_socket_dir,
+                status_dir=arguments.status_dir,
+                site_id=arguments.site_id,
+                edge_id=arguments.edge_id,
+                config_revision=arguments.config_revision,
+                deployment_revision=arguments.deployment_revision,
                 observation_host=arguments.observation_host,
                 observation_port=arguments.observation_port,
                 observation_interval_s=arguments.observation_interval_s,
@@ -292,6 +294,31 @@ def _path(value: str) -> Path:
     if not value:
         raise argparse.ArgumentTypeError("must be a non-empty path")
     return Path(value)
+
+
+def _absolute_path(value: str) -> Path:
+    result = _path(value)
+    if not result.is_absolute():
+        raise argparse.ArgumentTypeError("must be an absolute path")
+    return result
+
+
+def _identity(value: str) -> str:
+    if not value or len(value) > 128 or not value[0].isalnum():
+        raise argparse.ArgumentTypeError("must be a safe deployment identifier")
+    if any(
+        not (character.isascii() and (character.isalnum() or character in "_.-"))
+        for character in value
+    ):
+        raise argparse.ArgumentTypeError("must be a safe deployment identifier")
+    return value
+
+
+def _driver_identity(value: str) -> str:
+    result = _identity(value)
+    if len(result) > 64:
+        raise argparse.ArgumentTypeError("must be a driver-compatible identifier")
+    return result
 
 
 def _host(value: str) -> str:

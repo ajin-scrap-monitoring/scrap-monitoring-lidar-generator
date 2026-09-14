@@ -3,7 +3,8 @@
 from scrap_monitoring_lidar_generator.runtime.application import (
     DeadlineWaiter,
     GeneratorRunSummary,
-    ScanMessageSink,
+    ScanFrameSink,
+    ScanStreamServer,
     run_generator_application,
     run_scan_generation,
 )
@@ -33,7 +34,6 @@ from scrap_monitoring_lidar_generator.runtime.reference import (
     build_reference_generation_runtime,
 )
 from scrap_monitoring_lidar_generator.runtime.scenario import build_scenario_simulator
-from scrap_monitoring_lidar_generator.runtime.transport import build_scan_sender
 
 __all__ = [
     "DeadlineWaiter",
@@ -45,14 +45,14 @@ __all__ = [
     "PerformanceRecorder",
     "PerformanceStage",
     "ReferenceGenerationRuntime",
-    "ScanMessageSink",
+    "ScanFrameSink",
+    "ScanStreamServer",
     "ScenarioTimeObserver",
     "build_diagnostics_writer",
     "build_measurement_generation_runtime",
     "build_measurement_generators",
     "build_reference_generation_runtime",
     "build_rotation_schedulers",
-    "build_scan_sender",
     "build_scenario_simulator",
     "build_spatial_distortion_timeline",
     "generator_input_fingerprint",

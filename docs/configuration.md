@@ -1,133 +1,182 @@
 # 설정 출처와 기본 프로파일
 
-## 공개 설정의 정본
+## 설정 책임
 
-공개 합성 실행의 정본은 다음 3개 설정 파일의 조합이다.
+설정 책임은 3개로 분리한다.
 
-| 파일 | 책임 | 분류 |
+| 설정 | 정본 | 소비자 |
 | --- | --- | --- |
-| `examples/environment.v1.json` | 적재 공간 형상, 바닥과 상단 높이, 센서 위치와 방향 | 공개 합성 환경 |
-| `examples/generator.v1.json` | 시나리오, 측정, 전송과 진단 실행값 | 공개 합성 실행 프로파일 |
-| `examples/quality-profile.v1.json` | 센서별 유효 및 무효 측정 품질 분포 | 공개 합성 품질 fixture |
+| 합성 환경과 생성 모델 | `examples/`의 versioned JSON 3개 | 생성기와 processing config exporter |
+| 생성기 배포 실행 | CLI(Command-Line Interface) 인자와 환경변수 | 생성기 |
+| 높이 계산 처리 | exporter가 만든 담당자 형식 JSON | `lidar-processing` |
 
-이 3개 파일의 값이 공개 실행의 단일 입력 정본이다. 공개 실행을 설명하는 문서와 예제 검증은 이 정본을 기준으로 하며, 단위 테스트는 필요한 경우 별도 축소 설정을 사용한다. 생성 실행 schema는 모든 조정값을 요구하며 암묵적인 사용자 설정 기본값을 제공하지 않는다.
+`lidar-processing`은 생성기의 환경 JSON을 직접 읽지 않는다. 생성기는 환경 정의를 scan
+frame에 포함하지 않는다. exporter가 공개 합성 환경의 센서 위치와 방향을 담당자 처리 설정의
+강체 변환과 ROI(Region of Interest)로 변환한다.
 
-공개 환경의 공간 및 센서 규격은 프로젝트용 합성 규격이다. 공개 품질 분포도 실제 센서 관측값이 아닌 결정론적 테스트용 분포다. 실제 센서 측정값, 품질 관측 원본, 운영 로그, 사설 주소와 자격 증명은 이 프로파일의 출처나 입력이 아니다.
+## 공개 합성 입력
 
-공개 환경과 품질 설정은 `lidar_1`, `lidar_2`의 센서 2대를 정확히 포함한다. 생성 실행의 조립 loader는 환경 센서 수가 2가 아니면 입력을 거부한다. 공간 치수, 센서 배치와 투입구 좌표는 위 정본 파일에서만 관리한다.
+공개 합성 실행은 다음 3개 파일의 조합이다.
 
-## 실행 설정 계층
-
-실행값은 4개 계층을 다음 순서로 적용한다.
-
-| 우선순위 | 계층 | 범위 |
+| 파일 | 책임 | schema |
 | --- | --- | --- |
-| 1 | CLI(Command-Line Interface) 인자 | 실행 시 명시한 배포값 |
-| 2 | 환경변수 | container 또는 process에 주입한 배포값 |
-| 3 | version 1 JSON | 생성 모델과 환경변수가 없는 배포값 |
+| `examples/environment.v1.json` | 적재 공간, 바닥, 상단과 센서 설치 | `contracts/environment/v1/` |
+| `examples/generator.v2.json` | 시나리오, 측정, 표면, 관찰 복구, 진단과 seed | `contracts/v2/` |
+| `examples/quality-profile.v1.json` | 센서별 합성 quality 분포 | `contracts/quality/v1/` |
+
+공개 환경은 `lidar_1`, `lidar_2`의 LiDAR 2대를 정확히 포함한다. loader는 두 센서가 아니거나
+세 파일의 sensor ID가 다르면 입력을 거부한다. 공간 치수, 센서 위치, 방향과 투입구 좌표는
+이 파일에서만 관리한다.
+
+공간 및 센서 규격은 프로젝트용 합성값이고 공개 가능하다. quality 분포, 시나리오와 오차도
+결정론적 개발용 합성값이다. 실제 측정값, 품질 관측 원본, 운영 로그, 사설 주소와 자격 증명은
+공개 설정에 포함하지 않는다.
+
+## 적용 우선순위
+
+생성기 실행값은 다음 순서로 선택한다.
+
+| 우선순위 | 계층 | 책임 |
+| --- | --- | --- |
+| 1 | CLI 인자 | 현재 process의 명시적 override |
+| 2 | 환경변수 | container 배포값 |
+| 3 | versioned JSON | 합성 모델값 |
 | 4 | 코드 기본값 | 관찰 주기 1초 |
 
-앞선 계층의 값이 있으면 뒤의 계층 값은 사용하지 않는다. 환경변수 계층은 다음 10개 값만
-처리한다.
+센서 ID, 설치 형상, 측정과 합성 오차는 환경변수로 받지 않는다. 배포 식별자와 host 경로는
+JSON에 넣지 않는다.
 
-| 환경변수 | CLI 인자 | JSON 또는 기본 fallback |
+## 환경변수
+
+환경변수는 14개다.
+
+| 환경변수 | CLI 인자 | 필수 여부 또는 fallback |
 | --- | --- | --- |
-| `SCRAP_LIDAR_GENERATOR_CONFIG` | `--config` | 없음 |
+| `SCRAP_LIDAR_GENERATOR_CONFIG` | `--config` | 둘 중 하나 필수 |
+| `SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR` | `--grpc-socket-dir` | 둘 중 하나 필수, 절대 경로 |
+| `SCRAP_LIDAR_GENERATOR_STATUS_DIR` | `--status-dir` | 둘 중 하나 필수, 절대 경로 |
+| `SITE_ID` | `--site-id` | 둘 중 하나 필수 |
+| `EDGE_ID` | `--edge-id` | 둘 중 하나 필수 |
+| `CONFIG_REVISION` | `--config-revision` | 둘 중 하나 필수 |
+| `DEPLOYMENT_REVISION` | `--deployment-revision` | 둘 중 하나 필수 |
 | `SCRAP_LIDAR_GENERATOR_MEAN_FILL_DURATION_S` | `--mean-fill-duration-s` | `scenario.mean_fill_duration_s` |
 | `SCRAP_LIDAR_GENERATOR_COLLECTION_THRESHOLD_CENTER_RATIO` | `--collection-threshold-center-ratio` | `scenario.collection_threshold_range` |
-| `SCRAP_LIDAR_GENERATOR_SCAN_HOST` | `--scan-host` | `transport.host` |
-| `SCRAP_LIDAR_GENERATOR_SCAN_PORT` | `--scan-port` | `transport.port` |
-| `SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST` | `--observation-host` | 없음 |
-| `SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT` | `--observation-port` | 없음 |
+| `SCRAP_LIDAR_GENERATOR_OBSERVATION_HOST` | `--observation-host` | 둘 중 하나 필수 |
+| `SCRAP_LIDAR_GENERATOR_OBSERVATION_PORT` | `--observation-port` | 둘 중 하나 필수 |
 | `SCRAP_LIDAR_GENERATOR_OBSERVATION_INTERVAL_S` | `--observation-interval-s` | 1초 |
 | `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED` | `--diagnostics-enabled` | `diagnostics.enabled` |
 | `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH` | `--diagnostics-output-path` | `diagnostics.output_path` |
 
-환경변수는 평균 적재 주기, 수거 기준 임계치, 설정 경로, endpoint와 진단 출력처럼 배포
-환경에 종속되는 값만 덮어쓴다. 나머지 시나리오, 센서, 측정, 품질, seed와 전송 제한 및
-복구 정책은 구조 검증과 결정론적 재현을 위해 JSON에서만 관리한다. 평균 적재 주기는
-0초보다 큰 유한한 값이며 공개 기본값은 86,400초다. 수거 기준 임계치는 0.05 초과, 0.95
-이하의 적재율이며 회차별 실제 임계치 범위는 기준값의 `+-0.05`다. 공개 기본값 0.90은
-JSON의 0.85부터 0.95 범위와 동일하다. `SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_ENABLED`는
-소문자 `true`와 `false`만 허용한다. 상대 진단 출력 경로는 생성 설정 파일의 directory를
-기준으로 해석한다.
+`SITE_ID`, `EDGE_ID`, `CONFIG_REVISION`은 담당자 처리 설정과 같아야 한다.
+`DEPLOYMENT_REVISION`은 상태 snapshot에 기록한다. 식별자는 영문자 또는 숫자로 시작하고
+영문자, 숫자, `_`, `.`, `-`만 사용한다. sensor ID, `EDGE_ID`와 `CONFIG_REVISION`은 담당자
+driver 기준 최대 64자다. `SITE_ID`와 `DEPLOYMENT_REVISION`은 최대 128자다.
 
-## 출처 분류
+`SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR`은 두 UDS 파일을 만드는 container 내부 절대 경로다.
+파일 이름은 JSON sensor ID에서 계산하며 별도 환경변수로 받지 않는다. 상태 directory도
+container 내부 절대 경로다.
 
-### 센서 하드웨어 기준
+평균 적재 주기는 0보다 큰 유한한 simulation second다. 공개 기본값은 86,400초다. 수거 기준
+중심값은 0.05 초과 0.95 이하이고, 회차별 범위는 중심값의 `+-0.05`다. 공개 중심값 0.90은
+0.85부터 0.95 범위를 만든다.
 
-`examples/generator.v1.json`의 다음 측정값은 RPLIDAR S2E의 기본 운용 모델을 반영한다.
+관찰 host와 port는 별도 시각화 프로그램의 TCP 수신 endpoint다. 공개 port는 17000이고 동적
+snapshot 기본 주기는 1초다. 주기는 0초 초과 86,400초 이하만 허용한다. 진단 활성값은 소문자
+`true` 또는 `false`다. 상대 진단 경로는 generator JSON directory를 기준으로 해석한다.
 
-| 설정 | 프로파일 값 | 출처와 적용 |
+현재 계약에는 자격 증명이 없다. `.env`에 자격 증명을 넣지 않고 Docker secret도 구성하지
+않는다. 장비별 `.env`는 운영 경로와 주소를 포함하므로 Git에 추가하지 않는다.
+
+진단 기록은 sensor별 앞쪽 일부 scan의 기준 광선 교차, 당시 적재 표면과 시나리오 상태를
+owner-only JSON Lines 파일로 보존하는 개발 검증 기능이다. `diagnostics.sample_scan_limit_per_sensor`
+개수까지만 기록하므로 무제한 로그가 아니다. 담당자 gRPC frame, 운영 처리 결과와 시각화
+관찰 기록을 대신하지 않는다. 실제 운영 관측으로 사용하면 환경 형상을 포함할 수 있으므로
+외부 전송이나 Git 추적 대상이 아니다.
+
+## 담당자 처리 설정
+
+다음 명령은 공개 합성 환경에서 담당자 형식 처리 설정을 만든다.
+
+```bash
+uv run --locked scrap-monitoring-lidar-generator-export-processing-config \
+  --generator-config examples/generator.v2.json \
+  --socket-dir /sockets \
+  --site-id synthetic-site \
+  --edge-id synthetic-edge \
+  --config-revision synthetic-r1 \
+  --output processing.synthetic.json
+```
+
+출력의 sensor별 endpoint는 `unix:/sockets/<sensor_id>.sock`이다. exporter는 환경 좌표계에서
+담당자 scan 좌표계로의 강체 변환, 50 mm 단면, 내부 경계와 측정 범위를 계산한다. 합성
+calibration은 `demo: true`이고 운영 현장 calibration으로 사용하지 않는다.
+
+담당자 전체 edge 설정을 보존해야 하면 `--base-config`에 해당 JSON을 전달한다. exporter는
+camera와 다른 구성 요소 설정을 유지한다. `service_versions`가 있으면 `lidar-driver-a`와
+`lidar-driver-b`를 현재 생성기 package version으로 갱신하고 나머지 version은 유지한다. 다른
+생성기 image version을 대상으로 할 때는 `--driver-service-version`을 명시한다. 다음 세
+식별자가 인자와 다르면 실패한다.
+
+```text
+site_id
+edge_id
+config_revision
+```
+
+생성 결과와 소비자 수락 기준은 [`../edge-platform-integration/`](../edge-platform-integration/)이
+정본이다.
+
+## 센서 하드웨어 기준
+
+공개 측정 설정은 RPLIDAR S2E의 기본 운용 기준을 반영한다.
+
+| 설정 | 값 | 적용 |
 | --- | --- | --- |
-| `measurement.sample_rate_hz` | 32,000 | [SLAMTEC S2 specification](https://www.slamtec.com/en/s2/spec)의 S2E sample rate |
-| `measurement.rotation_rate_hz` | 10 | [SLAMTEC S2 specification](https://www.slamtec.com/en/s2/spec)의 S2E scan rate와 600 RPM 운용 기준 |
-| `measurement.min_distance_m` | 0.05 | S2E 90% 반사율 측정 범위의 하한 및 version 1 입력 계약 |
-| `measurement.max_distance_m` | 30 | S2E 90% 반사율 측정 범위의 상한 및 version 1 입력 계약 |
+| `measurement.sample_rate_hz` | 32,000 | S2E sample rate |
+| `measurement.rotation_rate_hz` | 10 | S2E scan rate와 600 RPM 기준 |
+| `measurement.min_distance_m` | 0.05 | 90 percent 반사율 측정 하한 |
+| `measurement.max_distance_m` | 30 | 90 percent 반사율 측정 상한 |
 
-센서 한 대에서 32,000회를 초당 10회전으로 나눈 명목 측정점 수는 회전당 3,200개다. 센서 2대의 합산 생성량은 초당 20 scan과 64,000 point다. 이 계산값은 생성 프로파일의 정수 비율을 설명하는 값이며 센서 수신 배열 길이나 전송 계약의 고정 제약이 아니다. 회전 scheduler는 회전 경계와 각 측정점의 시각으로 스캔을 나누고, 실제 배열 길이는 입력 배열의 길이로 처리한다.
+명목 측정량은 센서당 회전당 3,200 point, 초당 10 scan과 32,000 point다. 두 센서 합계는
+초당 20 scan과 64,000 point다. scan 배열 길이는 wire 고정값이 아니며 scheduler가 회전
+경계로 나눈 실제 측정점 수를 사용한다. SDK 이후 정수 변환은
+[`sdk-compatibility.md`](sdk-compatibility.md)가 정본이다.
 
-생성기는 제조사 통신 packet이나 SDK 수신 형식을 재현하지 않는다. 생성기와 실제 수집 경로는 SDK 처리 이후의 각도, 거리, 품질과 시각을 version 1 공통 입력 계약으로 제공한다. SDK 자료형 변환과 생성 결과의 표현 단위는 [`sdk-compatibility.md`](sdk-compatibility.md)가 정본이다. `scan_id`는 하드웨어 packet 번호가 아니라 실행 중 센서별로 1부터 증가하는 스캔 sequence다.
+## 합성 시나리오와 측정 오차
 
-### 합성 시나리오 기본값
+다음 값은 센서 사양이 아니라 프로젝트 합성 정책이다.
 
-시나리오 값은 적재와 수거의 시간 흐름 및 표면 변화를 재현하기 위한 프로젝트 합성값이다. 센서의 물리 기본값으로 해석하지 않는다. 기준 평균 적재 시간은 24시간이며 코드의 시나리오 시간 기준과 일치한다.
-
-| 설정 묶음 | 프로파일 값 | 적용 의미 |
+| 설정 묶음 | 공개 값 | 의미 |
 | --- | --- | --- |
-| `scenario.mean_fill_duration_s` | 86,400 | 24시간 기준 적재 구간 |
-| 적재 시간 및 속도 배수 | 0.8~1.2, 0.5~1.5 | 회차와 회차 내부의 합성 변동 |
-| 적재 속도 변화 시간 | 300~900초 | 24시간 기준 5~15분 변화 |
-| 수거 임계치 | 0.85~0.95 | 적재 부피 비율 기반 수거 시작 |
-| 수거 시간 배수 | 0.03333333333333333~0.05 | 24시간 기준 48~72분 수거 |
-| 수거 속도 및 변화 시간 | 0.3~1.7, 60~180초 | 수거 속도의 합성 변동 |
-| 투입구 전환 | 활성 비율 0.5, 높이 차이 0.25m, 비교 반경 0.5m | 합성 표면 높이 비교 |
-| 표면 확산 및 요철 | `examples/generator.v1.json`의 `surface` 객체 | 격자 해상도와 합성 표면 형상 |
+| 평균 적재 시간 | 86,400초 | 24시간 기준 적재 구간 |
+| 적재 시간 및 속도 배수 | 0.8-1.2, 0.5-1.5 | 회차와 회차 내부 변동 |
+| 적재 속도 변화 | 300-900초 | 5-15분 구간 변동 |
+| 수거 임계치 | 0.85-0.95 | 부피 비율 기반 수거 시작 |
+| 수거 시간 배수 | 0.03333333333333333-0.05 | 48-72분 수거 |
+| 투입구 전환 | 활성 비율 0.5, 높이 차이 0.25m, 반경 0.5m | 국소 표면 비교 |
+| 표면 확산 | 안식각 35도, 갱신당 최대 32회 | 부피 보존 경사 이완 |
+| 거리 noise | 표준편차 0.01m, 제한 0.03m | 평상시 합성 거리 오차 |
+| 낙하물 | 초당 0.5개 후보 | 국소 거리 감소 |
+| 빈틈 | 투영 면적 비율 0.03 | 국소 거리 증가 |
+| 수거 가림 | 20-40초 간격 | 이동 가림 |
+| 반사 경로 오류 | 확률 0.001 | 거리 감소 후보 |
+| dropout | 비활성 | 선택적 장애 모델 |
 
-`surface.roughness_radius_range_m`은 코드의 반경 단위다. 공개 프로파일은 국소 요철의 수평 크기 0.2~0.6m를 반경 0.1~0.3m로 표현한다. 투입구 좌표와 환경 형상은 별도의 공개 합성 환경 정본을 따른다.
+상세 좌표와 범위는 공개 JSON 정본에서만 변경한다.
 
-### 합성 측정 오차와 왜곡
+## 코드 내부 상한
 
-거리 noise와 원인별 distortion은 S2E의 출력 기본값이 아니다. 측정 오차와 적재 상황별 관측 이상을 검증하기 위한 합성 모델이다.
+다음 값은 사용자 설정의 암묵적 대체값이 아니라 API와 안전 경계다.
 
-| 설정 묶음 | 프로파일 값 | 적용 의미 |
+| 상한 | 값 | 책임 |
 | --- | --- | --- |
-| `distance_noise` | 표준편차 0.01m, 제한 0.03m | 평상시 거리 오차의 합성 모델 |
-| `falling_material` | 초당 0.5개 후보, 반경 0.025~0.1m, 0.05~0.2초 | 낙하물 가림의 합성 모델 |
-| `voids` | 면적 비율 0.03, 반경 0.015~0.06m, 60~300초 | 스크랩 사이 빈틈의 합성 모델 |
-| `collection_occlusion` | 간격 20~40초, 반경 0.15~0.5m, 2~8초 | 수거 중 가림의 합성 모델 |
-| `reflection_error` | 확률 0.001, 거리 감소 0.5~2m | 반사 경로 오류의 합성 모델 |
-| `dropout` | 비활성, 범위는 schema 입력 유지용 | 기본 실행에서 사용하지 않는 장애 모델 |
+| gRPC send message | 4 MiB | frame 크기 안전 상한 |
+| sensor별 구독자 | 8 | 담당자 driver 호환 상한 |
+| sensor별 대기 frame | 2 | latest-two 유실 제한 정책 |
+| gRPC UDS endpoint | UTF-8 100 byte 이하 | Unix socket 경로 안전성 |
+| 관찰 대기 snapshot | 1 | latest-only 비차단 정책 |
+| 상태 갱신 | 2초 | 담당자 상태 snapshot 주기 |
 
-실제 품질 관측 분포를 공개 품질 fixture에 복제하지 않는다. 합성 품질 fixture의 값은 설정 재현성과 계약 검증을 위한 선택값이다.
-
-### 전송과 진단 정책
-
-`transport`의 endpoint, frame 크기, buffer, timeout과 재접속 값은 센서 사양이 아닌 개발용 TCP 전송 정책이다. 높이 계산 프로세스와 공유하는 전송 계약은 [`height-calculation-contract-proposal/`](../height-calculation-contract-proposal/)에서 정의한다. `diagnostics`와 `seed`는 검증 출력의 범위와 결정론을 제어하는 개발 정책이다. 실제 scan 및 관찰 수신 endpoint는 CLI 또는 환경변수로 주입하고, 관찰 주기의 코드 기본값은 1초다.
-
-운영 실행은 scan endpoint override가 없으면 설정 파일에 명시한 전송 endpoint를 사용한다. 공개 예시의 `receiver` 주소는 합성 실행을 위한 container network 이름이며 실제 운영 주소를 나타내지 않는다.
-
-## 코드 내부 기본값 감사
-
-다음 코드 상수는 JSON schema가 요구하는 공개 입력 필드를 대신하는 암묵적 설정이 아니다. 시나리오 시간 기준과 표면 이완 값은 모든 실행에 적용하는 프로젝트 합성 모델 정책이고, 나머지는 직접 API 또는 개발 경계 기본값이다.
-
-| 코드 상수 | 값 | 성격 |
-| --- | --- | --- |
-| `scenario.time_scale.REFERENCE_MEAN_FILL_DURATION_S` | 86,400초 | 24시간 시나리오 기준 |
-| `scenario.height_field.DEFAULT_ANGLE_OF_REPOSE_DEG` | 35도 | 합성 적재물의 경사 안정 기준 |
-| `scenario.height_field.DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS` | 32회 | 표면 갱신당 경사 이완 계산 상한 |
-| `measurement.reference.DEFAULT_MIN_DISTANCE_M` | 0.05m | 직접 생성 API의 거리 기본값 |
-| `measurement.reference.DEFAULT_MAX_DISTANCE_M` | 30m | 직접 생성 API의 거리 기본값 |
-| `transport.framing.DEFAULT_MAX_MESSAGE_BODY_BYTES` | 1,048,576 byte | 직접 framing API의 개발용 frame 상한 |
-| `observation.publisher.DEFAULT_OBSERVATION_INTERVAL_S` | 1초 | 관찰 stream 전송 주기 |
-| `observation.publisher.DEFAULT_OBSERVATION_HOST` | `127.0.0.1` | 직접 application API의 개발용 TCP host |
-| `observation.publisher.DEFAULT_OBSERVATION_PORT` | 9,100 | 직접 application API의 개발용 TCP port |
-| `geometry.intersections.DEFAULT_MIN_DISTANCE_M` | 1e-9m | 광선 교차 수치 epsilon, 센서 측정 하한 아님 |
-
-전송 계약의 유효 거리 상수 0.05m와 30m는 메시지 검증 범위다. frame prefix가 표현할 수 있는 최대 길이와 각종 입력 검증 상한은 운영 프로파일의 기본값이 아니라 형식 안전성 제한이다.
-
-직접 생성 API의 기본 인자는 테스트와 저수준 기하 계산을 위한 것이다. 실행 경로는 loader가 반환한 명시적 측정 및 전송 설정을 각 구성 요소에 전달하며, 이때 공개 프로파일과 계약의 하드웨어 및 정책 기준을 사용한다.
-
-## 변경 기준
-
-하드웨어 사양 또는 공통 계약이 바뀌면 공개 실행 프로파일, 이 문서의 출처 분류, 관련 테스트와 성능 결과를 같은 변경에서 갱신한다. 합성 시나리오 값을 조정하면 하드웨어 기준과 분리된 합성값임을 유지하고 결정론 및 성능 검증을 다시 실행한다. `docs/project-spec.md`와 기존 `docs/internal/**`는 이 절차의 변경 대상이 아니다.
+실행 경로는 loader가 반환한 명시적 JSON과 배포 입력을 사용한다. 하드웨어 기준 또는 담당자
+계약이 바뀌면 공개 입력, exporter, 고정 Proto metadata와 자동 검증을 같은 변경에서 갱신한다.
+`docs/project-spec.md`와 기존 `docs/internal/**`은 이 절차의 변경 대상이 아니다.
