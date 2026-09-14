@@ -15,7 +15,9 @@ const DRIVER_IDENTITY_MAX_BYTES: usize = 64;
 const ENDPOINT_MAX_BYTES: usize = 100;
 const IDENTITY_MAX_BYTES: usize = 128;
 const PLANE_TOLERANCE: f64 = 1e-6;
-const SECTION_HEIGHT_SAMPLES: usize = 41;
+const SEGMENT_PARAMETER_TOLERANCE: f64 = 1e-12;
+const I64_MIN_F64: f64 = -9_223_372_036_854_775_808.0;
+const I64_EXCLUSIVE_MAX_F64: f64 = 9_223_372_036_854_775_808.0;
 
 type Matrix3 = [[f64; 3]; 3];
 type Vector3 = [f64; 3];
@@ -52,6 +54,11 @@ pub fn build_synthetic_processing_config(
     )?;
 
     let environment = &inputs.environment;
+    if environment.environment_id.chars().count() > IDENTITY_MAX_BYTES {
+        return invalid(format!(
+            "calibration version must contain at most {IDENTITY_MAX_BYTES} characters"
+        ));
+    }
     if environment.sensors.len() != 2 {
         return invalid("processing configuration requires exactly two sensors");
     }
@@ -263,10 +270,8 @@ fn select_section(
         .iter()
         .max()
         .ok_or_else(|| ProcessingConfigError::Invalid("environment boundary is empty".into()))?;
-    let first_edge = minimum.div_euclid(BIN_WIDTH_MM) * BIN_WIDTH_MM;
-    let last_edge = ceil_div(maximum, BIN_WIDTH_MM)
-        .checked_mul(BIN_WIDTH_MM)
-        .ok_or_else(|| ProcessingConfigError::Invalid("section edge exceeds i64".into()))?;
+    let first_edge = floor_bin_edge(minimum)?;
+    let last_edge = ceil_bin_edge(maximum)?;
     let origin_mm = millimetres(dot(sensor.p0_m, axis_x))?;
     let span = last_edge
         .checked_sub(first_edge)
@@ -278,7 +283,13 @@ fn select_section(
     }
     let mut valid = BTreeMap::new();
     for index in 0..edge_count {
-        let edge = first_edge + i64::try_from(index).unwrap() * BIN_WIDTH_MM;
+        let offset = i64::try_from(index)
+            .ok()
+            .and_then(|value| value.checked_mul(BIN_WIDTH_MM))
+            .ok_or_else(|| ProcessingConfigError::Invalid("section edge exceeds i64".into()))?;
+        let edge = first_edge
+            .checked_add(offset)
+            .ok_or_else(|| ProcessingConfigError::Invalid("section edge exceeds i64".into()))?;
         let center_m = (edge as f64 + BIN_WIDTH_MM as f64 / 2.0) / 1_000.0;
         valid.insert(
             edge,
@@ -344,19 +355,92 @@ fn section_column_is_inside(
 ) -> Result<bool> {
     let origin_section_x_m = dot(sensor.p0_m, axis_x);
     let b = origin_section_x_m - section_x_m;
-    for index in 0..SECTION_HEIGHT_SAMPLES {
-        let fraction = index as f64 / (SECTION_HEIGHT_SAMPLES - 1) as f64;
-        let height_m = floor_z_m + (top_z_m - floor_z_m) * fraction;
+    let point_at_height = |height_m: f64| -> Result<Vec2> {
         let a = (height_m - sensor.p0_m[2]) / sensor.u0[2];
         let point = [
             sensor.p0_m[0] + a * sensor.u0[0] + b * sensor.u90[0],
             sensor.p0_m[1] + a * sensor.u0[1] + b * sensor.u90[1],
         ];
-        if !boundary.contains(Vec2::new(point[0], point[1])?)? {
+        Ok(Vec2::new(point[0], point[1])?)
+    };
+    segment_is_inside_boundary(
+        point_at_height(floor_z_m)?,
+        point_at_height(top_z_m)?,
+        boundary,
+    )
+}
+
+fn segment_is_inside_boundary(start: Vec2, end: Vec2, boundary: &Polygon2) -> Result<bool> {
+    if !boundary.contains(start)? || !boundary.contains(end)? {
+        return Ok(false);
+    }
+    let direction = [end.x() - start.x(), end.y() - start.y()];
+    let length_squared = dot2(direction, direction);
+    if length_squared == 0.0 {
+        return Ok(true);
+    }
+
+    let mut cuts = vec![0.0, 1.0];
+    for (edge_start, edge_end) in boundary.edges() {
+        let edge = [edge_end.x() - edge_start.x(), edge_end.y() - edge_start.y()];
+        let offset = [edge_start.x() - start.x(), edge_start.y() - start.y()];
+        let denominator = cross2(direction, edge);
+        let scale = direction[0]
+            .abs()
+            .max(direction[1].abs())
+            .max(edge[0].abs())
+            .max(edge[1].abs())
+            .max(1.0);
+        let parallel_tolerance = f64::EPSILON * 64.0 * scale * scale;
+        if denominator.abs() <= parallel_tolerance {
+            if cross2(offset, direction).abs() <= parallel_tolerance {
+                for point in [edge_start, edge_end] {
+                    let relative = [point.x() - start.x(), point.y() - start.y()];
+                    push_segment_cut(&mut cuts, dot2(relative, direction) / length_squared);
+                }
+            }
+            continue;
+        }
+        let segment_parameter = cross2(offset, edge) / denominator;
+        let edge_parameter = cross2(offset, direction) / denominator;
+        if (-SEGMENT_PARAMETER_TOLERANCE..=1.0 + SEGMENT_PARAMETER_TOLERANCE)
+            .contains(&segment_parameter)
+            && (-SEGMENT_PARAMETER_TOLERANCE..=1.0 + SEGMENT_PARAMETER_TOLERANCE)
+                .contains(&edge_parameter)
+        {
+            push_segment_cut(&mut cuts, segment_parameter);
+        }
+    }
+    cuts.sort_by(f64::total_cmp);
+    cuts.dedup_by(|left, right| (*left - *right).abs() <= SEGMENT_PARAMETER_TOLERANCE);
+    for interval in cuts.windows(2) {
+        if interval[1] - interval[0] <= SEGMENT_PARAMETER_TOLERANCE {
+            continue;
+        }
+        let parameter = (interval[0] + interval[1]) * 0.5;
+        let point = Vec2::new(
+            start.x() + parameter * direction[0],
+            start.y() + parameter * direction[1],
+        )?;
+        if !boundary.contains(point)? {
             return Ok(false);
         }
     }
     Ok(true)
+}
+
+fn push_segment_cut(cuts: &mut Vec<f64>, parameter: f64) {
+    if (-SEGMENT_PARAMETER_TOLERANCE..=1.0 + SEGMENT_PARAMETER_TOLERANCE).contains(&parameter) {
+        cuts.push(parameter.clamp(0.0, 1.0));
+    }
+}
+
+fn dot2(left: [f64; 2], right: [f64; 2]) -> f64 {
+    left[0] * right[0] + left[1] * right[1]
+}
+
+fn cross2(left: [f64; 2], right: [f64; 2]) -> f64 {
+    left[0] * right[1] - left[1] * right[0]
 }
 
 fn minimum_valid_quality(frequencies: &[u64; 256]) -> Result<u8> {
@@ -376,8 +460,7 @@ fn millimetres(value_m: f64) -> Result<i64> {
     let rounded = value_mm.round_ties_even();
     if !value_mm.is_finite()
         || (value_mm - rounded).abs() > 1e-6
-        || rounded < i64::MIN as f64
-        || rounded > i64::MAX as f64
+        || !(I64_MIN_F64..I64_EXCLUSIVE_MAX_F64).contains(&rounded)
     {
         return invalid(format!(
             "processing geometry requires integer millimetres: {value_m}"
@@ -492,9 +575,30 @@ fn ceil_div(value: i64, divisor: i64) -> i64 {
     value.div_euclid(divisor) + i64::from(value.rem_euclid(divisor) != 0)
 }
 
+fn floor_bin_edge(value: i64) -> Result<i64> {
+    value
+        .div_euclid(BIN_WIDTH_MM)
+        .checked_mul(BIN_WIDTH_MM)
+        .ok_or_else(|| ProcessingConfigError::Invalid("section edge exceeds i64".into()))
+}
+
+fn ceil_bin_edge(value: i64) -> Result<i64> {
+    ceil_div(value, BIN_WIDTH_MM)
+        .checked_mul(BIN_WIDTH_MM)
+        .ok_or_else(|| ProcessingConfigError::Invalid("section edge exceeds i64".into()))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ceil_div, stable_float};
+    use crate::{
+        configuration::SensorConfig,
+        geometry::{Polygon2, Vec2},
+    };
+
+    use super::{
+        ceil_bin_edge, ceil_div, floor_bin_edge, millimetres, section_column_is_inside,
+        stable_float,
+    };
 
     #[test]
     fn decimal_grid_ceiling_handles_both_signs() {
@@ -512,5 +616,46 @@ mod tests {
         assert_eq!(stable_float(2.8458872586489115), 2.845887258648911);
         assert_eq!(stable_float(-1.5578600007716954), -1.557860000771695);
         assert_eq!(stable_float(1e-16), 0.0);
+    }
+
+    #[test]
+    fn millimetre_and_bin_edges_reject_values_outside_i64() {
+        assert!(millimetres(9_223_372_036_854_776.0).is_err());
+        assert!(millimetres(-9_223_372_036_854_776.0).is_ok());
+        assert!(floor_bin_edge(i64::MIN).is_err());
+        assert!(ceil_bin_edge(i64::MAX).is_err());
+        assert_eq!(floor_bin_edge(-51).unwrap(), -100);
+        assert_eq!(ceil_bin_edge(51).unwrap(), 100);
+    }
+
+    #[test]
+    fn section_column_detects_a_narrow_concave_gap_between_height_samples() {
+        let boundary = Polygon2::new(
+            [
+                [0.0, 0.0],
+                [4.0, 0.0],
+                [4.0, 2.011],
+                [3.0, 2.011],
+                [3.0, 2.019],
+                [4.0, 2.019],
+                [4.0, 4.0],
+                [0.0, 4.0],
+            ]
+            .into_iter()
+            .map(Vec2::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap(),
+        )
+        .unwrap();
+        let diagonal = 0.5_f64.sqrt();
+        let sensor = SensorConfig {
+            sensor_id: "lidar_1".into(),
+            p0_m: [2.0, 5.0, 5.0],
+            u0: [0.0, -diagonal, -diagonal],
+            u90: [1.0, 0.0, 0.0],
+        };
+        let axis_x = [-1.0, 0.0, 0.0];
+        assert!(!section_column_is_inside(&sensor, -3.5, axis_x, &boundary, 0.0, 4.0).unwrap());
+        assert!(section_column_is_inside(&sensor, -2.5, axis_x, &boundary, 0.0, 4.0).unwrap());
     }
 }
