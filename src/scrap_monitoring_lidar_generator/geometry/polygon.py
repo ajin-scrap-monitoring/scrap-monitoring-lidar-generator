@@ -3,6 +3,7 @@
 import math
 from dataclasses import dataclass
 
+from scrap_monitoring_lidar_generator._limits import MAX_POLYGON_VERTICES
 from scrap_monitoring_lidar_generator.geometry.primitives import Vec2
 
 _GEOMETRY_TOLERANCE = 1e-12
@@ -21,6 +22,8 @@ class Polygon2:
         object.__setattr__(self, "vertices", vertices)
         if len(vertices) < 3:
             raise ValueError("polygon must contain at least 3 vertices")
+        if len(vertices) > MAX_POLYGON_VERTICES:
+            raise ValueError("polygon exceeds MAX_POLYGON_VERTICES")
         if len(vertices) != len(set(vertices)):
             raise ValueError("polygon must contain unique vertices")
 

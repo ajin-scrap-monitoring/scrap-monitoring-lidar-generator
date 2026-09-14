@@ -2,6 +2,7 @@
 
 import pytest
 
+from scrap_monitoring_lidar_generator._limits import MAX_POLYGON_VERTICES
 from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
 
 
@@ -55,4 +56,11 @@ def test_boundary_inclusion_is_explicit() -> None:
 )
 def test_rejects_invalid_polygon(vertices: tuple[Vec2, ...]) -> None:
     with pytest.raises(ValueError):
+        Polygon2(vertices)
+
+
+def test_rejects_polygon_above_engine_vertex_limit_before_quadratic_work() -> None:
+    vertices = tuple(Vec2(float(index), 0.0) for index in range(MAX_POLYGON_VERTICES + 1))
+
+    with pytest.raises(ValueError, match=r"^polygon exceeds MAX_POLYGON_VERTICES$"):
         Polygon2(vertices)

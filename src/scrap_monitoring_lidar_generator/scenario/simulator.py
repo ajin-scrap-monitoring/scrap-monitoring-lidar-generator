@@ -6,6 +6,7 @@ import random
 from dataclasses import dataclass
 from enum import StrEnum
 
+from scrap_monitoring_lidar_generator._limits import MAX_INLET_POSITIONS
 from scrap_monitoring_lidar_generator.geometry import Vec2
 from scrap_monitoring_lidar_generator.scenario.height_field import HeightField
 from scrap_monitoring_lidar_generator.scenario.rate_profile import (
@@ -83,6 +84,8 @@ class ScenarioSettings:
         )
         if not self.inlet_positions:
             raise ValueError("scenario must contain at least one inlet position")
+        if len(self.inlet_positions) > MAX_INLET_POSITIONS:
+            raise ValueError("scenario inlet count exceeds the engine limit")
         if len(set(self.inlet_positions)) != len(self.inlet_positions):
             raise ValueError("scenario inlet positions must be unique")
         _require_ratio(self.inlet_switch_activation_ratio, "inlet switch activation ratio")

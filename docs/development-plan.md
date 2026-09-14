@@ -22,10 +22,10 @@ UDS(Unix Domain Socket) endpoint를 제공한다. `lidar-processing`은 생성�
 사용하고 100 ms scan 주기의 여유가 부족했다. 기능 범위는 갖췄지만 공유 edge 장비의 지속 실행
 합격 조건은 충족하지 못한 상태다. 측정 범위와 현재 관측은 `docs/performance.md`가 정본이다.
 
-Rust 전환은 단계 1까지 완료했다. Rust crate는 공개 JSON 3개, 배포 override와 고정 Proto를
-검증하며 별도 binary는 설정 검사만 수행한다. 적재 시뮬레이션, LiDAR 측정과 외부 출력은 아직
-Python 실행 경로가 담당한다. 전환의 목적은 현재 외부 계약과 합성 모델을 유지하면서 계산 여유와
-실행 안정성을 확보하는 것이다.
+Rust 전환은 단계 2까지 완료했다. Rust crate는 공개 JSON 3개, 배포 override와 고정 Proto를
+검증하고 적재 표면, 적재 및 수거 상태 전이, model version 1 난수와 event별 불변 snapshot을
+계산한다. LiDAR 측정과 외부 출력은 아직 Python 실행 경로가 담당한다. 전환의 목적은 현재 외부
+계약과 합성 모델을 유지하면서 계산 여유와 실행 안정성을 확보하는 것이다.
 
 현재 CI는 Python source의 외부 계약 호환, Python package와 ARM64 image의 `--help` 실행까지
 검증한다. `tests/edge/run.sh`의 UDS, 관찰과 상태 수락 검증은 별도 실행 절차다. 단계 4 이후 CI는
@@ -79,7 +79,7 @@ ID에 포함된 기존 Repository 이름도 version 1에서는 바꾸지 않는�
 | --- | --- | --- | --- | --- |
 | 0 | 완료 | 기준선 고정 | Python golden fixture, 좌표 예제, noise 오류 회귀 검증, edge 측정 기록 | 계약 의미와 현재 성능 재현 |
 | 1 | 완료 | Rust 기반 구성 | package, 설정 loader, 오류 모델, CI와 ARM64 build | 공개 JSON 3개 수락 및 오류 동등성 |
-| 2 | 예정 | 적재 시뮬레이션 이식 | World 자료형, 표면, 적재 및 수거 상태 전이 | 고정 시각 snapshot과 부피 불변식 통과 |
+| 2 | 완료 | 적재 시뮬레이션 이식 | World 자료형, 표면, 적재 및 수거 상태 전이 | 고정 시각 snapshot과 부피 불변식 통과 |
 | 3 | 예정 | LiDAR 측정 이식 | 회전, 광선 교차, 합성 왜곡, quality와 SDK 정수 변환 | 무잡음 geometry 및 ScanFrame golden 통과 |
 | 4 | 예정 | 외부 출력 이식 | UDS gRPC server 2개, 상태 및 진단 writer, 관찰 publisher, exporter CLI | 기존 소비자와 versioned 계약 수락 |
 | 5 | 예정 | ARM64 병행 검증 | digest image, 장기 공유 부하 보고서 | 기능 및 성능 합격선 통과 |
@@ -89,8 +89,8 @@ ID에 포함된 기존 Repository 이름도 version 1에서는 바꾸지 않는�
 비교한다. Noise와 합성 왜곡은 고정 seed 재현 및 분포 허용범위로 비교한다. Python의
 `random.Random`과 NumPy 난수열 자체는 외부 계약이 아니므로 Rust가 그 구현 세부를 복제하지
 않는다. Python seeded fixture는 전환 기준선이고 Rust exact fixture는 model version 1의 별도
-계약이다. Model version 1은 단계 2 전에 PRNG(Pseudorandom Number Generator), stream seed 파생과
-분포 sampling 규칙을 고정한다. 같은 Rust model version, 설정과 seed는 같은 지원 architecture에서
+계약이다. Model version 1의 PRNG(Pseudorandom Number Generator), stream seed와 rate profile 계약은
+[`simulation-model.md`](simulation-model.md)가 정본이다. 같은 Rust model version, 설정과 seed는 같은 지원 architecture에서
 동일한 simulation snapshot과 측정 sample을 만든다. ScanFrame golden은 instance ID와 wall 및
 monotonic clock을 주입해 비교한다.
 

@@ -152,6 +152,13 @@ def test_rejects_duplicate_inlet_positions(valid_generator: dict[str, Any]) -> N
         _parse(valid_generator)
 
 
+def test_rejects_more_than_64_inlet_positions(valid_generator: dict[str, Any]) -> None:
+    valid_generator["scenario"]["inlet_positions_xy_m"] = [[index, 0] for index in range(65)]
+
+    with pytest.raises(ConfigurationError, match="must contain at most 64 coordinates"):
+        _parse(valid_generator)
+
+
 def test_rejects_fill_duration_factors_not_centered_on_average(
     valid_generator: dict[str, Any],
 ) -> None:

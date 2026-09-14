@@ -1,6 +1,7 @@
 use std::{fs, path::Path};
 
 use scrap_monitoring_lidar_generator::{
+    MAX_INLET_POSITIONS,
     configuration::{
         EnvironmentConfig, GeneratorConfig, QualityProfileConfig, load_environment,
         load_generator_config, load_generator_inputs, load_quality_profile, parse_environment,
@@ -8,6 +9,7 @@ use scrap_monitoring_lidar_generator::{
         validate_inputs,
     },
     error::{ConfigurationError, ErrorKind},
+    geometry::MAX_POLYGON_VERTICES,
 };
 use serde_json::{Value, json};
 
@@ -470,6 +472,18 @@ fn every_generator_section_enforces_semantic_bounds() {
             "accepted {pointer}"
         );
     }
+    let excessive_inlets = Value::Array(
+        (0..=MAX_INLET_POSITIONS)
+            .map(|index| json!([index, 0]))
+            .collect(),
+    );
+    let error = parse_generator_config(
+        &generator_with("/scenario/inlet_positions_xy_m", excessive_inlets),
+        ".",
+    )
+    .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Range);
+    assert_eq!(error.path, "$.scenario.inlet_positions_xy_m");
     let overflow = GENERATOR.replace("86400", "1e999");
     let error = parse_generator_config(&overflow, ".").unwrap_err();
     assert_eq!(error.path, "$.scenario.mean_fill_duration_s");
@@ -556,6 +570,16 @@ fn environment_rejects_invalid_polygons_and_sensor_frames() {
     let mut clockwise = source.clone();
     clockwise["boundary_xy_m"].as_array_mut().unwrap().reverse();
     assert!(parse_environment(&clockwise.to_string()).is_ok());
+
+    let mut excessive = source.clone();
+    excessive["boundary_xy_m"] = Value::Array(
+        (0..=MAX_POLYGON_VERTICES)
+            .map(|index| json!([index, 0]))
+            .collect(),
+    );
+    let error = parse_environment(&excessive.to_string()).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Range);
+    assert_eq!(error.path, "$.boundary_xy_m");
 }
 
 #[test]

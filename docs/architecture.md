@@ -68,10 +68,10 @@ scenario -> geometry
 형식을 알지 않는다. `scan_stream`은 측정 결과를 외부 wire 표현으로만 바꾸며 적재 모델을
 변경하지 않는다. `edge_integration`은 실행 중 scan 경로에 참여하지 않는다.
 
-## Rust 설정 검증 경계
+## Rust 설정 및 실행 경계
 
-Rust crate의 실행 경계는 5개다. `src/lib.rs`는 설정 및 wire API를 공개하며 별도
-`scrap-monitoring-lidar-generator-rust` binary는 입력 검증만 수행한다.
+Rust crate의 설정 및 실행 경계는 5개다. `src/lib.rs`는 설정, wire와 아래 시뮬레이션 계산 API를
+공개하며 별도 `scrap-monitoring-lidar-generator-rust` binary는 입력 검증만 수행한다.
 
 | 경로 | 책임 |
 | --- | --- |
@@ -91,9 +91,38 @@ Cargo 빌드 출력에만 두며 고정 Proto 원문과 Python binding을 변경
 식별자와 관찰 endpoint도 요구한다. 두 명령은 scan 생성, socket 생성과 상태 출력을 하지
 않으며 성공 시 0, 설정 오류 시 2로 종료한다.
 
-`cargo test --locked`는 Rust 단위 테스트와 `tests/configuration.rs`, `tests/cli.rs`,
-`tests/wire.rs`의 공개 입력, override, 오류와 Proto 회귀 검증을 실행한다.
+`cargo test --locked`는 Rust 단위 테스트와 `tests/`의 설정, CLI, wire, 기하, 난수, rate profile,
+높이장 및 시나리오 회귀 검증을 실행한다.
 `cargo fmt --check`와 `cargo clippy --locked --all-targets -- -D warnings`는 Rust 정적 검증이다.
+
+## Rust 시뮬레이션 계산 경계
+
+Rust 시뮬레이션 계산 경계는 6개다.
+
+| 경로 | 책임 |
+| --- | --- |
+| `src/geometry/` | 유한 World 좌표 벡터, 불변 다각형, 면적과 경계 포함 판정 |
+| `src/scenario/grid.rs` | 다각형 clipping, bilinear node 면적 적분, cell coverage와 이웃 쌍 |
+| `src/scenario/height_field.rs` | 부피 보존 표면 갱신, 유한 반복 경사 이완과 불변 snapshot |
+| `src/scenario/simulator.rs` | 적재 및 수거 plan, 절대 시각 event와 AFTER-event snapshot |
+| `src/randomness.rs` | versioned seed 분리와 결정론적 난수 word 생성 |
+| `src/rate_profile.rs` | bounded 구간 생성과 평균 보존 rate 계산 |
+
+높이는 y-major 연속 배열이며 정적 grid는 `Arc`로 공유한다. `SurfaceSnapshot`은 독립된
+불변 높이 배열을 보관하고 이후 표면 갱신의 영향을 받지 않는다. `HeightField`의 공개 조회는
+읽기 전용 slice를 반환한다. `ScenarioSimulator`는 각 갱신 event의 상태와 불변 표면을 순서대로
+반환하므로 sensor 계산은 event와 같은 시각의 sample에 갱신 후 표면을 적용할 수 있다. 광선 교차와
+network 실행은 이 경계에 포함하지 않는다.
+
+다각형과 격자는 계산 및 할당 전에 engine 상한을 검사한다. 이 값은 센서나 합성 환경의 물리 규격이 아니다.
+부피 scale 계산은 포화 breakpoint 이후의 잔여 가중치 합을 사용하여 좁은 kernel의 상쇄 오차를 제한한다.
+`tests/height_field.rs`는 Python 표면 연산 fixture의 모든 높이와 node 면적, 부피 및 연산 결과를
+비교하고 부피 보존, 경계와 할당 상한을 검증한다.
+
+`rate_profile`은 `randomness`의 word source만 참조하며 설정, 적재 표면과 외부 출력을 참조하지
+않는다. `scenario` 계산은 `geometry`, `randomness`와 `rate_profile`을 참조하며 공개 설정을 계산
+자료형으로 조립하는 adapter만 `configuration`을 참조한다. Model version, 난수 소비와 상태 event
+계약은 [`simulation-model.md`](simulation-model.md)가 정본이다.
 
 ## 설정과 계약
 

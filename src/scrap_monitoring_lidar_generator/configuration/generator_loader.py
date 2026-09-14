@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from scrap_monitoring_lidar_generator._limits import MAX_INLET_POSITIONS
 from scrap_monitoring_lidar_generator.configuration._json import (
     parse_document,
     read_document,
@@ -219,6 +220,10 @@ def _parse_scenario(value: Any, path: str) -> ScenarioConfig:
     inlet_values = require_array(scenario["inlet_positions_xy_m"], f"{path}.inlet_positions_xy_m")
     if not inlet_values:
         raise ConfigurationError(f"{path}.inlet_positions_xy_m must contain at least 1 coordinate")
+    if len(inlet_values) > MAX_INLET_POSITIONS:
+        raise ConfigurationError(
+            f"{path}.inlet_positions_xy_m must contain at most {MAX_INLET_POSITIONS} coordinates"
+        )
     inlet_positions = tuple(
         _parse_coordinate2(item, f"{path}.inlet_positions_xy_m[{index}]")
         for index, item in enumerate(inlet_values)
