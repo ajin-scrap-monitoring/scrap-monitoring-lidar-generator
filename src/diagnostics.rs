@@ -22,6 +22,7 @@ use tokio::{sync::oneshot, time::timeout};
 use crate::{
     MAX_DIAGNOSTIC_SCANS_PER_SENSOR,
     configuration::{GeneratorInputs, MeasurementConfig, ScenarioConfig},
+    measurement::{HitKind, MeasurementResult},
     output_format::{DiagnosticsSurfaceDocument, ScenarioDocument, validate_model_snapshot},
     scenario::ScenarioModelSnapshot,
 };
@@ -49,6 +50,8 @@ pub enum DiagnosticsError {
     Json(#[from] serde_json::Error),
     #[error("diagnostics worker could not start: {0}")]
     WorkerStart(#[source] io::Error),
+    #[error("diagnostics point allocation failed")]
+    Allocation,
     #[error("scan captured_at exceeds the signed 64-bit range")]
     TimestampOverflow,
 }
@@ -155,6 +158,37 @@ impl DiagnosticsRecordInput {
             snapshot,
             reference_points: reference_points.into(),
         })
+    }
+
+    pub fn from_measurement(
+        result: &MeasurementResult,
+        snapshot: ScenarioModelSnapshot,
+    ) -> Result<Self> {
+        let reference = result.reference();
+        let mut points = Vec::new();
+        points
+            .try_reserve_exact(reference.scan().points().len())
+            .map_err(|_| DiagnosticsError::Allocation)?;
+        for point in reference.scan().points() {
+            let hit_kind = point.hit_kind.map(|kind| match kind {
+                HitKind::Floor => ReferenceHitKind::Floor,
+                HitKind::Wall => ReferenceHitKind::Wall,
+                HitKind::Surface => ReferenceHitKind::Surface,
+            });
+            points.push(DiagnosticsReferencePoint::new(
+                point.angle_deg,
+                point.distance_m,
+                hit_kind,
+            )?);
+        }
+        Self::new(
+            result.sensor_id(),
+            result.scan_id(),
+            reference.schedule().captured_elapsed_s(),
+            reference.completed_at_s(),
+            snapshot,
+            points,
+        )
     }
 }
 
