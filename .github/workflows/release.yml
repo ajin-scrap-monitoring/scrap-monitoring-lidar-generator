@@ -79,8 +79,18 @@ jobs:
 
       - name: Verify edge platform processing compatibility
         run: |
+          cargo run --locked --quiet \
+            --bin scrap-monitoring-lidar-generator-rust -- \
+            export-synthetic-processing-config \
+            --generator-config examples/generator.v2.json \
+            --socket-dir /sockets \
+            --site-id synthetic-site \
+            --edge-id synthetic-edge \
+            --config-revision synthetic-r1 \
+            --output target/processing.synthetic.json
           uv run --locked python -m tools.verify_edge_platform_contract \
-            --edge-platform-root .contract/ajin-edge-platform
+            --edge-platform-root .contract/ajin-edge-platform \
+            --processing-config target/processing.synthetic.json
 
       - name: Package edge platform integration contract
         run: |

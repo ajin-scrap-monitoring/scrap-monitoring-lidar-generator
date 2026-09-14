@@ -22,11 +22,17 @@ _ROOT = Path(__file__).parents[1]
 _SOURCE = _ROOT / "contracts" / "lidar" / "v1" / "upstream.json"
 _PROTO = _ROOT / "contracts" / "lidar" / "v1" / "lidar.proto"
 _GENERATOR_CONFIG = _ROOT / "examples" / "generator.v2.json"
+_PROCESSING_FIXTURE = _ROOT / "edge-platform-integration" / "v1" / "processing.synthetic.json"
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edge-platform-root", required=True, type=Path)
+    parser.add_argument(
+        "--processing-config",
+        type=Path,
+        help="configuration produced by the Rust exporter; defaults to the Python builder",
+    )
     return parser
 
 
@@ -59,16 +65,32 @@ def _load_upstream_modules(edge_root: Path) -> tuple[Any, Any]:
     return load_config, ProcessingEngine
 
 
-def _validate_with_upstream(edge_root: Path) -> dict[str, object]:
+def _processing_config(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        inputs = load_generator_inputs(_GENERATOR_CONFIG)
+        return build_synthetic_processing_config(
+            inputs,
+            socket_directory=PurePosixPath("/sockets"),
+            site_id="synthetic-site",
+            edge_id="synthetic-edge",
+            config_revision="synthetic-r1",
+        )
+    generated = json.loads(path.read_text(encoding="utf-8"))
+    fixture = json.loads(_PROCESSING_FIXTURE.read_text(encoding="utf-8"))
+    if generated != fixture:
+        raise RuntimeError("Rust processing configuration differs from the integration fixture")
+    if not isinstance(generated, dict):
+        raise RuntimeError("Rust processing configuration must be a JSON object")
+    return generated
+
+
+def _validate_with_upstream(
+    edge_root: Path,
+    processing_config_path: Path | None,
+) -> dict[str, object]:
     load_config, processing_engine = _load_upstream_modules(edge_root)
     inputs = load_generator_inputs(_GENERATOR_CONFIG)
-    processing_config = build_synthetic_processing_config(
-        inputs,
-        socket_directory=PurePosixPath("/sockets"),
-        site_id="synthetic-site",
-        edge_id="synthetic-edge",
-        config_revision="synthetic-r1",
-    )
+    processing_config = _processing_config(processing_config_path)
     with tempfile.TemporaryDirectory(prefix="edge-contract-") as directory:
         path = Path(directory) / "processing.json"
         path.write_text(
@@ -155,7 +177,7 @@ def main() -> int:
     args = _parser().parse_args()
     source = json.loads(_SOURCE.read_text(encoding="utf-8"))
     _verify_source(args.edge_platform_root, source)
-    result = _validate_with_upstream(args.edge_platform_root)
+    result = _validate_with_upstream(args.edge_platform_root, args.processing_config)
     print(json.dumps(result, sort_keys=True))
     return 0
 
