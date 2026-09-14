@@ -64,6 +64,23 @@ Generator container                     Processing container
 `sequence` 간격으로 손실을 확인한다. `consumer_id`는 UTF-8 기준 1-128 byte이며 센서별 동시
 구독자는 최대 8개다.
 
+### Python UDS client authority
+
+Python gRPC C-core client가 `unix:` endpoint로 channel을 만들 때 UDS filesystem 경로가 HTTP/2
+`:authority`로 전달될 수 있다. Tonic server가 유효한 authority로 요청을 받도록 Python client는
+`grpc.default_authority`를 명시한다.
+
+```python
+grpc.aio.insecure_channel(
+    f"unix:{socket_path}",
+    options=(("grpc.default_authority", "localhost"),),
+)
+```
+
+이 값은 생성기 환경변수나 Proto 필드가 아니라 구독 client의 channel option이다. 실제
+`lidar-processing` container와 연결하기 전에 해당 client가 이 option을 적용하는지 확인한다.
+`tools/verify_rust_runtime_contract.py`의 live 구독은 이 조건을 적용한다.
+
 ## 환경과 처리 설정
 
 생성기의 `examples/environment.v1.json`은 합성 환경의 정본이다. `lidar-processing`은 이
@@ -134,11 +151,29 @@ scan gRPC 계약에는 환경 형상이나 observation record를 추가하지 �
 
 ## 수락 검증
 
-다음 명령은 고정한 외부 commit과 Proto가 같은지 확인하고, 실제 `lidar-processing` 설정 loader와
-`ProcessingEngine`이 생성 frame을 받아 두 센서 단면을 `GOOD` 상태와 전체 coverage로
-계산하는지 검증한다.
+수락 검증은 기준선과 live runtime의 2개 계층이다. 다음 명령은 고정한 외부 commit과 Proto가
+같은지 확인하고, 실제 `lidar-processing` 설정 loader와 `ProcessingEngine`이 Python 기준 frame을
+받아 두 센서 단면을 `GOOD` 상태와 전체 coverage로 계산하는지 검증한다. Rust exporter 출력을
+검사할 때는 `--processing-config`로 생성 파일을 추가 지정한다.
 
 ```shell
 uv run --locked python -m tools.verify_edge_platform_contract \
   --edge-platform-root /path/to/ajin-edge-platform
 ```
+
+Rust 후보의 live 계약 검증은 미리 만든 release profile 실행 파일을 요구한다. Debug 실행이나
+Python helper의 결과는 이 검증을 대신하지 않는다.
+
+```shell
+cargo build --locked --release \
+  --bin scrap-monitoring-lidar-generator-rust
+uv run --locked python -m tools.verify_rust_runtime_contract \
+  --runtime-binary target/release/scrap-monitoring-lidar-generator-rust \
+  --edge-platform-root /path/to/ajin-edge-platform
+```
+
+Live 검증기는 같은 Rust binary의 exporter로 처리 설정을 만들고 `run` process를 시작한다. 이어서
+`lidar_1.sock`과 `lidar_2.sock`을 실제 gRPC client로 구독하고 받은 frame을 고정한
+`ProcessingEngine`에 넣는다. 판정 항목은 sensor별 연속 sequence, SDK 정규화 범위, 두 sensor와
+융합 결과의 `GOOD`, 단면 coverage 1.0, 상태 파일의 필드 집합, 식별자 및 `HEALTHY` 진행값, 관찰
+TCP 전송, SIGTERM 종료 코드 0, 구독 EOF와 소유 UDS 제거다.

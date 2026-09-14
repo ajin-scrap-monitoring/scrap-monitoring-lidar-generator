@@ -3,7 +3,7 @@ name = "scrap-monitoring-lidar-generator"
 version = "0.9.0"
 edition = "2024"
 rust-version = "1.96"
-description = "Synthetic LiDAR configuration and wire contract foundation."
+description = "Deterministic synthetic LiDAR simulator for scan and observation streams."
 publish = false
 
 [lib]

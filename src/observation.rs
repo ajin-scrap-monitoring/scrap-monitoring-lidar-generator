@@ -590,6 +590,7 @@ impl TcpObservationPublisher {
             task.abort();
             let _ = task.await;
         }
+        reconcile_accepted_records(&self.shared.counters);
     }
 }
 
@@ -728,9 +729,25 @@ fn require_fingerprint(value: &str) -> Result<()> {
 }
 
 fn increment(counter: &AtomicU64) {
+    add(counter, 1);
+}
+
+fn add(counter: &AtomicU64, amount: u64) {
     let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-        Some(value.saturating_add(1))
+        Some(value.saturating_add(amount))
     });
+}
+
+fn reconcile_accepted_records(counters: &PublisherCounters) {
+    let accepted = counters.accepted_records.load(Ordering::Relaxed);
+    let accounted = counters
+        .sent_records
+        .load(Ordering::Relaxed)
+        .saturating_add(counters.dropped_records.load(Ordering::Relaxed));
+    add(
+        &counters.dropped_records,
+        accepted.saturating_sub(accounted),
+    );
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -836,5 +853,18 @@ mod tests {
         assert_eq!(first.current_delay_cap_s, 0.5);
         assert_eq!(first.consecutive_failures, 0);
         assert!(first.next_delay_after_failure().as_secs_f64() < 0.5);
+    }
+
+    #[test]
+    fn close_reconciliation_accounts_for_an_in_flight_record_once() {
+        let counters = PublisherCounters::default();
+        counters.accepted_records.store(3, Ordering::Relaxed);
+        counters.sent_records.store(1, Ordering::Relaxed);
+
+        reconcile_accepted_records(&counters);
+        reconcile_accepted_records(&counters);
+
+        assert_eq!(counters.snapshot().sent_records, 1);
+        assert_eq!(counters.snapshot().dropped_records, 2);
     }
 }

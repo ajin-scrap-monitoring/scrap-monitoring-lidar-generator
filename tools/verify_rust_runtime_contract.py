@@ -261,14 +261,24 @@ class LaneState:
 class ObservationSink:
     connections: int = 0
     received_bytes: int = 0
+    record_types: list[str] = field(default_factory=list)
     writers: set[asyncio.StreamWriter] = field(default_factory=set)
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.connections += 1
         self.writers.add(writer)
+        pending = bytearray()
         try:
             while chunk := await reader.read(65_536):
                 self.received_bytes += len(chunk)
+                pending.extend(chunk)
+                while b"\n" in pending:
+                    line, _, remainder = pending.partition(b"\n")
+                    pending = bytearray(remainder)
+                    document = json.loads(line)
+                    record_type = document.get("type")
+                    _require(isinstance(record_type, str), "observation record has no type")
+                    self.record_types.append(record_type)
         finally:
             self.writers.discard(writer)
             writer.close()
@@ -446,13 +456,23 @@ async def _consume_until_good(
     queue: asyncio.Queue[tuple[str, Any, int, int]],
     lanes: dict[str, LaneState],
     engine: Any,
+    subscribers: list[asyncio.Task[str]],
     timeout_s: float,
 ) -> Any:
     dirty: set[str] = set()
+    last_measurement: Any = None
     deadline = asyncio.get_running_loop().time() + timeout_s
     while asyncio.get_running_loop().time() < deadline:
         if process.returncode is not None:
             raise RuntimeError(f"Rust runtime exited during validation with {process.returncode}")
+        for subscriber in subscribers:
+            if subscriber.done():
+                exception = subscriber.exception()
+                raise RuntimeError(
+                    "Rust scan subscription stopped before validation: "
+                    f"result={None if exception else subscriber.result()!r}, "
+                    f"error={exception!r}"
+                )
         try:
             sensor_id, frame, receive_monotonic_ns, receive_unix_ms = await asyncio.wait_for(
                 queue.get(), timeout=0.5
@@ -480,11 +500,16 @@ async def _consume_until_good(
             measurement_id="rust-runtime-contract",
             cycle_id="rust-runtime-contract",
         )
+        last_measurement = measurement
         dirty.clear()
         if measurement is not None and measurement["quality"]["state"] == "GOOD":
             _validate_measurement(measurement)
             return measurement
-    raise RuntimeError("live Rust frames did not produce a GOOD fused measurement")
+    raise RuntimeError(
+        "live Rust frames did not produce a GOOD fused measurement: "
+        f"frames={{{', '.join(f'{key!r}: {value.frames}' for key, value in lanes.items())}}}, "
+        f"frame_loss={engine.frame_loss}, last_measurement={last_measurement!r}"
+    )
 
 
 async def _clean_shutdown(
@@ -501,6 +526,20 @@ async def _clean_shutdown(
         all(not path.exists() for path in socket_paths),
         "Rust runtime left an owned UDS endpoint after shutdown",
     )
+
+
+def _summary_values(stdout: str) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    lines = stdout.splitlines()
+    selected = []
+    for prefix in ("run_id=", "scan_stream ", "observation=active "):
+        matches = [line for line in lines if line.startswith(prefix)]
+        _require(len(matches) == 1, f"Rust runtime summary must contain one {prefix!r} line")
+        selected.append(matches[0])
+    parsed = []
+    for line in selected:
+        values = dict(field.split("=", 1) for field in line.split() if "=" in field)
+        parsed.append(values)
+    return parsed[0], parsed[1], parsed[2]
 
 
 async def _verify_runtime(arguments: argparse.Namespace) -> dict[str, object]:
@@ -567,6 +606,7 @@ async def _verify_runtime(arguments: argparse.Namespace) -> dict[str, object]:
         channels: list[Any] = []
         subscribers: list[asyncio.Task[str]] = []
         success = False
+        failure: Exception | None = None
         measurement: Any = None
         states: dict[str, str] = {}
         lanes = {sensor_id: LaneState(sensor_id) for sensor_id in _SENSOR_IDS}
@@ -579,7 +619,10 @@ async def _verify_runtime(arguments: argparse.Namespace) -> dict[str, object]:
             channels = [
                 grpc.aio.insecure_channel(
                     f"unix:{path}",
-                    options=(("grpc.max_receive_message_length", 4 * 1024 * 1024),),
+                    options=(
+                        ("grpc.max_receive_message_length", 4 * 1024 * 1024),
+                        ("grpc.default_authority", "localhost"),
+                    ),
                 )
                 for path in socket_paths
             ]
@@ -601,7 +644,7 @@ async def _verify_runtime(arguments: argparse.Namespace) -> dict[str, object]:
                 for channel, sensor_id in zip(channels, _SENSOR_IDS, strict=True)
             ]
             measurement = await _consume_until_good(
-                process, queue, lanes, engine, arguments.validation_timeout_s
+                process, queue, lanes, engine, subscribers, arguments.validation_timeout_s
             )
             _require(engine.frame_loss == 0, "lidar-processing detected live frame loss")
             states = await _wait_for_statuses(
@@ -609,6 +652,8 @@ async def _verify_runtime(arguments: argparse.Namespace) -> dict[str, object]:
             )
             await _clean_shutdown(process, subscribers, socket_paths)
             success = True
+        except Exception as error:
+            failure = error
         finally:
             if not success:
                 await _terminate_process(process)
@@ -624,13 +669,36 @@ async def _verify_runtime(arguments: argparse.Namespace) -> dict[str, object]:
             await sink.close()
             stdout = await stdout_task
             stderr = await stderr_task
-        if not success:
+        if failure is not None:
             raise RuntimeError(
-                "Rust runtime validation failed\n"
+                f"Rust runtime validation failed: {failure}\n"
                 f"stdout tail:\n{stdout[-4000:]}\n"
                 f"stderr tail:\n{stderr[-4000:]}"
-            )
+            ) from failure
+        _require(success, "Rust runtime validation stopped without a result")
         _validate_measurement(measurement)
+        _require(sink.connections >= 1, "observation publisher did not connect")
+        _require(sink.received_bytes > 0, "observation publisher sent no bytes")
+        _require(
+            "load_model_stream_header" in sink.record_types,
+            "observation publisher sent no stream header",
+        )
+        _require(
+            "load_model_observation" in sink.record_types,
+            "observation publisher sent no dynamic record",
+        )
+        run_summary, scan_summary, observation_summary = _summary_values(stdout)
+        generated_count = int(run_summary["generated"])
+        published_count = int(run_summary["published"])
+        _require(
+            generated_count - published_count == 2, "runtime did not reserve one scan per sensor"
+        )
+        _require(
+            int(scan_summary["published"]) == published_count,
+            "runtime scan summaries disagree",
+        )
+        _require(int(scan_summary["frame_loss"]) == 0, "runtime reported server frame loss")
+        _require(int(observation_summary["sent"]) >= 1, "runtime reported no observation output")
         return {
             "exit_code": process.returncode,
             "frames": {sensor_id: lane.frames for sensor_id, lane in lanes.items()},
@@ -646,6 +714,7 @@ async def _verify_runtime(arguments: argparse.Namespace) -> dict[str, object]:
             },
             "status_states": states,
             "observation_connections": sink.connections,
+            "observation_bytes": sink.received_bytes,
         }
 
 

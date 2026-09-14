@@ -201,6 +201,13 @@ fn check_cli_has_success_error_and_help_exit_codes() {
         "{}",
         String::from_utf8_lossy(&runtime.stderr)
     );
+    let run_without_settings = Command::new(binary)
+        .env_clear()
+        .arg("run")
+        .output()
+        .unwrap();
+    assert_eq!(run_without_settings.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&run_without_settings.stderr).contains("configuration error:"));
 }
 
 #[test]

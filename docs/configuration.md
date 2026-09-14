@@ -46,6 +46,11 @@ frame에 포함하지 않는다. exporter가 공개 합성 환경의 센서 위�
 센서 ID, 설치 형상, 측정과 합성 오차는 환경변수로 받지 않는다. 배포 식별자와 host 경로는
 JSON에 넣지 않는다.
 
+Python 기본 runtime과 Rust 후보의 `run` 명령은 같은 우선순위와 환경변수 이름을 사용한다.
+Rust `check --runtime`은 모든 배포 설정을 검증하지만 socket이나 상태 파일을 만들지 않는다.
+Rust `run`은 검증된 설정만으로 실제 생성과 외부 출력을 시작하며 별도 비공개 fallback을 두지
+않는다.
+
 ## 환경변수
 
 환경변수는 14개다.
@@ -74,7 +79,8 @@ driver 기준 최대 64자다. `SITE_ID`와 `DEPLOYMENT_REVISION`은 최대 128�
 
 `SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR`은 두 UDS 파일을 만드는 container 내부 절대 경로다.
 파일 이름은 JSON sensor ID에서 계산하며 별도 환경변수로 받지 않는다. 상태 directory도
-container 내부 절대 경로다.
+container 내부 절대 경로다. Python 구독 client의 UDS channel option은 생성기 설정이 아니며
+[`../edge-platform-integration/`](../edge-platform-integration/)의 연결 요구사항을 따른다.
 
 평균 적재 주기는 0보다 큰 유한한 simulation second다. 공개 기본값은 86,400초다. 수거 기준
 중심값은 0.05 초과 0.95 이하이고, 회차별 범위는 중심값의 `+-0.05`다. 공개 중심값 0.90은
@@ -173,6 +179,10 @@ config_revision
 | sensor별 대기 frame | 2 | latest-two 유실 제한 정책 |
 | gRPC UDS endpoint | UTF-8 100 byte 이하 | Unix socket 경로 안전성 |
 | 관찰 대기 snapshot | 1 | latest-only 비차단 정책 |
+| 관찰 JSON Lines record | 1 MiB | record 크기 안전 상한 |
+| Rust 진단 대기 record | 4 | 새 record 삭제 기반 비차단 정책 |
+| Rust 진단 record | 4 MiB | 개별 record 크기 안전 상한 |
+| Rust 진단 파일 | 64 MiB | 실행별 파일 크기 안전 상한 |
 | 상태 갱신 | 2초 | `ajin-edge-platform` 상태 snapshot 주기 |
 
 실행 경로는 loader가 반환한 명시적 JSON과 배포 입력을 사용한다. 하드웨어 기준 또는 외부

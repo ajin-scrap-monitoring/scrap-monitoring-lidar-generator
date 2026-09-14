@@ -2,11 +2,11 @@
 
 ## 적용 범위
 
-현재 직접 사용하는 외부 의존성은 39개다. Python 및 문서 실행 경계는 26개, Rust library와
-실행 기반은 toolchain 1개와 직접 crate 12개를 사용한다. NumPy, `grpcio`와 `protobuf`는 애플리케이션
-runtime의 수치 연산과 외부 gRPC(Google Remote Procedure Call) 계약에 사용한다. 나머지
-항목은 Python 실행, wire binding 생성, 빌드, 개발 검증, CI(Continuous Integration)와
-Release에 사용한다.
+현재 직접 사용하는 외부 의존성은 47개다. Python 및 문서 실행 경계는 26개, Rust 후보 실행과
+검증 경계는 toolchain 1개와 직접 crate 20개를 사용한다. NumPy, `grpcio`와 `protobuf`는 Python
+기본 runtime의 수치 연산과 외부 gRPC(Google Remote Procedure Call) 계약에 사용한다. Rust crate는
+동일 계약의 후보 runtime, wire binding 생성, 비동기 출력과 검증에 사용한다. 나머지 항목은 빌드,
+개발 검증, CI(Continuous Integration)와 Release에 사용한다.
 
 | 의존성 | 버전 | 사용 목적 | 출처 | 라이선스 |
 | --- | --- | --- | --- | --- |
@@ -39,25 +39,33 @@ Release에 사용한다.
 
 ## Rust 의존성
 
-Rust library와 설정 검증은 toolchain 1개와 직접 crate 12개를 사용한다. `rust-toolchain.toml`은
-compiler, rustfmt와 Clippy를 고정하고 `Cargo.toml`과 `Cargo.lock`은 직접 및 전이 crate를
-고정한다. `build.rs`는 vendored `protoc` 31.1을 사용하며 시스템 `protoc`에 의존하지 않는다.
+Rust 후보 애플리케이션과 검증은 toolchain 1개와 직접 crate 20개를 사용한다.
+`rust-toolchain.toml`은 compiler, rustfmt와 Clippy를 고정하고 `Cargo.toml`과 `Cargo.lock`은 직접
+및 전이 crate를 고정한다. `build.rs`는 vendored `protoc` 31.1을 사용하며 시스템 `protoc`에
+의존하지 않는다.
 
 | 의존성 | 버전 | 사용 목적 | 출처 | 라이선스 |
 | --- | --- | --- | --- | --- |
 | Rust | `1.96.0` | compiler, Cargo, rustfmt와 Clippy | [Rust](https://github.com/rust-lang/rust) | MIT OR Apache-2.0 |
-| `clap` | `4.6.6` | 별도 설정 검증 CLI | [clap](https://docs.rs/crate/clap/4.6.6) | MIT OR Apache-2.0 |
+| `clap` | `4.6.6` | 설정 검사, 실행 및 처리 설정 exporter CLI | [clap](https://docs.rs/crate/clap/4.6.6) | MIT OR Apache-2.0 |
 | `num-bigint` | `0.4.8` | 큰 10진 rate의 정확한 회전 및 sample 비율 계산 | [num-bigint](https://docs.rs/crate/num-bigint/0.4.8) | MIT OR Apache-2.0 |
+| `rustix` | `1.1.4` | Linux monotonic clock과 UDS 파일의 안전한 설치 | [rustix](https://docs.rs/crate/rustix/1.1.4) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | `serde` | `1.0.229` | 중복 key 보존 검증을 위한 JSON visitor | [Serde](https://docs.rs/crate/serde/1.0.229) | MIT OR Apache-2.0 |
 | `serde_json` | `1.0.151` | 정수 정밀도와 raw JSON을 보존하는 설정 parser | [Serde JSON](https://docs.rs/crate/serde_json/1.0.151) | MIT OR Apache-2.0 |
 | `thiserror` | `2.0.20` | 분류와 입력 경로를 가진 설정 오류 | [thiserror](https://docs.rs/crate/thiserror/2.0.20) | MIT OR Apache-2.0 |
-| `tonic` | `0.14.6` | 고정 Proto의 gRPC client와 server binding 기반 | [tonic](https://docs.rs/crate/tonic/0.14.6) | MIT |
+| `time` | `0.3.55` | 상태 파일의 UTC 시각 형식화 | [time](https://docs.rs/crate/time/0.3.55) | MIT OR Apache-2.0 |
+| `tokio` | `1.53.1` | signal, UDS gRPC, 관찰 TCP와 비동기 종료 생명주기 | [Tokio](https://docs.rs/crate/tokio/1.53.1) | MIT |
+| `tokio-stream` | `0.1.19` | UDS listener의 tonic incoming stream 변환 | [tokio-stream](https://docs.rs/crate/tokio-stream/0.1.19) | MIT |
+| `tonic` | `0.14.6` | 고정 Proto의 gRPC server와 검증 client 기반 | [tonic](https://docs.rs/crate/tonic/0.14.6) | MIT |
 | `tonic-prost` | `0.14.6` | tonic의 prost message codec | [tonic-prost](https://docs.rs/crate/tonic-prost/0.14.6) | MIT |
 | `prost` | `0.14.4` | Protocol Buffers message와 직렬화 | [prost](https://docs.rs/crate/prost/0.14.4) | Apache-2.0 |
 | `prost-build` | `0.14.4` | 명시적 compiler 경로를 사용한 message 생성 | [prost-build](https://docs.rs/crate/prost-build/0.14.4) | Apache-2.0 |
 | `tonic-prost-build` | `0.14.6` | 빌드 시 고정 Proto의 service binding 생성 | [tonic-prost-build](https://docs.rs/crate/tonic-prost-build/0.14.6) | MIT |
 | `protoc-bin-vendored` | `3.2.0`, 포함 compiler `31.1` | host별 고정 Protocol Buffers compiler | [crate](https://docs.rs/crate/protoc-bin-vendored/3.2.0), [compiler](https://github.com/protocolbuffers/protobuf/blob/v31.1/LICENSE) | wrapper MIT, compiler BSD-3-Clause |
 | `sha2` | `0.11.0` | model stream seed, 진단 fingerprint와 고정 Proto SHA-256 검증 | [RustCrypto](https://docs.rs/crate/sha2/0.11.0) | MIT OR Apache-2.0 |
-| `tokio` | `1.53.1` | 관찰 TCP publisher와 진단 종료 기한의 비동기 실행 | [Tokio](https://docs.rs/crate/tokio/1.53.1) | MIT |
+| `uuid` | `1.26.1` | 실행 및 sensor instance ID 생성 | [uuid](https://docs.rs/crate/uuid/1.26.1) | Apache-2.0 OR MIT |
+| `hyper-util` | `0.1.20` | Rust UDS gRPC 검증 adapter | [hyper-util](https://docs.rs/crate/hyper-util/0.1.20) | MIT |
+| `tempfile` | `3.27.0` | Rust filesystem 및 UDS 격리 테스트 | [tempfile](https://docs.rs/crate/tempfile/3.27.0) | MIT OR Apache-2.0 |
+| `tower` | `0.5.3` | Rust gRPC 검증 connector | [tower](https://docs.rs/crate/tower/0.5.3) | MIT |
 
 애플리케이션 또는 개발 의존성을 추가하거나 버전을 변경하면 같은 Pull Request에서 해당 표와 잠금 파일을 갱신한다.

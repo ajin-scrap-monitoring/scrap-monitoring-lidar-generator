@@ -31,7 +31,7 @@ pub type Environment = BTreeMap<String, String>;
 #[command(
     name = "scrap-monitoring-lidar-generator-rust",
     version,
-    about = "Validate synthetic LiDAR inputs with the Rust configuration foundation."
+    about = "Run and validate the deterministic synthetic LiDAR simulator."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -46,6 +46,12 @@ pub enum Command {
         /// Also require and validate every deployment setting.
         #[arg(long)]
         runtime: bool,
+        #[command(flatten)]
+        overrides: Box<RuntimeSettingOverrides>,
+    },
+    /// Run paced synthetic generation and serve both LiDAR scan lanes.
+    #[command(args_override_self = true, infer_long_args = true)]
+    Run {
         #[command(flatten)]
         overrides: Box<RuntimeSettingOverrides>,
     },
@@ -288,6 +294,10 @@ pub fn check(command: &Command, environment: &Environment) -> Result<GeneratorIn
         Command::ExportSyntheticProcessingConfig(_) => Err(invalid(
             "command",
             "export command cannot be used as a configuration check",
+        )),
+        Command::Run { .. } => Err(invalid(
+            "command",
+            "run command cannot be used as a configuration check",
         )),
     }
 }

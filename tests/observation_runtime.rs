@@ -182,6 +182,10 @@ async fn connection_failure_preserves_latest_until_prompt_close_discards_it() {
 
     assert_eq!(publisher.stats().sent_records, 0);
     assert_eq!(publisher.stats().dropped_records, 1);
+    assert_eq!(
+        publisher.stats().accepted_records,
+        publisher.stats().sent_records + publisher.stats().dropped_records
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]
