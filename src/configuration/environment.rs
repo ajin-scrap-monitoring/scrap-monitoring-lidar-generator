@@ -5,6 +5,7 @@ use super::{
     strict_json::{self as json, Object},
 };
 use crate::error::{ConfigurationError, ErrorKind, Result};
+use crate::geometry::MAX_POLYGON_VERTICES;
 
 pub fn load_environment(path: impl AsRef<Path>) -> Result<EnvironmentConfig> {
     parse_environment(&json::read_document(
@@ -37,8 +38,15 @@ pub fn parse_environment(document: &str) -> Result<EnvironmentConfig> {
             ));
         }
     }
-    let boundary = root
-        .array("boundary_xy_m")?
+    let boundary_values = root.array("boundary_xy_m")?;
+    if boundary_values.len() > MAX_POLYGON_VERTICES {
+        return Err(ConfigurationError::new(
+            ErrorKind::Range,
+            "$.boundary_xy_m",
+            format!("must contain at most {MAX_POLYGON_VERTICES} vertices"),
+        ));
+    }
+    let boundary = boundary_values
         .iter()
         .enumerate()
         .map(|(index, value)| json::coordinate(value, &format!("$.boundary_xy_m[{index}]")))

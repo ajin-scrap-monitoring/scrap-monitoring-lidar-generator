@@ -27,6 +27,7 @@
     "boundary_xy_m": {
       "type": "array",
       "minItems": 3,
+      "maxItems": 256,
       "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/coordinate2"

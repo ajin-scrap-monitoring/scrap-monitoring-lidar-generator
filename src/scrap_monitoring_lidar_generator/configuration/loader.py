@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import scrap_monitoring_lidar_generator.configuration._json as strict_json
+from scrap_monitoring_lidar_generator._limits import MAX_POLYGON_VERTICES
 from scrap_monitoring_lidar_generator.configuration.errors import ConfigurationError
 from scrap_monitoring_lidar_generator.configuration.models import (
     Coordinate2,
@@ -51,6 +52,10 @@ def parse_environment(document: str) -> EnvironmentConfig:
     boundary_value = strict_json.require_array(root["boundary_xy_m"], "$.boundary_xy_m")
     if len(boundary_value) < 3:
         raise ConfigurationError("$.boundary_xy_m must contain at least 3 coordinates")
+    if len(boundary_value) > MAX_POLYGON_VERTICES:
+        raise ConfigurationError(
+            f"$.boundary_xy_m must contain at most {MAX_POLYGON_VERTICES} vertices"
+        )
     boundary = tuple(
         _require_coordinate2(item, f"$.boundary_xy_m[{index}]")
         for index, item in enumerate(boundary_value)

@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from scrap_monitoring_lidar_generator._limits import MAX_POLYGON_VERTICES
 from scrap_monitoring_lidar_generator.configuration import (
     ConfigurationError,
     load_environment,
@@ -150,4 +151,16 @@ def test_rejects_invalid_boundaries(
     valid_environment["boundary_xy_m"] = boundary
 
     with pytest.raises(ConfigurationError):
+        _parse(valid_environment)
+
+
+def test_rejects_boundary_above_engine_vertex_limit(
+    valid_environment: dict[str, Any],
+) -> None:
+    valid_environment["boundary_xy_m"] = [[index, 0] for index in range(MAX_POLYGON_VERTICES + 1)]
+
+    with pytest.raises(
+        ConfigurationError,
+        match=rf"^\$\.boundary_xy_m must contain at most {MAX_POLYGON_VERTICES} vertices$",
+    ):
         _parse(valid_environment)

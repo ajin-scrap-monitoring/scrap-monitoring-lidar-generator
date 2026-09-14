@@ -1,6 +1,7 @@
 """Tests for deterministic fill and collection state transitions."""
 
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -269,3 +270,10 @@ def test_rejects_backward_time_and_nonempty_initial_surface() -> None:
     nonempty_surface.add_volume(0.1, center=Vec2(0.4, 0.5), spread_radius_m=0.2)
     with pytest.raises(ValueError, match="empty"):
         ScenarioSimulator(nonempty_surface, _settings(), seed=33)
+
+
+def test_rejects_more_than_64_inlet_positions_before_simulation() -> None:
+    inlets = tuple(Vec2(float(index), 0.0) for index in range(65))
+
+    with pytest.raises(ValueError, match="inlet count exceeds the engine limit"):
+        replace(_settings(), inlet_positions=inlets)

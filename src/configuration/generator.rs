@@ -11,6 +11,7 @@ use super::{
     polygon, python_float_sum,
     strict_json::{self as json, Object},
 };
+use crate::MAX_INLET_POSITIONS;
 use crate::error::{ConfigurationError, ErrorKind, Result};
 
 pub fn load_generator_config(path: impl AsRef<Path>) -> Result<GeneratorConfig> {
@@ -150,8 +151,15 @@ fn scenario(value: &Value) -> Result<ScenarioConfig> {
             "surface",
         ],
     )?;
-    let inlets = config
-        .array("inlet_positions_xy_m")?
+    let inlet_values = config.array("inlet_positions_xy_m")?;
+    if inlet_values.len() > MAX_INLET_POSITIONS {
+        return Err(ConfigurationError::new(
+            ErrorKind::Range,
+            config.at("inlet_positions_xy_m"),
+            format!("must contain at most {MAX_INLET_POSITIONS} coordinates"),
+        ));
+    }
+    let inlets = inlet_values
         .iter()
         .enumerate()
         .map(|(index, value)| {
