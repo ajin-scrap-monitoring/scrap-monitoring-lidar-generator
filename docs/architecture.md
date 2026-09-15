@@ -30,10 +30,11 @@ gRPC(Google Remote Procedure Call) server이고 `lidar-processing`이 server-str
 +------------------+
 ```
 
-## 패키지 경계
+## Python 기준 구현 경계
 
-기본 생성기 진입점과 container는 Python 구현을 실행한다. Python 패키지는
-`src/scrap_monitoring_lidar_simulator/` 아래에 있다.
+Python 패키지는 `src/scrap_monitoring_lidar_simulator/` 아래에 있으며 Rust 동등성 fixture,
+외부 계약 검사와 개발용 exporter의 기준 구현을 제공한다. 기본 생성기 진입점과 container에는
+Python package를 포함하지 않는다.
 
 | 패키지 | 책임 |
 | --- | --- |

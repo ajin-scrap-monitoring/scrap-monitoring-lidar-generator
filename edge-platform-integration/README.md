@@ -213,7 +213,7 @@ uv run --locked python -m tools.verify_edge_platform_contract \
   --edge-platform-root /path/to/ajin-edge-platform
 ```
 
-Rust 후보의 live 계약 검증은 미리 만든 release profile 실행 파일을 요구한다. Debug 실행이나
+Rust 기본 구현의 live 계약 검증은 미리 만든 release profile 실행 파일을 요구한다. Debug 실행이나
 Python helper의 결과는 이 검증을 대신하지 않는다.
 
 ```shell

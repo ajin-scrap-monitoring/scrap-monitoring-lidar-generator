@@ -3,15 +3,14 @@
 ## 적용 범위
 
 현재 직접 사용하는 외부 의존성은 54개다. Python, 문서, CI(Continuous Integration), 컨테이너와
-라이선스 검증 경계는 33개를 사용하고 Rust 후보 실행과 검증 경계는 toolchain 1개와 직접 crate
-20개를 사용한다. NumPy, `grpcio`와 `protobuf`는 Python 기본 runtime의 수치 연산과 외부
-gRPC(Google Remote Procedure Call) 계약에 사용한다. Rust crate는 동일 계약의 후보 runtime,
-wire binding 생성, 비동기 출력과 검증에 사용한다. 나머지 항목은 빌드, 개발 검증과 Release에
-사용한다.
+라이선스 검증 경계는 33개를 사용하고 Rust 기본 실행과 검증 경계는 toolchain 1개와 직접 crate
+20개를 사용한다. NumPy, `grpcio`와 `protobuf`는 Python 기준 구현의 수치 연산과 외부
+gRPC(Google Remote Procedure Call) 계약 검사에 사용한다. Rust crate는 기본 runtime, wire binding
+생성, 비동기 출력과 검증에 사용한다. 나머지 항목은 빌드, 개발 검증과 Release에 사용한다.
 
 | 의존성 | 버전 | 사용 목적 | 출처 | 라이선스 |
 | --- | --- | --- | --- | --- |
-| CPython | 호환 범위 `>=3.14,<3.15`, 개발 및 OCI image `3.14.4` | 애플리케이션 실행 및 Python 구문 검사 | [Python](https://www.python.org/downloads/) | Python-2.0 |
+| CPython | 호환 범위 `>=3.14,<3.15`, 개발 및 CI `3.14.4` | Python 기준 구현, 계약 검사와 개발 도구 실행 | [Python](https://www.python.org/downloads/) | Python-2.0 |
 | `uv` | `0.12.15` | 환경 구성, 의존성 잠금과 명령 실행 | [Astral](https://github.com/astral-sh/uv) | MIT OR Apache-2.0 |
 | `uv_build` | `0.12.15` | Python source distribution과 wheel 빌드 | [Astral](https://docs.astral.sh/uv/concepts/build-backend/) | MIT OR Apache-2.0 |
 | NumPy | `>=2.5.3,<2.6` | 높이장 배열, 부피와 표면 변화 수치 연산 | [NumPy](https://numpy.org/) | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
@@ -26,7 +25,7 @@ wire binding 생성, 비동기 출력과 검증에 사용한다. 나머지 항�
 | `types-grpcio` | `>=1.83.0.20260730,<1.84` | gRPC 사용 코드의 정적 type 검사 | [typeshed](https://github.com/python/typeshed) | Apache-2.0 |
 | `actions/checkout` | `v7.0.1` | GitHub Actions 실행 환경의 Repository checkout | [GitHub](https://github.com/actions/checkout) | MIT |
 | `actions/setup-python` | `v7.0.0` | GitHub Actions의 Python 3.14.4 설치 | [GitHub](https://github.com/actions/setup-python) | MIT |
-| `actions/upload-artifact` | `v7.0.1` | ARM64 후보 image digest 참조의 검증 결과 보관 | [GitHub](https://github.com/actions/upload-artifact) | MIT |
+| `actions/upload-artifact` | `v7.0.1` | ARM64 후보 image 참조와 검증 source bundle 보관 | [GitHub](https://github.com/actions/upload-artifact) | MIT |
 | `astral-sh/setup-uv` | `v10.1.0` | GitHub Actions의 uv 설치 및 cache 구성 | [Astral](https://github.com/astral-sh/setup-uv) | MIT |
 | `docker/setup-qemu-action` | `v4.4.0` | GitHub Actions의 ARM64 image emulation 구성 | [Docker](https://github.com/docker/setup-qemu-action) | Apache-2.0 |
 | `tonistiigi/binfmt` | `qemu-v10.2.3-68` | ARM64 실행용 QEMU static binary 등록 | [GitHub](https://github.com/tonistiigi/binfmt) | MIT |
@@ -35,9 +34,9 @@ wire binding 생성, 비동기 출력과 검증에 사용한다. 나머지 항�
 | Moby BuildKit | `v0.33.0` | GitHub Actions의 고정 container image builder | [GitHub](https://github.com/moby/buildkit) | Apache-2.0 |
 | `docker/login-action` | `v4.6.0` | GitHub Container Registry 인증 | [Docker](https://github.com/docker/login-action) | Apache-2.0 |
 | `docker/build-push-action` | `v7.4.0` | OCI image build, attestation과 registry 게시 | [Docker](https://github.com/docker/build-push-action) | Apache-2.0 |
-| `docker/dockerfile` | `1.20` | 고정 Dockerfile frontend를 사용한 후보 image build | [BuildKit](https://github.com/moby/buildkit) | Apache-2.0 |
+| `docker/dockerfile` | `1.20` | 고정 Dockerfile frontend를 사용한 Rust image build | [BuildKit](https://github.com/moby/buildkit) | Apache-2.0 |
 | actionlint | `1.7.12` | GitHub Actions 문법과 action SHA 고정 검사 | [actionlint](https://github.com/rhysd/actionlint) | MIT |
-| `softprops/action-gh-release` | `v3.0.3` | integration bundle과 image 참조를 포함한 GitHub Release 게시 | [GitHub](https://github.com/softprops/action-gh-release) | MIT |
+| `softprops/action-gh-release` | `v3.0.3` | 통합 bundle, 검증 source와 image 참조의 GitHub Release 게시 | [GitHub](https://github.com/softprops/action-gh-release) | MIT |
 | rumdl | `>=0.2.70,<0.3` | Markdown 형식 검사 | [GitHub](https://github.com/rvben/rumdl) | MIT |
 | Pillow | `12.3.0` | 합성 환경 PNG 도면 생성 | [Pillow](https://python-pillow.github.io/) | HPND |
 | `python-docx` | `1.2.0` | 합성 환경 DOCX 생성 | [python-docx](https://python-docx.readthedocs.io/) | MIT |
@@ -47,7 +46,7 @@ wire binding 생성, 비동기 출력과 검증에 사용한다. 나머지 항�
 
 ## Rust 의존성
 
-Rust 후보 애플리케이션과 검증은 toolchain 1개와 직접 crate 20개를 사용한다.
+Rust 기본 애플리케이션과 검증은 toolchain 1개와 직접 crate 20개를 사용한다.
 `rust-toolchain.toml`은 compiler, rustfmt와 Clippy를 고정하고 `Cargo.toml`과 `Cargo.lock`은 직접
 및 전이 crate를 고정한다. `build.rs`는 vendored `protoc` 31.1을 사용하며 시스템 `protoc`에
 의존하지 않는다.

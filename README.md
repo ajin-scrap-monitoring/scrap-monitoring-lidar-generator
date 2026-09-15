@@ -24,29 +24,31 @@ scan 생성과 gRPC 구독을 중단시키지 않는다.
 
 | 용도 | 요구 사항 |
 |---|---|
-| 개발 | Python 3.14.4, uv 0.12.15, Rust 1.96.0 |
+| 기본 구현 개발 | Rust 1.96.0 |
+| 기준 구현 및 문서 검증 | Python 3.14.4, uv 0.12.15 |
 | 엣지 검증 | 64-bit ARM Linux, Docker Engine |
-| 배포 검증 | Docker Engine, Git, GitHub CLI, Bash |
+| 배포 제어 | Linux, Python 3.14.4, uv 0.12.15, GitHub CLI, Bash |
 
 엣지 검증 장비는 Python, uv, compiler와 이미지 빌드 도구를 설치하지 않는다. GitHub Container
 Registry에 게시된 `linux/arm64` 이미지를 digest로 받아 실행한다.
 
-다음 명령은 새 checkout의 잠금 환경을 구성하고 `lidar-processing`용 합성 처리 설정을 생성한다.
+다음 명령은 새 checkout에서 공개 설정을 검사하고 `lidar-processing`용 합성 처리 설정을 생성한다.
 
 ```bash
-uv sync --locked --all-groups
-uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
+cargo run --locked -- check --config examples/generator.v2.json
+cargo run --locked -- export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
   --edge-id synthetic-edge \
   --config-revision synthetic-r1 \
   --output /tmp/processing.synthetic.json
-uv run --locked pytest tests/integration/test_grpc_scan_server.py
+cargo test --locked --test scan_runtime
 ```
 
 두 번째 명령은 `/tmp/processing.synthetic.json`을 만들고 세 번째 명령은 sensor별 UDS(Unix
-Domain Socket) 구독과 상태 출력을 검증한다.
+Domain Socket) 구독과 상태 출력을 검증한다. Python 기준 구현과 문서까지 검증하려면
+`uv sync --locked --all-groups`로 개발 환경을 구성한다.
 
 ## 설정
 
@@ -167,21 +169,20 @@ uv run --locked python -m tools.verify_edge_platform_contract \
 ```
 
 검증기는 외부 Proto와 로컬 계약의 일치, `lidar-processing` 설정 loader의 수락, 두 sensor frame의
-ingest, 단면 coverage와 최종 `GOOD` 측정을 확인한다. 단계 4의 Rust 후보는 실제 `run` process와
-두 UDS lane을 검증하는 별도 계약 검증을 통과한다. 이 검증은 미리 만든 release binary를 요구하며
+ingest, 단면 coverage와 최종 `GOOD` 측정을 확인한다. Rust 기본 구현은 실제 `run` process와 두
+UDS lane을 검증하는 별도 계약 검증을 통과한다. 이 검증은 미리 만든 release binary를 요구하며
 정확한 명령과 판정 범위는 [`edge-platform-integration/`](edge-platform-integration/)을 따른다.
 
 ## 배포
 
 배포 대상은 실제 센서 운영 환경이 아니라 Raspberry Pi 5에서 `lidar-processing`과 연동하는 개발 및
 검증 환경이다. Release는 `linux/arm64` OCI(Open Container Initiative) image와 digest 참조를
-제공한다. 현재 0.9.0 image의 기본 실행 경로는 Python이며 Rust `run` 후보는 ARM64 공유 부하 검증을
-통과한 뒤 기본 실행 경로로 전환한다.
+제공한다. 기본 image는 Python runtime과 빌드 도구가 없는 Rust 단일 실행 파일을 UID와 GID
+10001로 실행한다. Python 구현은 동등성 fixture, 외부 계약 검사와 개발 도구로만 유지한다.
 
-Rust 후보는 Raspberry Pi 5에서 두 sensor scan 의미와 `lidar-processing`의 높이 및 적재율 변환을
-통과했다. 짧은 사전 검증은 정식 60분 부하 수락을 대신하지 않으며 고정한 `lidar-processing`
-source의 호환 선행 조건이 남아 있다. 현재 Release의 기본 실행 경로는 Python이다. 측정값과 남은
-조건은
+Release 전 검증은 두 sensor scan 의미, `lidar-processing`의 높이 및 적재율 변환, 짧은 공유 부하,
+재시작, OOM(Out Of Memory)과 thermal throttling 상태를 확인한다. 4개 case의 장기 공유 부하 검증은
+Release 이후 별도 안정성 검증으로 수행한다. 측정값과 후속 조건은
 [`docs/performance.md`](docs/performance.md)와 [`docs/development-plan.md`](docs/development-plan.md)가
 정본이다.
 
@@ -216,7 +217,7 @@ Release 선택, Host 준비, 전체 Docker 명령과 반복 가능한 image 검�
 | [`docs/deployment.md`](docs/deployment.md) | 검증 image 배포와 실행 |
 | [`docs/performance.md`](docs/performance.md) | 부하 측정 범위와 기준 |
 | [`docs/dependencies.md`](docs/dependencies.md) | 직접 의존성과 라이선스 |
-| [`docs/development-plan.md`](docs/development-plan.md) | 현재 상태와 Python에서 Rust로의 전환 계획 |
+| [`docs/development-plan.md`](docs/development-plan.md) | 현재 구현 상태와 Release 후속 검증 |
 | [`docs/synthetic-environment-specification/`](docs/synthetic-environment-specification/) | 공개 합성 환경의 자기완결 Markdown, DOCX, PDF와 도면 묶음 |
 
 ## 이용 조건

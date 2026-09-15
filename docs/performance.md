@@ -93,66 +93,47 @@ test double의 `docker stats`는 결과 directory에 남는다. CPU 2 core는 �
 명시적으로 양보하지 않을 수 있다. 계산 시간이 100 ms 주기에 근접하면 gRPC와 상태 갱신 task가
 지연되므로 짧은 데이터 정합성 통과만으로 지속 실행을 판정할 수 없다.
 
-## Rust ARM64 사전 검증
+## Rust ARM64 단기 통합 검증
 
-Rust 후보 source revision은 `23f9e5a5061735ff3c8b7d324792340ce94782d9`이고 검증 image digest는
-`sha256:2aaf1d3a6fae800906e19a9d28a69e9063f40bd45d20bdfa0924ec5221b92fae`다. Raspberry Pi 5
-8 GB에서 600초 평균 적재 주기와 진단 비활성 설정으로 짧은 검증을 수행했다.
-
-생성기 단독 사전 검증 결과는 다음과 같다. CPU는 Docker의 약 2초 간격 표본 20개를 사용했고
-frame 지연은 40초 측정 구간의 전체 400개 batch를 사용했다.
-
-| 항목 | 관측값 |
-| --- | --- |
-| 완료 batch | 400/400 |
-| 생성기 CPU P95 | 35.18 percent |
-| 생성기 CPU 최대 | 35.46 percent |
-| 공동 frame 완료 지연 P99 | 21.381 ms |
-| 공동 frame 완료 지연 최대 | 23.895 ms |
-| 계측 buffer overflow | 없음 |
-
-Docker가 scratch runtime의 memory 사용량을 0 B로 반환했으므로 단독 검증의 RSS 값은 사용하지
+Rust source revision `65730a13697162dc42741effd0241ac3aa942e2d`의 로컬 ARM64 image ID
+`sha256:458a01ac36990ba36f9d15b145d44faeeeb2d7f83ac3b158a476c1021306a53f`를 Raspberry Pi 5
+8 GB에서 검증했다. `lidar-processing`은 고정한 외부 source에 UDS authority와 frame 손실 집계를
+보완한 revision `55b2e9d9401682c237a42945d9f548a4c912951f`의 로컬 ARM64 image ID
+`sha256:c737833bc97958e2a6c0807276cce3e0f9b46fa6f020a8b890bb279092deb042`를 사용했다. 재현
+source와 patch는 `edge-platform-integration/`에 고정되어 있고 두 image는 registry에 게시하지
 않았다.
 
-공유 사전 검증은 같은 Rust image, 고정한 `lidar-processing` source
-`666ca6067a3bb86833b74140cb659049025d0dae`에 UDS authority option만 적용한 로컬 ARM64 image와
-임시 계약 수신기를 함께 실행했다. 이 처리 image는 registry에 게시하지 않았다. CPU와 RSS는
-cgroup v2 CPU 시간과 `smaps_rollup`을 약 1초 간격으로 읽은 29개 구간 및 표본을 사용했다. 준비
-2초와 측정 30초의 짧은 실행이므로 정식 percentile 근거가 아니다.
+측정은 600초 평균 적재 주기, 관찰 no-op, 진단 비활성, 2초 준비와 30초 측정 조건을 사용했다. 이
+구간은 filling 방향과 공유 자원 여유를 검증하며 수거 전이, 관찰 추가 부하와 지속 안정성은 장기
+matrix에서 검증한다. CPU와 RSS는 1초 간격 30개 표본, frame 완료 지연은 300개 전체 batch를
+사용했다.
 
 | 항목 | 관측값 |
 | --- | --- |
 | 완료 batch | 300/300 |
-| 생성기 CPU P95 | 37.79 percent |
-| 생성기 CPU 최대 | 37.83 percent |
-| 생성기 RSS P95 | 5.81 MiB |
-| 생성기 RSS 최대 | 5.92 MiB |
-| 공동 frame 완료 지연 P99 | 22.756 ms |
-| 처리기 CPU P95 | 22.19 percent |
-| 처리기 CPU 최대 | 93.31 percent |
-| 처리기 RSS P95 | 67.38 MiB |
-| 처리기 RSS 최대 | 67.38 MiB |
-| 처리 measurement | 전체 29개, `GOOD` 27개 |
+| 생성기 CPU P95 | 33.17 percent |
+| 생성기 RSS P95 | 5.73 MiB |
+| 공동 frame 완료 지연 P99 | 20.00 ms |
+| 처리기 CPU P95 | 22.30 percent |
+| 처리기 RSS P95 | 66.39 MiB |
+| 처리 measurement | 26개, sensor별 및 융합 `GOOD` 26개 |
+| 처리 measurement 최대 간격 | 1.188 s |
+| 처리 measurement 최대 전달 지연 | 192.469 ms |
 | 생성기 scan 의미 | 두 sensor 모두 통과 |
-| 처리 결과 의미 | 높이 범위, sequence 증가와 융합 적재율 범위 통과 |
-| 처리기 `frame_loss` | 82 |
+| 처리 결과 의미 | 높이, quality, sensor별 및 융합 적재율 범위와 filling 증가 통과 |
+| 유실 및 생명주기 | 모든 sequence 및 frame 유실, 재시작, OOM과 thermal throttling 0회 |
+| 장비 최고 온도 | 59.5 C |
 
-`frame_loss`는 생성기 scan 의미나 server frame 누락에서 발생하지 않았다. 고정한 처리 구현은
-sensor별 최근 10개 scan을 보관하고 1초마다 계산한다. 10 Hz에서 계산 경계 사이 11개 scan이
-들어오면 첫 scan을 보관하지 못하고 다음 계산에서 sensor당 1개를 `frame_loss`로 기록한다. 같은
-입력을 처리 엔진 단위 실행에 넣어 총 2 증가와 `GOOD` 결과를 함께 재현했다. 처리 image가 이
-경계를 수정하거나 counter 의미를 실제 전송 유실과 분리하기 전에는 장기 matrix의 유실 0 조건을
-통과할 수 없다.
-
-현재 edge의 Rust 후보와 authority 수정 처리기는 함께 실행되며 두 driver와 처리 상태는
-`HEALTHY`다. 상주 measurement uplink가 없는 실행의 `local_loss_count`는 downstream 부재를
-나타내므로 사전 성능 결과에 포함하지 않는다.
+장비 kernel은 cgroup v2 memory controller를 활성화하지 않았다. 생성기와 처리기 RSS는 각
+cgroup의 process별 `/proc/<pid>/smaps_rollup`을 합산했고 `memory.current`는 누락 진단값으로
+기록했다. 기존 상주 생성기와 처리기는 검증 전후 같은 container로 복구했으며 restart count와
+`vcgencmd get_throttled` 결과는 각각 0과 `0x0`이었다.
 
 ## Rust 공유 부하 측정 규칙
 
-Rust 장기 공유 부하 합격 결과는 아직 없다. 아래 규칙은 Rust 전환의 합격 측정에 적용하며 수치
-합격선은 [`development-plan.md`](development-plan.md#성능-합격)가 정본이다. 위 사전 검증이나
-Python 기준선의 관측값으로 Rust 합격 여부를 판정하지 않는다.
+Rust 장기 공유 부하 결과는 아직 없다. 아래 규칙은 Release 후 지속 안정성 측정에 적용하며 수치
+기준은 [`development-plan.md`](development-plan.md#release-전-단기-합격)가 정본이다. 단기 통합
+검증과 Python 기준선의 관측값은 장기 matrix 결과를 대신하지 않는다.
 
 고정된 실행 명령, 증거 인계와 aggregate 결과 schema는
 [`../tests/edge/long_validation/README.md`](../tests/edge/long_validation/README.md)를 따른다.
@@ -201,8 +182,9 @@ cgroup(Control Group)에 둔다. image digest, 공개 입력 fingerprint, seed, 
 RSS 표본은 같은 cgroup과 하위 cgroup의 `cgroup.procs`에서 중복을 제거한 process ID별로
 `/proc/<pid>/smaps_rollup`의 `Rss`를 읽어 합산한다. `kB` 값에 1,024를 곱해 byte로 변환하며
 1 MiB는 1,048,576 byte다. 이 합계는 process별 상주 메모리 합이므로 공유 page가 여러 process에
-매핑되면 중복 집계될 수 있다. cgroup `memory.current`와 Docker의 메모리 사용량은 별도
-진단값으로 기록한다. RSS field의 의미는
+매핑되면 중복 집계될 수 있다. Linux가 memory controller를 활성화한 경우 cgroup
+`memory.current`를 별도 진단값으로 기록하며, 이 값의 부재는 RSS 판정을 무효화하지 않는다. RSS
+field의 의미는
 [Linux process 메모리 통계](https://docs.kernel.org/filesystems/proc.html)를 따른다.
 
 P95는 3,600개 유효 표본을 오름차순 정렬한 뒤 `ceil(0.95 * N)`번째 값을 선택한다. 순위는

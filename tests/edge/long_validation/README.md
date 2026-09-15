@@ -21,7 +21,10 @@ helper는 processing image의 `ajin_edge.contracts.validate_measurement`를 사�
 고정된 schema, `site_id`, `edge_id`, `config_revision`, `calibration_version`, 정확히 두 sensor와
 fused quality를 통과해야 집계된다. helper는 host process와 cgroup을 읽기 위해 `--pid=host`,
 `--cgroupns=host`, read-only
-`/proc`와 `/sys/fs/cgroup` mount를 사용한다.
+`/proc`와 `/sys/fs/cgroup` mount를 사용한다. CPU와 process RSS는 필수 판정값이다. Linux가
+memory controller를 활성화한 경우에만 cgroup `memory.current`를 선택적 진단값으로 기록한다.
+계층별 `cpu.max`와 `memory.max`가 있으면 유효 자원 제한을 기록하고, 파일이 없는 cgroup root는
+제한 없음으로 해석한다.
 
 runner는 helper가 발행한 하나의 `CLOCK_MONOTONIC` 시작 시각을 simulator와 resource sampler에
 적용한다. 준비 구간은 300초이고 측정 구간은 3,600초다. runner가 이 시간이나 sensor 수를 변경하는
@@ -50,7 +53,7 @@ simulator가 통과하고 `lidar-processing`만 실패하면 `lidar-processing`,
 ## 선행 조건
 
 - Raspberry Pi 5 Model B 8 GB와 정상 동작하는 냉각 장치
-- cgroup v2를 사용하는 Linux와 Docker Engine
+- cgroup v2 CPU controller를 사용하는 Linux와 Docker Engine
 - 검증 계정에서 성공하는 `docker info` 또는 passwordless `sudo -n /usr/bin/docker info`
 - 검증 계정에서 성공하는 `vcgencmd get_throttled`와 온도 파일 읽기
 - `vcgencmd get_throttled` 결과 `0x0`
