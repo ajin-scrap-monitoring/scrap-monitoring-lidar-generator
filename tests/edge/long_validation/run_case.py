@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import io
 import json
 import math
 import os
@@ -42,6 +43,7 @@ _EXPECTED_OBSERVATION_RECORDS = 3_901
 _MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
 _MAX_SOURCE_ARCHIVE_FILES = 10_000
 _MAX_SOURCE_ARCHIVE_EXPANDED_BYTES = 512 * 1024 * 1024
+_MAX_DOCKER_COPY_BYTES = 16 * 1024 * 1024
 _OBSERVATION_RESULT_FIELDS = {
     "schema_version",
     "run_id",
@@ -755,12 +757,43 @@ class Docker:
         return result.returncode == 0 and result.stdout.strip() == "true"
 
     def copy_from(self, name: str, source: str, destination: Path) -> bool:
-        result = self._run(
-            ["cp", f"{name}:{source}", str(destination)],
-            operation=f"{name} artifact copy",
-            check=False,
-        )
-        return result.returncode == 0
+        try:
+            result = subprocess.run(
+                [self.executable, "cp", f"{name}:{source}", "-"],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise RunnerError(f"Docker {name} artifact copy timed out") from error
+        if result.returncode != 0:
+            return False
+        try:
+            with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:*") as archive:
+                members = archive.getmembers()
+                if len(members) != 1 or not members[0].isfile():
+                    raise RunnerError("Docker artifact copy must contain one regular file")
+                member = members[0]
+                if member.size > _MAX_DOCKER_COPY_BYTES:
+                    raise RunnerError("Docker artifact copy exceeds the size limit")
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    raise RunnerError("Docker artifact copy is unreadable")
+                payload = extracted.read(_MAX_DOCKER_COPY_BYTES + 1)
+        except (OSError, tarfile.TarError) as error:
+            raise RunnerError("Docker artifact copy is not a valid tar stream") from error
+        if len(payload) != member.size:
+            raise RunnerError("Docker artifact copy size differs from its tar metadata")
+        try:
+            descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+        except FileExistsError as error:
+            raise RunnerError("Docker artifact destination already exists") from error
+        return True
 
     def remove(self, name: str) -> None:
         self._run(["rm", "--force", name], operation=f"{name} removal", check=False)

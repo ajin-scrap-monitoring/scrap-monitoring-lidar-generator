@@ -1,5 +1,6 @@
 import argparse
 import hashlib
+import io
 import json
 import os
 import stat
@@ -309,6 +310,32 @@ def test_container_wait_uses_a_bounded_timeout() -> None:
 
     assert docker.wait("container-a", timeout_s=5.0) == 0
     assert docker.observed_timeout == 5.0
+
+
+def test_docker_copy_stream_is_written_by_the_calling_user(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    payload = b'{"state":"ready"}\n'
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w") as archive:
+        member = tarfile.TarInfo("ready.json")
+        member.size = len(payload)
+        member.mode = 0o600
+        archive.addfile(member, io.BytesIO(payload))
+
+    def run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        del kwargs
+        assert args[0] == ["sudo-docker", "cp", "helper:/ready.json", "-"]
+        return subprocess.CompletedProcess(args[0], 0, stream.getvalue(), b"")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    destination = tmp_path / "ready.json"
+
+    assert Docker("sudo-docker").copy_from("helper", "/ready.json", destination)
+    assert destination.read_bytes() == payload
+    assert destination.stat().st_uid == os.getuid()
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
 
 
 def test_repository_archive_requires_exact_tree_and_commit(tmp_path: Path) -> None:
