@@ -46,9 +46,8 @@ frame에 포함하지 않는다. exporter가 공개 합성 환경의 센서 위�
 센서 ID, 설치 형상, 측정과 합성 오차는 환경변수로 받지 않는다. 배포 식별자와 host 경로는
 JSON에 넣지 않는다.
 
-Rust 기본 runtime과 Python 기준 구현의 `run` 명령은 같은 우선순위와 환경변수 이름을 사용한다.
-Rust `check --runtime`은 모든 배포 설정을 검증하지만 socket이나 상태 파일을 만들지 않는다.
-Rust `run`은 검증된 설정만으로 실제 생성과 외부 출력을 시작하며 별도 비공개 fallback을 두지
+`check --runtime`은 모든 배포 설정을 검증하지만 socket이나 상태 파일을 만들지 않는다.
+`run`은 검증된 설정만으로 실제 생성과 외부 출력을 시작하며 별도 비공개 fallback을 두지
 않는다.
 
 `SCRAP_LIDAR_GENERATOR_*` 환경변수 prefix와 `generator.v2.json` 파일 이름은 기존 배포 및 설정
@@ -83,7 +82,7 @@ driver 기준 최대 64자다. `SITE_ID`와 `DEPLOYMENT_REVISION`은 최대 128�
 
 `SCRAP_LIDAR_GENERATOR_GRPC_SOCKET_DIR`은 두 UDS 파일을 만드는 container 내부 절대 경로다.
 파일 이름은 JSON sensor ID에서 계산하며 별도 환경변수로 받지 않는다. 상태 directory도
-container 내부 절대 경로다. Python 구독 client의 UDS channel option은 생성기 설정이 아니며
+container 내부 절대 경로다. 구독 client의 UDS channel option은 생성기 설정이 아니며
 [`../edge-platform-integration/`](../edge-platform-integration/)의 연결 요구사항을 따른다.
 
 평균 적재 주기는 0보다 큰 유한한 simulation second다. 공개 기본값은 86,400초다. 수거 기준
@@ -108,7 +107,7 @@ owner-only JSON Lines 파일로 보존하는 개발 검증 기능이다. `diagno
 다음 명령은 공개 합성 환경에서 `lidar-processing` 형식의 처리 설정을 만든다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
+cargo run --locked -- export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -147,7 +146,7 @@ config_revision
 초당 20 scan과 64,000 point다. scan 배열 길이는 wire 고정값이 아니며 scheduler가 회전
 경계로 나눈 실제 측정점 수를 사용한다. 생성기 loader는 `lidar-processing`의 frame 수락 상한에
 맞춰 `ceil(sample_rate_hz / rotation_rate_hz) <= 32768`을 검증한다. JSON Schema는 두 field의
-비율을 표현하지 못하므로 이 교차 field 조건은 Python과 Rust loader가 동일하게 검증한다. SDK 이후 정수 변환은
+비율을 표현하지 못하므로 loader가 이 교차 field 조건을 검증한다. SDK 이후 정수 변환은
 [`sdk-compatibility.md`](sdk-compatibility.md)가 정본이다.
 
 ## 합성 시나리오와 측정 오차

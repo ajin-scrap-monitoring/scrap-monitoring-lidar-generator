@@ -44,7 +44,7 @@ wire 형식, 전달 의미와 field 의미는
 | `--observation-interval-s` | `1.0` | 시뮬레이션 초 기준 전송 간격 |
 
 ```bash
-uv run --locked scrap-monitoring-lidar-simulator \
+cargo run --locked -- run \
   --config /path/to/generator.v2.json \
   --grpc-socket-dir /run/lidar \
   --status-dir /status \

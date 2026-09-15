@@ -2,18 +2,10 @@
 
 import hashlib
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
-
-from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_simulator.edge_integration import build_synthetic_processing_config
-from scrap_monitoring_lidar_simulator.observation import (
-    decode_observation_header_line,
-    decode_observation_line,
-)
-from scrap_monitoring_lidar_simulator.wire import lidar_pb2
 
 _ROOT = Path(__file__).parents[2]
 _ENVIRONMENT_SCHEMA = _ROOT / "contracts" / "environment" / "v1" / "environment.schema.json"
@@ -60,11 +52,11 @@ def test_observation_fixture_matches_contract() -> None:
     assert len(lines) == 2
     Draft202012Validator(header_schema).validate(json.loads(lines[0]))
     Draft202012Validator(observation_schema).validate(json.loads(lines[1]))
-    header = decode_observation_header_line(lines[0])
-    record = decode_observation_line(lines[1])
-    assert header.run_id == record.run_id
-    assert header.scene.sensors[0].sensor_id == "sensor-a"
-    assert record.sequence == 1
+    header = json.loads(lines[0])
+    record = json.loads(lines[1])
+    assert header["run_id"] == record["run_id"]
+    assert header["scene"]["sensors"][0]["sensor_id"] == "sensor-a"
+    assert record["sequence"] == 1
 
 
 def test_pinned_proto_and_handoff_copy_match_source_metadata() -> None:
@@ -79,36 +71,6 @@ def test_pinned_proto_and_handoff_copy_match_source_metadata() -> None:
     validation_patch = _HANDOFF / validation["patch_path"]
     assert len(validation["commit"]) == 40
     assert hashlib.sha256(validation_patch.read_bytes()).hexdigest() == validation["patch_sha256"]
-    assert lidar_pb2.DESCRIPTOR.package == "ajin.edge.lidar.v1"
-    assert set(lidar_pb2.DESCRIPTOR.services_by_name) == {"LidarScanSource"}
-    assert [
-        method.name for method in lidar_pb2.DESCRIPTOR.services_by_name["LidarScanSource"].methods
-    ] == ["SubscribeScans"]
-    assert set(lidar_pb2.ScanFrame.DESCRIPTOR.fields_by_name) == {
-        "schema_version",
-        "edge_id",
-        "sensor_id",
-        "sequence",
-        "acquired_at_unix_ms",
-        "acquired_monotonic_ns",
-        "sdk_status",
-        "scan_hz",
-        "samples",
-        "instance_id",
-        "config_revision",
-    }
-
-
-def test_handoff_processing_fixture_is_current_exporter_output() -> None:
-    expected = build_synthetic_processing_config(
-        load_generator_inputs(_ROOT / "examples" / "generator.v2.json"),
-        socket_directory=PurePosixPath("/sockets"),
-        site_id="synthetic-site",
-        edge_id="synthetic-edge",
-        config_revision="synthetic-r1",
-    )
-
-    assert _json(_HANDOFF / "v1" / "processing.synthetic.json") == expected
 
 
 def test_handoff_contains_only_current_integration_artifacts() -> None:

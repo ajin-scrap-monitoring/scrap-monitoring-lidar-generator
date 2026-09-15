@@ -83,7 +83,7 @@ fn record(sensor_id: &str, scan_id: u64, completed_at_s: f64) -> DiagnosticsReco
 }
 
 #[test]
-fn generation_fingerprint_matches_the_python_public_fixture() {
+fn generation_fingerprint_matches_the_public_fixture() {
     assert_eq!(
         generator_input_fingerprint(&inputs()).unwrap(),
         "611b752a910a2015d69eb827981f167f3194a7fa21c52d351b4222d39c9a2604"

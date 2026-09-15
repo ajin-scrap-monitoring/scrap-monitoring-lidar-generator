@@ -215,11 +215,9 @@ fn normalized_quality(config: &QualityProfileConfig) -> Value {
 }
 
 #[test]
-fn public_inputs_match_the_python_normalized_fixture() {
-    let fixture: Value = serde_json::from_str(include_str!(
-        "fixtures/rust-parity/configuration-cases.json"
-    ))
-    .unwrap();
+fn public_inputs_match_the_model_v1_normalized_fixture() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/model-v1/configuration-cases.json")).unwrap();
     let normalized = &fixture["public_normalized"];
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
 
@@ -245,10 +243,8 @@ fn public_inputs_match_the_python_normalized_fixture() {
 
 #[test]
 fn configuration_fixture_cases_match_acceptance_kind_and_path() {
-    let fixture: Value = serde_json::from_str(include_str!(
-        "fixtures/rust-parity/configuration-cases.json"
-    ))
-    .unwrap();
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/model-v1/configuration-cases.json")).unwrap();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     for case in fixture["cases"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();

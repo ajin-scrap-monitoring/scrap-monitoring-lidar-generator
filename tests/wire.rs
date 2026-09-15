@@ -61,9 +61,9 @@ fn proto_matches_source_metadata_and_integration_bundle() {
 }
 
 #[test]
-fn python_fixture_protobuf_decodes_with_exact_fields_and_sample_order() {
+fn model_v1_fixture_protobuf_decodes_with_exact_fields_and_sample_order() {
     let fixture: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/rust-parity/scan-frames.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/model-v1/scan-frames.json")).unwrap();
     let mut checked = 0;
     for record in fixture["records"]
         .as_array()

@@ -106,15 +106,15 @@ sequence gap으로 확인한다.
 포함하지 않는다. 외부 SDK는 BSD-2-Clause license를 따른다.
 
 자동 검증은 HQ 표현 가능성, 정수 변환 경계, 0 거리, quality 이동, 안정 angle 정렬, 첫 scan
-생략과 sensor별 sequence를 Python 기준 구현과 Rust 기본 구현에서 확인한다. 다음 기준선 검증은 Python
-frame과 처리 설정을 고정한 `lidar-processing`의 `ProcessingEngine`에 넣는다. Rust exporter가 만든
-설정을 검사할 때는 `--processing-config`로 해당 파일을 지정한다.
+생략과 sensor별 sequence를 Rust 단위 및 통합 테스트에서 확인한다. Live 계약 검증은 실제 `run`
+process의 두 gRPC stream과 exporter 출력을 고정한 `lidar-processing`의 `ProcessingEngine`에 넣는다.
 
 ```bash
-uv run --locked python -m tools.verify_edge_platform_contract \
+cargo build --release --locked --bin scrap-monitoring-lidar-simulator
+uv run --locked python -m tools.verify_rust_runtime_contract \
+  --runtime-binary target/release/scrap-monitoring-lidar-simulator \
   --edge-platform-root /path/to/ajin-edge-platform
 ```
 
-실제 Rust `run` process가 내보낸 두 gRPC stream의 SDK 이후 값과 처리 결과는 별도 live 계약
-검증으로 확인한다. 이 검증은 release profile binary를 요구하며 정확한 명령과 판정 범위는
+검증은 release profile binary를 요구하며 정확한 판정 범위는
 [`../edge-platform-integration/`](../edge-platform-integration/)이 정본이다.

@@ -55,9 +55,9 @@ fn bounded(surface: &HeightField) {
 }
 
 #[test]
-fn every_height_field_fixture_value_matches_independent_python_baseline() {
+fn every_height_field_value_matches_the_model_v1_fixture() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "fixtures/rust-parity/height-field-operations.json"
+        "fixtures/model-v1/height-field-operations.json"
     ))
     .unwrap();
     assert_eq!(fixture["comparison_class"], "rng-independent");

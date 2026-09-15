@@ -611,7 +611,7 @@ mod tests {
     }
 
     #[test]
-    fn stable_float_matches_python_decimal_place_rounding() {
+    fn stable_float_uses_decimal_place_rounding() {
         assert_eq!(stable_float(4.430800646815651), 4.430800646815651);
         assert_eq!(stable_float(2.8458872586489115), 2.845887258648911);
         assert_eq!(stable_float(-1.5578600007716954), -1.557860000771695);

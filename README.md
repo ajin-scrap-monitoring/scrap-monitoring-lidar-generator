@@ -24,10 +24,10 @@ scan 생성과 gRPC 구독을 중단시키지 않는다.
 
 | 용도 | 요구 사항 |
 |---|---|
-| 기본 구현 개발 | Rust 1.96.0 |
-| 기준 구현 및 문서 검증 | Python 3.14.4, uv 0.12.15 |
+| 시뮬레이터 개발 | Rust 1.96.0 |
+| 계약, 장기 부하 및 문서 검증 | Python 3.14.4, uv 0.12.15 |
 | 엣지 검증 | 64-bit ARM Linux, Docker Engine |
-| 배포 제어 | Linux, Python 3.14.4, uv 0.12.15, GitHub CLI, Bash |
+| 배포 제어 | Linux, Rust 1.96.0, GitHub CLI, Bash |
 
 엣지 검증 장비는 Python, uv, compiler와 이미지 빌드 도구를 설치하지 않는다. GitHub Container
 Registry에 게시된 `linux/arm64` 이미지를 digest로 받아 실행한다.
@@ -47,8 +47,8 @@ cargo test --locked --test scan_runtime
 ```
 
 두 번째 명령은 `/tmp/processing.synthetic.json`을 만들고 세 번째 명령은 sensor별 UDS(Unix
-Domain Socket) 구독과 상태 출력을 검증한다. Python 기준 구현과 문서까지 검증하려면
-`uv sync --locked --all-groups`로 개발 환경을 구성한다.
+Domain Socket) 구독과 상태 출력을 검증한다. 계약, 장기 부하와 문서 자동화를 검증하려면
+`uv sync --locked --all-groups`로 개발 도구 환경을 구성한다.
 
 ## 설정
 
@@ -116,7 +116,7 @@ JSON Lines 파일로 남기는 개발 검증 기능이다. 일반 scan 전송과
 값만 넣는다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
+cargo run --locked -- export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -142,7 +142,7 @@ CONFIG_SHA256="$(sha256sum processing.synthetic.json | awk '{print $1}')"
 
 ## 개발 및 검증
 
-다음 명령은 전체 소스, 계약, 문서와 Python package를 검증한다.
+다음 명령은 전체 Rust 소스, 계약, Python 자동화와 문서를 검증한다.
 
 ```bash
 cargo fmt --check
@@ -157,14 +157,14 @@ uv run --locked mypy
 uv run --locked pytest
 uv run --locked --group docs \
   python docs/synthetic-environment-specification/generate.py --check
-uv run --locked python -m tools.generate_lidar_wire --check
-uv build --no-sources
 ```
 
 `ajin-edge-platform` 구현과의 직접 호환성은 고정한 source checkout으로 확인한다.
 
 ```bash
-uv run --locked python -m tools.verify_edge_platform_contract \
+cargo build --release --locked --bin scrap-monitoring-lidar-simulator
+uv run --locked python -m tools.verify_rust_runtime_contract \
+  --runtime-binary target/release/scrap-monitoring-lidar-simulator \
   --edge-platform-root /path/to/ajin-edge-platform
 ```
 
@@ -178,11 +178,11 @@ UDS lane을 검증하는 별도 계약 검증을 통과한다. 이 검증은 미
 배포 대상은 실제 센서 운영 환경이 아니라 Raspberry Pi 5에서 `lidar-processing`과 연동하는 개발 및
 검증 환경이다. Release는 `linux/arm64` OCI(Open Container Initiative) image와 digest 참조를
 제공한다. 기본 image는 Python runtime과 빌드 도구가 없는 Rust 단일 실행 파일을 UID와 GID
-10001로 실행한다. Python 구현은 동등성 fixture, 외부 계약 검사와 개발 도구로만 유지한다.
+10001로 실행한다. Python은 계약, 장기 부하와 문서 자동화에만 사용하는 개발 도구다.
 
-Release 전 검증은 두 sensor scan 의미, `lidar-processing`의 높이 및 적재율 변환, 짧은 공유 부하,
-재시작, OOM(Out Of Memory)과 thermal throttling 상태를 확인한다. 4개 case의 장기 공유 부하 검증은
-Release 이후 별도 안정성 검증으로 수행한다. 측정값과 후속 조건은
+Release 전 검증은 두 sensor scan 의미, ARM64 상태와 sequence 진행, 짧은 생성기 부하, 재시작,
+OOM(Out Of Memory)과 thermal throttling 상태를 확인한다. 처리 구성 요소의 교체 전에는 처리 결과와
+4개 case 장기 공유 부하 검증을 보류한다. 측정값과 후속 조건은
 [`docs/performance.md`](docs/performance.md)와 [`docs/development-plan.md`](docs/development-plan.md)가
 정본이다.
 

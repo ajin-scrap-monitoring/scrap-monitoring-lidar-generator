@@ -4,7 +4,7 @@
 
 Input fingerprint SHA-256: `c062670498a299f28eecf78667c18eccea6316ae06d8711a48ba99b2aa27f126`
 
-Artifact fingerprint SHA-256: `c35791f4ccfa430a33544438663258f1050e3c6eb88b16a423fc2a641a17d37b`
+Artifact fingerprint SHA-256: `be782bd9e5ffdd86a94c545da9d673ce206d76956fabdbad20a8974a1199120b`
 
 ## 도면
 

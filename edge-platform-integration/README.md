@@ -86,9 +86,8 @@ grpc.aio.insecure_channel(
 
 `SOURCE.json`의 `commit`은 외부 계약을 읽는 기준 commit이다. `validation_image`는 이 commit에
 `validation/lidar-processing-compatibility.mbox`를 적용해 만드는 검증 전용 파생 image의 source를
-고정한다. Patch는 Python UDS client authority와 runtime에서 수신 검증을 통과한 연속 scan의
-sequence 집계를 수정한다. 정상 recent-ten 보관 회전은 `history_evictions`에 남고 실제 sequence
-간격만 `frame_loss`에 남는다.
+고정한다. Patch는 현재 고정된 처리 구현과 UDS 연결 및 검증 실행을 재현하기 위한 호환 변경이다.
+이 patch의 처리기 내부 정책은 simulator의 제품 계약이나 결함 판정 기준이 아니다.
 
 검증 image는 simulator Release 산출물이 아니며 GHCR(GitHub Container Registry)에 게시하지
 않는다. 홈서버에서 ARM64 image와 archive를 만들고 엣지에는 archive를 전달하여 load한다. 다음
@@ -140,7 +139,7 @@ schema를 직접 읽지 않는다. 합성 통합 검증을 준비할 때 다음 
 `lidar-processing` JSON으로 변환한다.
 
 ```shell
-scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
+cargo run --locked -- export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -203,18 +202,8 @@ scan gRPC 계약에는 환경 형상이나 observation record를 추가하지 �
 
 ## 수락 검증
 
-수락 검증은 기준선과 live runtime의 2개 계층이다. 다음 명령은 고정한 외부 commit과 Proto가
-같은지 확인하고, 실제 `lidar-processing` 설정 loader와 `ProcessingEngine`이 Python 기준 frame을
-받아 두 센서 단면을 `GOOD` 상태와 전체 coverage로 계산하는지 검증한다. Rust exporter 출력을
-검사할 때는 `--processing-config`로 생성 파일을 추가 지정한다.
-
-```shell
-uv run --locked python -m tools.verify_edge_platform_contract \
-  --edge-platform-root /path/to/ajin-edge-platform
-```
-
-Rust 기본 구현의 live 계약 검증은 미리 만든 release profile 실행 파일을 요구한다. Debug 실행이나
-Python helper의 결과는 이 검증을 대신하지 않는다.
+수락 검증은 고정한 외부 commit 및 Proto와 실제 Rust runtime의 직접 연결을 검사한다. 미리 만든
+release profile 실행 파일을 요구하며 debug 실행 결과는 이 검증을 대신하지 않는다.
 
 ```shell
 cargo build --locked --release \
@@ -224,7 +213,7 @@ uv run --locked python -m tools.verify_rust_runtime_contract \
   --edge-platform-root /path/to/ajin-edge-platform
 ```
 
-Live 검증기는 같은 Rust binary의 exporter로 처리 설정을 만들고 `run` process를 시작한다. 이어서
+검증기는 같은 Rust binary의 exporter로 처리 설정을 만들고 `run` process를 시작한다. 이어서
 `lidar_1.sock`과 `lidar_2.sock`을 실제 gRPC client로 구독하고 받은 frame을 고정한
 `ProcessingEngine`에 넣는다. 판정 항목은 sensor별 연속 sequence, SDK 정규화 범위, 두 sensor와
 융합 결과의 `GOOD`, 단면 coverage 1.0, 상태 파일의 필드 집합, 식별자 및 `HEALTHY` 진행값, 관찰

@@ -2,7 +2,7 @@
   "schema_version": 2,
   "environment_id": "synthetic-scrap-pit-v1",
   "input_fingerprint_sha256": "c062670498a299f28eecf78667c18eccea6316ae06d8711a48ba99b2aa27f126",
-  "artifact_fingerprint_sha256": "c35791f4ccfa430a33544438663258f1050e3c6eb88b16a423fc2a641a17d37b",
+  "artifact_fingerprint_sha256": "be782bd9e5ffdd86a94c545da9d673ce206d76956fabdbad20a8974a1199120b",
   "sources": [
     {
       "path": "examples/environment.v1.json",
@@ -19,7 +19,7 @@
   ],
   "generator": {
     "path": "docs/synthetic-environment-specification/generate.py",
-    "sha256": "e01df00a4290f72fbed6d606475476968bbd414d2049b0f8800a893793d9b312"
+    "sha256": "dab7098c346a21ed9f7cd5adb167b2d48eb4ca62d81593eede0c32b5346edf95"
   },
   "model_values": {
     "angle_of_repose_deg": 35.0,

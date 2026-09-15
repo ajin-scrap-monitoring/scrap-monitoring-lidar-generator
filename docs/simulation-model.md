@@ -9,8 +9,8 @@ version은 별개이며 기존 version 2 입력 schema를 변경하지 않는다
 
 계약의 구성 요소는 seed 파생, PRNG(Pseudorandom Number Generator), sampling, rate profile,
 시나리오 event, sensor 회전 및 HQ 변환과 최종 측정의 7개다. 난수 word, sampling과 생성된 segment의
-bit pattern은 Rust exact vector로 검증한다. Python 난수 byte열은 비교하지 않고 scripted rate,
-시나리오, 좌표, 왜곡과 SDK 변환은 Python 기준 fixture와 비교한다.
+bit pattern은 exact vector로 검증한다. Scripted rate, 시나리오, 좌표, 왜곡과 SDK 변환은
+`tests/fixtures/model-v1/`의 고정 기준값과 비교한다.
 
 ## Stream seed
 
@@ -244,6 +244,6 @@ Dropout scheduler와 sensor별 측정기는 한 호출이 실패하면 해당 �
 복원한다. 같은 입력을 수정해 재시도한 결과는 실패 호출 없이 실행한 같은 seed의 결과와 같다.
 
 같은 model version, 설정과 seed는 같은 지원 architecture에서 동일한 난수 소비, profile, 공간
-event와 sensor별 측정을 만든다. `sin`을 포함한 rate 조회와 적분은 Python scripted oracle의
+event와 sensor별 측정을 만든다. `sin`을 포함한 rate 조회와 적분은 model version 1 fixture의
 tolerance로 검증한다. 기존 word 전이, seed layout, sampling 소비량, profile 생성, event 생성이나
 측정 처리 순서를 바꾸면 새 model version이 필요하다.

@@ -16,7 +16,7 @@ use scrap_monitoring_lidar_simulator::{
 };
 use serde_json::Value;
 
-const FIXTURE: &str = include_str!("fixtures/rust-parity/scan-frames.json");
+const FIXTURE: &str = include_str!("fixtures/model-v1/scan-frames.json");
 
 fn timed_reference(value: &Value) -> TimedReferenceScan {
     let sensor_id = value["sensor_id"].as_str().unwrap();

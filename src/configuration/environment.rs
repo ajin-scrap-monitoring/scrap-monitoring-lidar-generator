@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, path::Path};
 
 use super::{
-    EnvironmentConfig, SensorConfig, polygon, python_float_sum,
+    EnvironmentConfig, SensorConfig, compensated_sum, polygon,
     strict_json::{self as json, Object},
 };
 use crate::error::{ConfigurationError, ErrorKind, Result};
@@ -75,7 +75,7 @@ pub fn parse_environment(document: &str) -> Result<EnvironmentConfig> {
             let u90 = json::coordinate::<3>(sensor.get("u90"), &sensor.at("u90"))?;
             for (key, vector) in [("u0", u0), ("u90", u90)] {
                 let length =
-                    python_float_sum(vector.iter().map(|component| component * component)).sqrt();
+                    compensated_sum(vector.iter().map(|component| component * component)).sqrt();
                 if (length - 1.0).abs() > 1e-6 {
                     return Err(ConfigurationError::new(
                         ErrorKind::Geometry,
@@ -84,7 +84,7 @@ pub fn parse_environment(document: &str) -> Result<EnvironmentConfig> {
                     ));
                 }
             }
-            let dot = python_float_sum(u0.iter().zip(u90).map(|(left, right)| left * right));
+            let dot = compensated_sum(u0.iter().zip(u90).map(|(left, right)| left * right));
             if dot.abs() > 1e-6 {
                 return Err(ConfigurationError::new(
                     ErrorKind::Geometry,

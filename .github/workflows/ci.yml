@@ -63,8 +63,9 @@ jobs:
           with open("pyproject.toml", "rb") as source:
               python_version = tomllib.load(source)["project"]["version"]
           if cargo_version != python_version:
-              raise SystemExit("Cargo and Python package versions differ")
+              raise SystemExit("Cargo and development-tool project versions differ")
           PY
+          test -z "$(find src -type f -name '*.py' -print -quit)"
 
       - name: Validate GitHub Actions workflows
         shell: bash
@@ -120,25 +121,22 @@ jobs:
           image: docker.io/tonistiigi/binfmt:qemu-v10.2.3-68@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
           platforms: arm64
 
-      - name: Check Python formatting
+      - name: Check Python automation formatting
         run: uv run --locked ruff format --check .
 
-      - name: Lint Python
+      - name: Lint Python automation
         run: uv run --locked ruff check .
 
-      - name: Check Python types
+      - name: Check Python automation types
         run: uv run --locked mypy
 
-      - name: Test
+      - name: Test Python automation
         run: uv run --locked pytest
 
       - name: Verify synthetic environment specification
         run: |
           uv run --locked --group docs \
             python docs/synthetic-environment-specification/generate.py --check
-
-      - name: Verify generated LiDAR wire modules
-        run: uv run --locked python -m tools.generate_lidar_wire --check
 
       - name: Resolve pinned edge platform contract
         id: edge-contract
@@ -157,21 +155,6 @@ jobs:
           ref: ${{ steps.edge-contract.outputs.commit }}
           path: .contract/ajin-edge-platform
           persist-credentials: false
-
-      - name: Verify edge platform processing compatibility
-        run: |
-          cargo run --locked --quiet \
-            --bin scrap-monitoring-lidar-simulator -- \
-            export-synthetic-processing-config \
-            --generator-config examples/generator.v2.json \
-            --socket-dir /sockets \
-            --site-id synthetic-site \
-            --edge-id synthetic-edge \
-            --config-revision synthetic-r1 \
-            --output target/processing.synthetic.json
-          uv run --locked python -m tools.verify_edge_platform_contract \
-            --edge-platform-root .contract/ajin-edge-platform \
-            --processing-config target/processing.synthetic.json
 
       - name: Verify Rust runtime processing compatibility
         run: |
@@ -197,30 +180,11 @@ jobs:
             "$GITHUB_WORKSPACE/edge-platform-integration/$patch_path"
           test "$(git -C .contract/ajin-edge-platform rev-parse HEAD)" = "$validation_commit"
 
-      - name: Smoke test CLI
+      - name: Smoke test Rust CLI
         run: |
-          uv run --locked scrap-monitoring-lidar-simulator --help
-          uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config --help
-
-      - name: Build package
-        run: uv build --no-sources
-
-      - name: Verify built package
-        shell: bash
-        run: |
-          uv pip uninstall --python .venv/bin/python scrap-monitoring-lidar-simulator
-          uv pip install --python .venv/bin/python --no-deps dist/*.whl
-          .venv/bin/scrap-monitoring-lidar-simulator --help
-          .venv/bin/scrap-monitoring-lidar-simulator-export-synthetic-processing-config --help
-          test ! -e .venv/bin/scrap-monitoring-lidar-generator
-          .venv/bin/python - <<'PY'
-          import importlib.util
-
-          if importlib.util.find_spec("scrap_monitoring_lidar_generator") is not None:
-              raise SystemExit("legacy Python package remains installed")
-          if importlib.util.find_spec("scrap_monitoring_lidar_simulator") is None:
-              raise SystemExit("simulator Python package is not installed")
-          PY
+          target/release/scrap-monitoring-lidar-simulator --help
+          target/release/scrap-monitoring-lidar-simulator \
+            export-synthetic-processing-config --help
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
