@@ -175,10 +175,24 @@ def test_cgroup_parser_requires_one_real_v2_membership(tmp_path: Path) -> None:
     target.mkdir(parents=True)
     (process / "cgroup").write_text("0::/system.slice/docker-test.scope\n", encoding="ascii")
     (target / "cpu.stat").write_text("usage_usec 1\n", encoding="ascii")
-    (target / "memory.current").write_text("1\n", encoding="ascii")
     host_path, helper_path = parse_cgroup_path(proc_root, cgroup_root, 42)
     assert host_path == target
     assert helper_path == Path("/host/sys/fs/cgroup/system.slice/docker-test.scope")
+
+
+def test_effective_constraints_allow_disabled_memory_controller(tmp_path: Path) -> None:
+    root = tmp_path / "cgroup"
+    child = root / "container"
+    child.mkdir(parents=True)
+    (child / "cpu.max").write_text("max 100000\n", encoding="ascii")
+    (child / "cpuset.cpus.effective").write_text("0-3\n", encoding="ascii")
+
+    assert _read_effective_constraints("helper", child, root) == {
+        "component": "helper",
+        "effective_cpu_count": 4,
+        "cpu_quota_cores": None,
+        "memory_limit_bytes": None,
+    }
 
 
 def test_lifecycle_counters_are_derived_from_explicit_evidence() -> None:

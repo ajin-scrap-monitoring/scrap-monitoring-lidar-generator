@@ -461,6 +461,27 @@ def test_cgroup_snapshot_uses_unique_process_smaps_rollup_rss(tmp_path: Path) ->
     assert snapshot.throttled_usec == 7
 
 
+def test_cgroup_snapshot_allows_disabled_memory_controller(tmp_path: Path) -> None:
+    cgroup = tmp_path / "cgroup"
+    proc = tmp_path / "proc"
+    process = proc / "101"
+    cgroup.mkdir()
+    process.mkdir(parents=True)
+    (cgroup / "cpu.stat").write_text(
+        "usage_usec 123\nnr_throttled 0\nthrottled_usec 0\n", encoding="ascii"
+    )
+    (cgroup / "cgroup.procs").write_text("101\n", encoding="ascii")
+    (process / "smaps_rollup").write_text(
+        "00400000-00452000 r--p 00000000 00:00 0 [rollup]\nRss: 3 kB\n",
+        encoding="ascii",
+    )
+
+    snapshot = read_cgroup_snapshot(cgroup, monotonic_ns=1_000, proc_root=proc)
+
+    assert snapshot.memory_current_bytes is None
+    assert snapshot.rss_bytes == 3 * 1_024
+
+
 def test_cgroup_interval_uses_actual_monotonic_delta() -> None:
     previous = CgroupSnapshot(1_000_000_000, 1_000, 1, 1, 0, 0)
     current = CgroupSnapshot(3_000_000_000, 1_500_000, 1, 1, 0, 0)
