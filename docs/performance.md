@@ -103,7 +103,7 @@ sequence를 대조해 실패 영역을 분리한다.
 영역이다. 합성 처리 설정의 `fusion_map`은 통합 검증용 항등값이므로 처리 적재율 비교는 연결과
 추세의 검증이며 실제 보정 정확도의 근거가 아니다.
 
-## 현재 검증 기준
+## 현재 검증 결과
 
 Release 0.10.2 ARM64 image
 `sha256:6208aa794b036a21ad25f03fd4c9b1b6573d25c6fbd64bd0a1cc5001f9603475`를
@@ -128,4 +128,28 @@ Raspberry Pi 5 8 GB에서 실제 `lidar-processing`과 함께 실행했다. 평�
 
 같은 원시 frame에 처리 좌표 변환을 독립 적용한 중앙 높이와 P90 높이는 처리 결과와 일치하는
 범위였다. 이 결과는 두 UDS lane, 허공 및 외벽 표현, 적재면 변화와 처리 좌표 변환이 연결된
-상태를 확인한다. 지속 자원 판정은 같은 실제 구성에서 수집한 전체 실행 구간으로 별도 수행한다.
+상태를 확인한다.
+
+같은 image와 처리 구성으로 2시간 42분 36초 동안 795개 자원 표본을 수집했다. Docker CPU
+100 percent는 논리 core 하나이고 P95는 이 문서의 nearest-rank 방식으로 계산했다.
+
+| 항목 | 관측값 |
+| --- | --- |
+| 생성기 CPU | 평균 24.91 percent, P95 28.89 percent, 최대 33.81 percent |
+| 생성기 RSS | 평균 6.19 MiB, P95 6.52 MiB, 최대 6.88 MiB |
+| sensor 생성률 | sensor별 10.0007 scan/s |
+| sensor sequence | 역행 0회, 검증 시작 이후 frame loss 증가 0회 |
+| 생성기 상태 | 두 sensor 전체 표본 `HEALTHY`, `sdk_errors` 0 |
+| host load average 1분 | 평균 0.55, 최대 1.22 |
+| host 가용 memory | 최소 7,454.88 MiB |
+| CPU 온도 | 평균 58.35 C, 최대 61.5 C |
+| 생명주기 | OOM, container restart와 thermal throttling 0회 |
+
+처리 결과 저장 경로에는 같은 생성기 instance의 결과 8,575건이 2시간 48분 동안 기록됐다.
+결과 시각 간격은 평균 1.176초이고 1.5초를 넘는 공백은 없었다. 평균 적재 주기 600초에서
+적재 후 수거 추세가 16회 나타났으며, 처리 적재율은 수거 직전 약 0.78-0.83에서 수거 후
+약 0.01-0.03으로 내려갔다.
+
+현재 고정한 `lidar-processing`의 `INCOMPLETE_PROFILE`, `INSUFFICIENT_SENSORS`, frame 보관 회전과
+`CLOCK_UNSYNCED` 상태는 처리 구성 요소의 판정 및 보관 정책이다. 같은 구간의 생성기 sensor
+sequence와 기준 scan 재현에는 대응하는 오류가 없으므로 시뮬레이터 실패로 분류하지 않는다.

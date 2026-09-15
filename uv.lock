@@ -491,7 +491,7 @@ wheels = [
 
 [[package]]
 name = "scrap-monitoring-lidar-simulator"
-version = "0.10.3"
+version = "1.0.0"
 source = { virtual = "." }
 
 [package.dev-dependencies]

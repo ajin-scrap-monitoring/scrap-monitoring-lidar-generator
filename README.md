@@ -183,23 +183,27 @@ UDS lane을 검증하는 별도 계약 검증을 통과한다. 이 검증은 미
 
 Release 전 검증은 두 sensor scan 의미, ARM64 상태와 sequence 진행 및 정상 종료를 확인한다.
 지속 부하와 처리 높이는 Raspberry Pi 5에서 Release image와 `lidar-processing`을 함께 실행해
-판정한다. 측정 방법, 현재 기준과 후속 조건은
+판정한다. 측정 방법과 현재 검증 결과는
 [`docs/performance.md`](docs/performance.md)와 [`docs/development-plan.md`](docs/development-plan.md)가
 정본이다.
 
-배포 입력은 다음 4개 경로로 구분한다.
+생성기 실행 입력은 다음 5개 Host 경로로 구분한다.
 
 | Host 입력 | Container 경로 | 역할 |
 |---|---|---|
 | `/opt/ajin/config/lidar-simulator/` | `/config/` | 공개 합성 JSON 3개 |
 | `/etc/scrap-monitoring-lidar-simulator.env` | `--env-file` | 실행 경로와 검증 식별자 |
 | `/opt/ajin/runtime/sockets/lidar-simulator/` | `/run/lidar/` | sensor별 gRPC UDS |
-| `/opt/ajin/runtime/status/` | `/status/` | driver 호환 상태 파일 |
+| `/opt/ajin/runtime/status/lidar-driver-a/`과 `lidar-driver-b/` | `/status/`의 같은 하위 경로 | driver 호환 상태 파일 |
+| `/opt/ajin/runtime/diagnostics/lidar-simulator/` | `/data/diagnostics/` | 기본 진단 출력, 비활성화 시 생략 가능 |
 
 `.env`의 `SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v2.json`은 container 경로다. Host의
 `examples/environment.v1.json`, `examples/generator.v2.json`과
 `examples/quality-profile.v1.json`을 첫 번째 경로에 복사한 뒤 directory 전체를 read-only로
 mount한다.
+
+Exporter가 만든 `processing.synthetic.json`은 생성기 입력이 아니다. 검증용 `lidar-processing`
+container에 별도로 read-only mount한다.
 
 Release 선택, Host 준비, 전체 Docker 명령과 반복 가능한 image 검증은
 [`docs/deployment.md`](docs/deployment.md)를 따른다.
@@ -218,7 +222,7 @@ Release 선택, Host 준비, 전체 Docker 명령과 반복 가능한 image 검�
 | [`docs/deployment.md`](docs/deployment.md) | 검증 image 배포와 실행 |
 | [`docs/performance.md`](docs/performance.md) | 부하 측정 범위와 기준 |
 | [`docs/dependencies.md`](docs/dependencies.md) | 직접 의존성과 라이선스 |
-| [`docs/development-plan.md`](docs/development-plan.md) | 현재 구현 상태와 Release 후속 검증 |
+| [`docs/development-plan.md`](docs/development-plan.md) | 현재 구현 상태와 외부 계약 갱신 조건 |
 | [`docs/synthetic-environment-specification/`](docs/synthetic-environment-specification/) | 공개 합성 환경의 자기완결 Markdown, DOCX, PDF와 도면 묶음 |
 
 ## 이용 조건
