@@ -177,6 +177,15 @@ jobs:
             "$GITHUB_SHA" \
             edge-platform-integration
 
+      - name: Package edge validation source
+        run: |
+          git archive \
+            --format=tar.gz \
+            --output=dist/edge-validation-source.tar.gz \
+            "$GITHUB_SHA"
+          sha256sum dist/edge-validation-source.tar.gz \
+            | awk '{print $1}' > dist/edge-validation-source.sha256
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
@@ -344,11 +353,10 @@ jobs:
             exit 1
           fi
           docker pull --platform linux/arm64 "$IMAGE_NAME@$IMAGE_DIGEST"
-          tests/edge/verify-runtime-image.sh \
+          tests/edge/verify-rust-image.sh \
             "$IMAGE_NAME@$IMAGE_DIGEST" \
             examples \
-            "$GITHUB_SHA" \
-            python
+            "$GITHUB_SHA"
           printf '%s@%s\n' "$IMAGE_NAME" "$version_digest" > dist/oci-image.txt
 
       - name: Resolve existing GitHub Release
@@ -367,7 +375,12 @@ jobs:
           import sys
 
           assets = {asset["name"] for asset in json.loads(sys.argv[1])["assets"]}
-          expected = {"edge-platform-integration-v1.tar.gz", "oci-image.txt"}
+          expected = {
+              "edge-platform-integration-v1.tar.gz",
+              "edge-validation-source.tar.gz",
+              "edge-validation-source.sha256",
+              "oci-image.txt",
+          }
           if assets != expected:
               raise SystemExit("existing release assets differ from the required set")
           PY
@@ -375,11 +388,19 @@ jobs:
             mkdir "$existing_dir"
             gh release download "$GITHUB_REF_NAME" \
               --pattern edge-platform-integration-v1.tar.gz \
+              --pattern edge-validation-source.tar.gz \
+              --pattern edge-validation-source.sha256 \
               --pattern oci-image.txt \
               --dir "$existing_dir"
             cmp --silent \
               dist/edge-platform-integration-v1.tar.gz \
               "$existing_dir/edge-platform-integration-v1.tar.gz"
+            cmp --silent \
+              dist/edge-validation-source.tar.gz \
+              "$existing_dir/edge-validation-source.tar.gz"
+            cmp --silent \
+              dist/edge-validation-source.sha256 \
+              "$existing_dir/edge-validation-source.sha256"
             cmp --silent dist/oci-image.txt "$existing_dir/oci-image.txt"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           elif grep -Eqi 'release not found|HTTP 404' "$release_stderr"; then
@@ -396,6 +417,8 @@ jobs:
         with:
           files: |
             dist/edge-platform-integration-v1.tar.gz
+            dist/edge-validation-source.tar.gz
+            dist/edge-validation-source.sha256
             dist/oci-image.txt
           fail_on_unmatched_files: true
           generate_release_notes: true

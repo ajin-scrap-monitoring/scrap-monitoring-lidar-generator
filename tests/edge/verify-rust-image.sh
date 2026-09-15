@@ -11,7 +11,7 @@ config_dir="$(cd "$2" && pwd -P)"
 expected_revision="$3"
 temporary_base="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 temporary_base="$(cd "$temporary_base" && pwd -P)"
-runtime_root="$(mktemp -d "$temporary_base/rust-candidate-image.XXXXXX")"
+runtime_root="$(mktemp -d "$temporary_base/rust-image.XXXXXX")"
 chmod 0777 "$runtime_root"
 probe_container=""
 validation_container=""
@@ -23,18 +23,18 @@ cleanup() {
       docker container rm --force "$container" >/dev/null 2>&1 || true
     fi
   done
-  if [[ "$runtime_root" == "$temporary_base"/rust-candidate-image.* ]]; then
+  if [[ "$runtime_root" == "$temporary_base"/rust-image.* ]]; then
     sudo find "$runtime_root" -depth -delete
   fi
 }
 trap cleanup EXIT
 
 if [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" != "linux/arm64" ]]; then
-  echo "candidate image must be linux/arm64" >&2
+  echo "Rust image must be linux/arm64" >&2
   exit 1
 fi
 if [[ "$(docker image inspect --format '{{.Config.User}}' "$image")" != "10001:10001" ]]; then
-  echo "candidate image user must be 10001:10001" >&2
+  echo "Rust image user must be 10001:10001" >&2
   exit 1
 fi
 
@@ -52,7 +52,7 @@ grep -Fxq \
   "$rootfs_listing"
 if grep -Eq '(^|/)(python([0-9]+(\.[0-9]+)*)?|cargo|rustc|cc|gcc|g\+\+|make)$' \
   "$rootfs_listing"; then
-  echo "candidate runtime contains a build or Python executable" >&2
+  echo "Rust runtime contains a build or Python executable" >&2
   exit 1
 fi
 docker container rm "$probe_container" >/dev/null
@@ -67,7 +67,7 @@ docker run --rm --platform linux/arm64 \
   --mount "type=bind,src=$config_dir,dst=/config,readonly" \
   "$image" check --config /config/generator.v2.json
 
-validation_container="rust-candidate-validation-$container_suffix"
+validation_container="rust-image-validation-$container_suffix"
 docker container create --platform linux/arm64 \
   --name "$validation_container" \
   --mount "type=bind,src=$config_dir,dst=/config,readonly" \
@@ -78,8 +78,8 @@ docker container create --platform linux/arm64 \
   --status-dir /runtime/status \
   --site-id synthetic-site \
   --edge-id synthetic-edge \
-  --config-revision candidate-smoke \
-  --deployment-revision candidate-smoke \
+  --config-revision rust-image-smoke \
+  --deployment-revision rust-image-smoke \
   --observation-host 127.0.0.1 \
   --observation-port 17000 \
   --diagnostics-enabled false \

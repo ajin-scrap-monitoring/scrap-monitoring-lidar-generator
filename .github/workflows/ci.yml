@@ -229,35 +229,23 @@ jobs:
           driver-opts: |
             image=docker.io/moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
 
-      - name: Build Rust ARM64 candidate image
+      - name: Build ARM64 OCI image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: Dockerfile.rust-candidate
           platforms: linux/arm64
           load: true
           push: false
-          tags: scrap-monitoring-lidar-simulator:ci-rust-candidate
+          tags: scrap-monitoring-lidar-simulator:ci
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=candidate-${{ github.sha }}
-          cache-from: type=gha,scope=ci-rust-candidate
-          cache-to: type=gha,mode=max,scope=ci-rust-candidate
+            org.opencontainers.image.version=ci-${{ github.sha }}
+          cache-from: type=gha,scope=ci-runtime
+          cache-to: type=gha,mode=max,scope=ci-runtime
 
-      - name: Verify Rust ARM64 candidate image
+      - name: Verify ARM64 OCI image
         run: |
-          tests/edge/verify-rust-candidate-image.sh \
-            scrap-monitoring-lidar-simulator:ci-rust-candidate \
+          tests/edge/verify-rust-image.sh \
+            scrap-monitoring-lidar-simulator:ci \
             examples \
             "$GITHUB_SHA"
-
-      - name: Build ARM64 OCI image
-        run: |
-          docker buildx build \
-            --platform linux/arm64 \
-            --load \
-            --tag scrap-monitoring-lidar-simulator:ci \
-            .
-
-      - name: Smoke test OCI image
-        run: docker run --rm --platform linux/arm64 scrap-monitoring-lidar-simulator:ci --help
