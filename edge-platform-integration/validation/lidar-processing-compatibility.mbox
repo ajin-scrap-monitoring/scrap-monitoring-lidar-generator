@@ -1,0 +1,120 @@
+From 768a2b7ceeb1954e3ce994fb4d1d401f40287957 Mon Sep 17 00:00:00 2001
+From: whdcksdbwls <whdcksdbwls@gmail.com>
+Date: Tue, 15 Sep 2026 10:56:41 +0000
+Subject: [PATCH 1/2] =?UTF-8?q?fix:=20UDS=20gRPC=20authority=20=ED=98=B8?=
+ =?UTF-8?q?=ED=99=98=EC=84=B1?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../lidar-processing/src/ajin_lidar_processing/runtime.py    | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/services/lidar-processing/src/ajin_lidar_processing/runtime.py b/services/lidar-processing/src/ajin_lidar_processing/runtime.py
+index 0d9d0ac..e6e3b2a 100644
+--- a/services/lidar-processing/src/ajin_lidar_processing/runtime.py
++++ b/services/lidar-processing/src/ajin_lidar_processing/runtime.py
+@@ -66,7 +66,10 @@ async def run(args):
+             try:
+                 async with grpc.aio.insecure_channel(
+                     sensor["endpoint"],
+-                    options=[("grpc.max_receive_message_length", 4 * 1024 * 1024)],
++                    options=[
++                        ("grpc.default_authority", "localhost"),
++                        ("grpc.max_receive_message_length", 4 * 1024 * 1024),
++                    ],
+                 ) as channel:
+                     stream = lidar_pb2_grpc.LidarScanSourceStub(channel).SubscribeScans(
+                         lidar_pb2.SubscribeRequest(consumer_id=status.instance_id)
+-- 
+2.53.0
+
+
+From 55b2e9d9401682c237a42945d9f548a4c912951f Mon Sep 17 00:00:00 2001
+From: whdcksdbwls <whdcksdbwls@gmail.com>
+Date: Tue, 15 Sep 2026 11:48:50 +0000
+Subject: [PATCH 2/2] =?UTF-8?q?fix:=20runtime=20scan=20=EC=9C=A0=EC=8B=A4?=
+ =?UTF-8?q?=20=EC=A7=91=EA=B3=84=20=ED=98=B8=ED=99=98=EC=84=B1?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../src/ajin_lidar_processing/engine.py       |  5 +++
+ tests/test_processing.py                      | 43 +++++++++++++++++++
+ 2 files changed, 48 insertions(+)
+
+diff --git a/services/lidar-processing/src/ajin_lidar_processing/engine.py b/services/lidar-processing/src/ajin_lidar_processing/engine.py
+index a694fee..7239e94 100644
+--- a/services/lidar-processing/src/ajin_lidar_processing/engine.py
++++ b/services/lidar-processing/src/ajin_lidar_processing/engine.py
+@@ -242,6 +242,11 @@ class ProcessingEngine:
+             self.frame_loss += 1
+             return False
+         self.blocked.discard(sid)
++        if receive_monotonic_ns is not None:
++            if old and old.instance_id == f.instance_id:
++                self.frame_loss += max(0, f.sequence - old.sequence - 1)
++            self.last[sid] = f
++            self.validated_history[sid].add((f.instance_id, f.sequence))
+         # Replay has no receive clock: commit sequence/time history only after
+         # measure validates its supplied clocks. Runtime can reject immediately.
+         if len(self.buffers[sid]) == 10:
+diff --git a/tests/test_processing.py b/tests/test_processing.py
+index f826bb0..a44182b 100644
+--- a/tests/test_processing.py
++++ b/tests/test_processing.py
+@@ -308,6 +308,49 @@ def test_normal_history_eviction_is_not_frame_loss():
+     assert e.frame_loss == 0
+ 
+ 
++def test_runtime_history_eviction_between_measurements_is_not_frame_loss():
++    e = engine()
++    for sid in ["a", "b"]:
++        e.ingest(
++            frame(sid, 1, 1_000_000_000),
++            receive_monotonic_ns=1_000_000_000,
++            receive_unix_ms=101000,
++        )
++    e.measure(1_000_000_000, 101000, {})
++
++    for seq in range(2, 13):
++        stamp = seq * 100_000_000 + 1_000_000_000
++        for sid in ["a", "b"]:
++            e.ingest(
++                frame(sid, seq, stamp),
++                receive_monotonic_ns=stamp,
++                receive_unix_ms=100000 + stamp // 1_000_000,
++            )
++
++    measurement = e.measure(2_200_000_000, 102200, {})
++
++    assert measurement is not None
++    assert [sensor["sequence"] for sensor in measurement["sensors"]] == [12, 12]
++    assert e.history_evictions == 4
++    assert e.frame_loss == 0
++
++
++def test_runtime_sequence_gap_is_frame_loss():
++    e = engine()
++    assert e.ingest(
++        frame(seq=1, stamp=1_000_000_000),
++        receive_monotonic_ns=1_000_000_000,
++        receive_unix_ms=101000,
++    )
++    assert e.ingest(
++        frame(seq=3, stamp=1_200_000_000),
++        receive_monotonic_ns=1_200_000_000,
++        receive_unix_ms=101200,
++    )
++
++    assert e.frame_loss == 1
++
++
+ def test_malformed_global_angle_rejects_frame():
+     e = engine()
+     f = frame()
+-- 
+2.53.0
+

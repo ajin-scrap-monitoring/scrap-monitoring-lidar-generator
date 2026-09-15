@@ -16,7 +16,7 @@ scrap-monitoring-lidar-simulator = "scrap_monitoring_lidar_simulator.cli:main"
 scrap-monitoring-lidar-simulator-export-synthetic-processing-config = "scrap_monitoring_lidar_simulator.edge_integration.cli:main"
 
 [build-system]
-requires = ["uv_build==0.12.12"]
+requires = ["uv_build==0.12.15"]
 build-backend = "uv_build"
 
 [dependency-groups]
@@ -35,7 +35,7 @@ docs = [
     "python-docx==1.2.0",
 ]
 [tool.uv]
-required-version = "==0.12.12"
+required-version = "==0.12.15"
 
 [tool.ruff]
 line-length = 100

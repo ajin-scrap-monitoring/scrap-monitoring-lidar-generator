@@ -11,17 +11,20 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import FrameType
 from typing import cast
 
 _DIGEST_REFERENCE = re.compile(r"^[A-Za-z0-9._:/-]+@sha256:([0-9a-f]{64})$")
+_LOCAL_IMAGE_ID = re.compile(r"^sha256:([0-9a-f]{64})$")
 _SOURCE_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _RUN_ID = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$")
 _THROTTLED = re.compile(r"^throttled=0x([0-9a-fA-F]+)$")
 _EXPECTED_SENSOR_IDS = ["lidar_1", "lidar_2"]
@@ -36,6 +39,9 @@ _EXPECTED_LOGICAL_CPU_COUNT = 4
 _MIN_PI5_8GB_MEMORY_BYTES = 7 * 1_073_741_824
 _MAX_PI5_8GB_MEMORY_BYTES = 9 * 1_073_741_824
 _EXPECTED_OBSERVATION_RECORDS = 3_901
+_MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
+_MAX_SOURCE_ARCHIVE_FILES = 10_000
+_MAX_SOURCE_ARCHIVE_EXPANDED_BYTES = 512 * 1024 * 1024
 _OBSERVATION_RESULT_FIELDS = {
     "schema_version",
     "run_id",
@@ -117,6 +123,13 @@ def parse_digest_reference(value: str) -> str:
     if match is None:
         raise RunnerError("container images must use repository@sha256 digest references")
     return f"sha256:{match.group(1)}"
+
+
+def parse_processing_image_reference(value: str) -> str:
+    local_match = _LOCAL_IMAGE_ID.fullmatch(value)
+    if local_match is not None:
+        return f"sha256:{local_match.group(1)}"
+    return parse_digest_reference(value)
 
 
 def parse_throttled(value: str) -> int:
@@ -301,23 +314,49 @@ class PublicConfiguration:
     config_revision: str
     calibration_version: str
     pinned_processing_source_commit: str
+    validation_processing_source_commit: str
 
 
-def _load_pinned_processing_source_commit(repository: Path) -> str:
+def _load_processing_source_commits(repository: Path) -> tuple[str, str]:
     source_metadata = _load_json(repository / "edge-platform-integration" / "SOURCE.json")
     commit = source_metadata.get("commit")
     if not isinstance(commit, str) or _SOURCE_COMMIT.fullmatch(commit) is None:
         raise RunnerError("edge platform source metadata has an invalid pinned commit")
-    return commit
+    validation_image = _mapping(
+        source_metadata.get("validation_image"), "edge platform validation image"
+    )
+    validation_commit = validation_image.get("commit")
+    if (
+        not isinstance(validation_commit, str)
+        or _SOURCE_COMMIT.fullmatch(validation_commit) is None
+    ):
+        raise RunnerError("edge platform source metadata has an invalid validation commit")
+    patch_name = validation_image.get("patch_path")
+    patch_sha256 = validation_image.get("patch_sha256")
+    if (
+        not isinstance(patch_name, str)
+        or not isinstance(patch_sha256, str)
+        or _SHA256.fullmatch(patch_sha256) is None
+    ):
+        raise RunnerError("edge platform validation patch metadata is incomplete")
+    integration_root = (repository / "edge-platform-integration").resolve()
+    patch_path = (integration_root / patch_name).resolve()
+    if not patch_path.is_relative_to(integration_root) or not patch_path.is_file():
+        raise RunnerError("edge platform validation patch path is invalid")
+    if hashlib.sha256(patch_path.read_bytes()).hexdigest() != patch_sha256:
+        raise RunnerError("edge platform validation patch digest does not match")
+    return commit, validation_commit
 
 
 def load_public_configuration(repository: Path) -> PublicConfiguration:
     generator_path = repository / "examples" / "generator.v2.json"
     processing_path = repository / "edge-platform-integration" / "v1" / "processing.synthetic.json"
+    pinned_commit, validation_commit = _load_processing_source_commits(repository)
     return _load_public_configuration_files(
         generator_path,
         processing_path,
-        _load_pinned_processing_source_commit(repository),
+        pinned_commit,
+        validation_commit,
     )
 
 
@@ -325,6 +364,7 @@ def _load_public_configuration_files(
     generator_path: Path,
     processing_path: Path,
     pinned_processing_source_commit: str,
+    validation_processing_source_commit: str,
 ) -> PublicConfiguration:
     environment_path, quality_path, seed, environment_id = _load_generator_values(generator_path)
     site_id, edge_id, config_revision, calibration_version = _load_processing_values(
@@ -339,6 +379,7 @@ def _load_public_configuration_files(
         config_revision=config_revision,
         calibration_version=calibration_version,
         pinned_processing_source_commit=pinned_processing_source_commit,
+        validation_processing_source_commit=validation_processing_source_commit,
     )
 
 
@@ -404,17 +445,30 @@ def _load_processing_values(processing_path: Path) -> tuple[str, str, str, str]:
 
 
 def _load_staged_public_configuration(
-    directory: Path, pinned_processing_source_commit: str
+    directory: Path,
+    pinned_processing_source_commit: str,
+    validation_processing_source_commit: str,
 ) -> PublicConfiguration:
     return _load_public_configuration_files(
         directory / "generator.v2.json",
         directory / "processing.synthetic.json",
         pinned_processing_source_commit,
+        validation_processing_source_commit,
     )
 
 
+def _sha256_stream(source: object) -> str:
+    digest = hashlib.sha256()
+    read = getattr(source, "read", None)
+    if not callable(read):
+        raise RunnerError("source archive contains an unreadable file")
+    while chunk := read(1024 * 1024):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
 def verify_repository_checkout(repository: Path, expected_commit: str) -> None:
-    """Require the runner and configuration checkout to match the candidate source."""
+    """Require a development-side checkout that matches the candidate source."""
     commands = (
         (["rev-parse", "--show-toplevel"], "repository root"),
         (["rev-parse", "HEAD"], "repository HEAD"),
@@ -443,6 +497,105 @@ def verify_repository_checkout(repository: Path, expected_commit: str) -> None:
         raise RunnerError("validation checkout HEAD differs from generator source commit")
     if status:
         raise RunnerError("validation checkout contains tracked or untracked changes")
+
+
+def _archive_member_path(repository: Path, member: tarfile.TarInfo) -> tuple[Path, str]:
+    raw_name = member.name.rstrip("/")
+    relative = PurePosixPath(raw_name)
+    if (
+        not raw_name
+        or relative.is_absolute()
+        or relative.as_posix() != raw_name
+        or any(part in ("", ".", "..") for part in relative.parts)
+    ):
+        raise RunnerError("source archive contains an unsafe path")
+    return repository.joinpath(*relative.parts), relative.as_posix()
+
+
+def _verify_regular_archive_member(
+    archive: tarfile.TarFile, member: tarfile.TarInfo, target: Path
+) -> None:
+    if target.is_symlink() or not target.is_file():
+        raise RunnerError("source tree file differs from its archive")
+    archived = archive.extractfile(member)
+    if archived is None:
+        raise RunnerError("source archive contains an unreadable file")
+    with archived, target.open("rb") as current:
+        if _sha256_stream(archived) != _sha256_stream(current):
+            raise RunnerError("source tree file content differs from its archive")
+    expected_executable = bool(member.mode & 0o111)
+    actual_executable = bool(target.stat().st_mode & 0o111)
+    if actual_executable != expected_executable:
+        raise RunnerError("source tree file mode differs from its archive")
+
+
+def _verify_archive_member(
+    archive: tarfile.TarFile, repository: Path, member: tarfile.TarInfo
+) -> tuple[str, int | None]:
+    target, relative_name = _archive_member_path(repository, member)
+    if member.isdir():
+        if target.is_symlink() or not target.is_dir():
+            raise RunnerError("source tree directory differs from its archive")
+        return relative_name, None
+    if member.isfile():
+        _verify_regular_archive_member(archive, member, target)
+        return relative_name, member.size
+    if member.issym():
+        if not target.is_symlink() or os.readlink(target) != member.linkname:
+            raise RunnerError("source tree symlink differs from its archive")
+        return relative_name, 0
+    raise RunnerError("source archive contains an unsupported entry type")
+
+
+def _verify_archive_contents(
+    archive: tarfile.TarFile, repository: Path, expected_commit: str
+) -> set[str]:
+    if archive.pax_headers.get("comment") != expected_commit:
+        raise RunnerError("source archive commit differs from generator source commit")
+    archived_entries: set[str] = set()
+    archived_files: set[str] = set()
+    expanded_bytes = 0
+    for index, member in enumerate(archive):
+        if index >= _MAX_SOURCE_ARCHIVE_FILES:
+            raise RunnerError("source archive contains too many entries")
+        if member.isfile() and expanded_bytes + member.size > _MAX_SOURCE_ARCHIVE_EXPANDED_BYTES:
+            raise RunnerError("source archive exceeds the expanded size limit")
+        relative_name, file_size = _verify_archive_member(archive, repository, member)
+        if relative_name in archived_entries:
+            raise RunnerError("source archive contains a duplicate path")
+        archived_entries.add(relative_name)
+        if file_size is None:
+            continue
+        archived_files.add(relative_name)
+        expanded_bytes += file_size
+    return archived_files
+
+
+def verify_repository_archive(repository: Path, source_archive: Path, expected_commit: str) -> str:
+    """Require an exact extraction of one commit-addressed Git archive."""
+    try:
+        archive_stat = source_archive.stat()
+    except OSError as error:
+        raise RunnerError("cannot inspect the source archive") from error
+    if source_archive.is_symlink() or not source_archive.is_file():
+        raise RunnerError("source archive must be a regular file")
+    if archive_stat.st_size > _MAX_SOURCE_ARCHIVE_BYTES:
+        raise RunnerError("source archive exceeds the compressed size limit")
+    archive_sha256 = hashlib.sha256(source_archive.read_bytes()).hexdigest()
+    try:
+        with tarfile.open(source_archive, mode="r:*") as archive:
+            archived_files = _verify_archive_contents(archive, repository, expected_commit)
+    except (OSError, tarfile.TarError, UnicodeError) as error:
+        raise RunnerError("cannot verify the source archive") from error
+
+    current_files = {
+        path.relative_to(repository).as_posix()
+        for path in repository.rglob("*")
+        if path.is_symlink() or not path.is_dir()
+    }
+    if current_files != archived_files:
+        raise RunnerError("source tree file set differs from its archive")
+    return archive_sha256
 
 
 class Docker:
@@ -486,26 +639,40 @@ class Docker:
     def pull(self, image: str) -> None:
         self._run(["pull", image], operation="image pull", capture=False)
 
-    def verify_image(self, image: str, expected_source_commit: str) -> None:
-        digest = parse_digest_reference(image)
+    def verify_image(
+        self, image: str, expected_source_commit: str, *, allow_local_id: bool = False
+    ) -> None:
+        digest = (
+            parse_processing_image_reference(image)
+            if allow_local_id
+            else parse_digest_reference(image)
+        )
         platform_name = self._run(
             ["image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image],
             operation="image platform inspection",
         ).stdout.strip()
         if platform_name != "linux/arm64":
             raise RunnerError("validation images must be linux/arm64")
-        raw_digests = self._run(
-            ["image", "inspect", "--format", "{{json .RepoDigests}}", image],
-            operation="image digest inspection",
-        ).stdout
-        try:
-            repo_digests = json.loads(raw_digests)
-        except json.JSONDecodeError as error:
-            raise RunnerError("Docker image digest evidence is invalid") from error
-        if not isinstance(repo_digests, list) or not any(
-            isinstance(value, str) and value.endswith(f"@{digest}") for value in repo_digests
-        ):
-            raise RunnerError("pulled image does not expose the requested manifest digest")
+        if _LOCAL_IMAGE_ID.fullmatch(image) is not None:
+            image_id = self._run(
+                ["image", "inspect", "--format", "{{.Id}}", image],
+                operation="local image identity inspection",
+            ).stdout.strip()
+            if image_id != digest:
+                raise RunnerError("local image does not expose the requested content identity")
+        else:
+            raw_digests = self._run(
+                ["image", "inspect", "--format", "{{json .RepoDigests}}", image],
+                operation="image digest inspection",
+            ).stdout
+            try:
+                repo_digests = json.loads(raw_digests)
+            except json.JSONDecodeError as error:
+                raise RunnerError("Docker image digest evidence is invalid") from error
+            if not isinstance(repo_digests, list) or not any(
+                isinstance(value, str) and value.endswith(f"@{digest}") for value in repo_digests
+            ):
+                raise RunnerError("pulled image does not expose the requested manifest digest")
         user = self._run(
             ["image", "inspect", "--format", "{{.Config.User}}", image],
             operation="image user inspection",
@@ -904,34 +1071,54 @@ class CaseRunner:
 
     def run(self) -> int:
         configuration = load_public_configuration(self.arguments.repository)
-        verify_repository_checkout(
-            self.arguments.repository, self.arguments.generator_source_commit
+        source_archive_sha256 = verify_repository_archive(
+            self.arguments.repository,
+            self.arguments.source_archive,
+            self.arguments.generator_source_commit,
         )
-        if self.arguments.processing_source_commit != configuration.pinned_processing_source_commit:
-            raise RunnerError("processing source commit differs from the pinned integration source")
+        if (
+            self.arguments.processing_source_commit
+            != configuration.validation_processing_source_commit
+        ):
+            raise RunnerError("processing source commit differs from the validation image source")
         initial_throttled = _get_throttled()
         if initial_throttled != 0:
             raise RunnerError("thermal throttle history must be 0x0 before validation")
-        for image, source_commit in (
-            (self.arguments.generator_image, self.arguments.generator_source_commit),
-            (self.arguments.processing_image, self.arguments.processing_source_commit),
-        ):
-            self.docker.pull(image)
-            self.docker.verify_image(image, source_commit)
+        self.docker.pull(self.arguments.generator_image)
+        self.docker.verify_image(
+            self.arguments.generator_image, self.arguments.generator_source_commit
+        )
+        if _DIGEST_REFERENCE.fullmatch(self.arguments.processing_image) is not None:
+            self.docker.pull(self.arguments.processing_image)
+        self.docker.verify_image(
+            self.arguments.processing_image,
+            self.arguments.processing_source_commit,
+            allow_local_id=True,
+        )
         device = _device(
             self.docker.version(), self.arguments.cooling, self.arguments.temperature_path
         )
         paths = _make_paths(self.arguments.output_dir)
         for source in configuration.source_paths:
             _copy_exclusive(source, paths.config / source.name)
-        verify_repository_checkout(
-            self.arguments.repository, self.arguments.generator_source_commit
-        )
+        if source_archive_sha256 != verify_repository_archive(
+            self.arguments.repository,
+            self.arguments.source_archive,
+            self.arguments.generator_source_commit,
+        ):
+            raise RunnerError("source archive changed during validation setup")
         configuration = _load_staged_public_configuration(
-            paths.config, configuration.pinned_processing_source_commit
+            paths.config,
+            configuration.pinned_processing_source_commit,
+            configuration.validation_processing_source_commit,
         )
         try:
-            return self._run_containers(configuration, device, paths, initial_throttled)
+            return self._run_containers(
+                configuration,
+                device,
+                paths,
+                initial_throttled,
+            )
         finally:
             self.cleanup()
 
@@ -1193,7 +1380,9 @@ class CaseRunner:
                 "generator_source_commit": self.arguments.generator_source_commit,
                 "generator_image_digest": parse_digest_reference(self.arguments.generator_image),
                 "processing_source_commit": self.arguments.processing_source_commit,
-                "processing_image_digest": parse_digest_reference(self.arguments.processing_image),
+                "processing_image_digest": parse_processing_image_reference(
+                    self.arguments.processing_image
+                ),
                 "config_fingerprint_sha256": fingerprint_files(generator_paths),
                 "processing_config_sha256": hashlib.sha256(
                     configuration.source_paths[3].read_bytes()
@@ -1273,8 +1462,8 @@ class CaseRunner:
 
 
 def _validate_arguments(arguments: argparse.Namespace) -> None:
-    for value in (arguments.generator_image, arguments.processing_image):
-        parse_digest_reference(value)
+    parse_digest_reference(arguments.generator_image)
+    parse_processing_image_reference(arguments.processing_image)
     for value in (arguments.generator_source_commit, arguments.processing_source_commit):
         if _SOURCE_COMMIT.fullmatch(value) is None:
             raise RunnerError("source commits must be full lowercase 40-character SHAs")
@@ -1286,18 +1475,22 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
         raise RunnerError("noop observation must not provide --observation-host")
     if not arguments.cooling or any(character in arguments.cooling for character in "\r\n"):
         raise RunnerError("cooling description must be one non-empty line")
-    _validate_repository_paths(arguments.repository, arguments.output_dir)
+    _validate_repository_paths(arguments.repository, arguments.output_dir, arguments.source_archive)
     if not arguments.temperature_path.is_absolute() or not str(
         arguments.temperature_path
     ).startswith("/sys/"):
         raise RunnerError("temperature path must be an absolute /sys path")
 
 
-def _validate_repository_paths(repository: Path, output_dir: Path) -> None:
+def _validate_repository_paths(repository: Path, output_dir: Path, source_archive: Path) -> None:
     if not repository.is_absolute() or not repository.is_dir():
         raise RunnerError("repository path must be an existing absolute directory")
     if output_dir.resolve().is_relative_to(repository.resolve()):
         raise RunnerError("output directory must be outside the validation repository")
+    if not source_archive.is_absolute() or not source_archive.is_file():
+        raise RunnerError("source archive must be an existing absolute file")
+    if source_archive.resolve().is_relative_to(repository.resolve()):
+        raise RunnerError("source archive must be outside the validation repository")
 
 
 def _port(value: str) -> int:
@@ -1328,6 +1521,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--generator-image", required=True)
     parser.add_argument("--generator-source-commit", required=True)
+    parser.add_argument("--source-archive", required=True, type=Path)
     parser.add_argument("--processing-image", required=True)
     parser.add_argument("--processing-source-commit", required=True)
     parser.add_argument("--mean-fill-duration-s", required=True, type=int, choices=(600, 86_400))
@@ -1338,6 +1532,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--observation-port", type=_port, default=17_000)
     parser.add_argument("--cooling", required=True)
     parser.add_argument("--handoff-timeout-s", type=_positive_int, default=300)
+    parser.add_argument("--docker-command", default="docker")
     parser.add_argument(
         "--temperature-path",
         type=Path,
@@ -1355,9 +1550,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     try:
         _validate_arguments(arguments)
-        executable = shutil.which("docker")
+        executable = shutil.which(arguments.docker_command)
         if executable is None:
-            raise RunnerError("Docker CLI is unavailable")
+            raise RunnerError("configured Docker command is unavailable")
         signal.signal(signal.SIGTERM, _raise_interrupt)
         return CaseRunner(arguments, Docker(executable)).run()
     except KeyboardInterrupt:

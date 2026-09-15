@@ -35,7 +35,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
-          version: "0.12.12"
+          version: "0.12.15"
           enable-cache: true
 
       - name: Install dependencies
@@ -115,7 +115,7 @@ jobs:
           python3 tools/generate_third_party_notices.py --check
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           image: docker.io/tonistiigi/binfmt:qemu-v10.2.3-68@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
           platforms: arm64
@@ -181,6 +181,22 @@ jobs:
             --runtime-binary target/release/scrap-monitoring-lidar-simulator \
             --edge-platform-root .contract/ajin-edge-platform
 
+      - name: Verify processing validation image source
+        shell: bash
+        run: |
+          validation_commit="$(
+            python3 -c 'import json; print(json.load(open("edge-platform-integration/SOURCE.json"))["validation_image"]["commit"])'
+          )"
+          patch_path="$(
+            python3 -c 'import json; print(json.load(open("edge-platform-integration/SOURCE.json"))["validation_image"]["patch_path"])'
+          )"
+          git -C .contract/ajin-edge-platform \
+            -c user.name=whdcksdbwls \
+            -c user.email=whdcksdbwls@gmail.com \
+            am --committer-date-is-author-date \
+            "$GITHUB_WORKSPACE/edge-platform-integration/$patch_path"
+          test "$(git -C .contract/ajin-edge-platform rev-parse HEAD)" = "$validation_commit"
+
       - name: Smoke test CLI
         run: |
           uv run --locked scrap-monitoring-lidar-simulator --help
@@ -207,7 +223,7 @@ jobs:
           PY
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
         with:
           version: v0.37.1
           driver-opts: |

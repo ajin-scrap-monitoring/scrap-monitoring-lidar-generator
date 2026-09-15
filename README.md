@@ -24,7 +24,7 @@ scan 생성과 gRPC 구독을 중단시키지 않는다.
 
 | 용도 | 요구 사항 |
 |---|---|
-| 개발 | Python 3.14.4, uv 0.12.12, Rust 1.96.0 |
+| 개발 | Python 3.14.4, uv 0.12.15, Rust 1.96.0 |
 | 엣지 검증 | 64-bit ARM Linux, Docker Engine |
 | 배포 검증 | Docker Engine, Git, GitHub CLI, Bash |
 

@@ -4,6 +4,7 @@ import json
 import os
 import stat
 import subprocess
+import tarfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -25,8 +26,9 @@ from .run_case import (
     load_public_configuration,
     parse_cgroup_path,
     parse_digest_reference,
+    parse_processing_image_reference,
     parse_throttled,
-    verify_repository_checkout,
+    verify_repository_archive,
 )
 
 
@@ -59,10 +61,13 @@ def _image() -> str:
 
 def test_digest_and_throttle_parsers_fail_closed() -> None:
     assert parse_digest_reference(_image()) == f"sha256:{'a' * 64}"
+    assert parse_processing_image_reference(f"sha256:{'b' * 64}") == f"sha256:{'b' * 64}"
     assert parse_throttled("throttled=0x0\n") == 0
     assert parse_throttled("throttled=0x50000") == 0x50000
     with pytest.raises(RunnerError, match="digest references"):
         parse_digest_reference("ghcr.io/example/simulator:latest")
+    with pytest.raises(RunnerError, match="digest references"):
+        parse_processing_image_reference("ajin-lidar-processing:validation")
     with pytest.raises(RunnerError, match="unexpected"):
         parse_throttled("0")
 
@@ -133,6 +138,9 @@ def test_public_configuration_has_two_exact_sensor_lanes() -> None:
     assert configuration.pinned_processing_source_commit == (
         "666ca6067a3bb86833b74140cb659049025d0dae"
     )
+    assert configuration.validation_processing_source_commit == (
+        "55b2e9d9401682c237a42945d9f548a4c912951f"
+    )
     assert [path.name for path in configuration.source_paths] == [
         "generator.v2.json",
         "environment.v1.json",
@@ -147,7 +155,11 @@ def test_staged_configuration_becomes_the_runtime_provenance_source(tmp_path: Pa
     for path in source.source_paths:
         _copy_exclusive(path, tmp_path / path.name)
 
-    staged = _load_staged_public_configuration(tmp_path, source.pinned_processing_source_commit)
+    staged = _load_staged_public_configuration(
+        tmp_path,
+        source.pinned_processing_source_commit,
+        source.validation_processing_source_commit,
+    )
 
     assert all(path.parent == tmp_path for path in staged.source_paths)
     assert fingerprint_files(staged.source_paths[:3]) == fingerprint_files(source.source_paths[:3])
@@ -223,6 +235,27 @@ def test_fake_docker_verifies_arm64_digest_and_declared_user() -> None:
     docker.verify_image(image, source_commit)
 
 
+def test_fake_docker_verifies_local_processing_image_identity() -> None:
+    image = f"sha256:{'d' * 64}"
+    source_commit = "b" * 40
+    docker = _FakeDocker(
+        {
+            ("image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image): "linux/arm64\n",
+            ("image", "inspect", "--format", "{{.Id}}", image): f"{image}\n",
+            ("image", "inspect", "--format", "{{.Config.User}}", image): "10001:10001\n",
+            (
+                "image",
+                "inspect",
+                "--format",
+                '{{index .Config.Labels "org.opencontainers.image.revision"}}',
+                image,
+            ): f"{source_commit}\n",
+        }
+    )
+
+    docker.verify_image(image, source_commit, allow_local_id=True)
+
+
 def test_image_revision_must_match_the_reported_source_commit() -> None:
     image = _image()
     docker = _FakeDocker(
@@ -278,34 +311,31 @@ def test_container_wait_uses_a_bounded_timeout() -> None:
     assert docker.observed_timeout == 5.0
 
 
-def test_repository_checkout_requires_expected_clean_head(tmp_path: Path) -> None:
+def test_repository_archive_requires_exact_tree_and_commit(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
-    commands = (
-        ("init", "--quiet"),
-        ("config", "user.name", "Test User"),
-        ("config", "user.email", "test@example.invalid"),
-    )
-    for command in commands:
-        subprocess.run(["git", "-C", str(repository), *command], check=True)
     (repository / "tracked.txt").write_text("one\n", encoding="ascii")
-    subprocess.run(["git", "-C", str(repository), "add", "tracked.txt"], check=True)
-    subprocess.run(
-        ["git", "-C", str(repository), "commit", "--quiet", "-m", "test: fixture"],
-        check=True,
-    )
-    head = subprocess.run(
-        ["git", "-C", str(repository), "rev-parse", "HEAD"],
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-    ).stdout.strip()
+    source_archive = tmp_path / "source.tar.gz"
+    commit = "a" * 40
+    with tarfile.open(
+        source_archive,
+        mode="w:gz",
+        format=tarfile.PAX_FORMAT,
+        pax_headers={"comment": commit},
+    ) as archive:
+        archive.add(repository / "tracked.txt", arcname="tracked.txt")
 
-    verify_repository_checkout(repository, head)
+    assert (
+        verify_repository_archive(repository, source_archive, commit)
+        == hashlib.sha256(source_archive.read_bytes()).hexdigest()
+    )
+
+    with pytest.raises(RunnerError, match="archive commit"):
+        verify_repository_archive(repository, source_archive, "b" * 40)
 
     (repository / "untracked.txt").write_text("two\n", encoding="ascii")
-    with pytest.raises(RunnerError, match="tracked or untracked changes"):
-        verify_repository_checkout(repository, head)
+    with pytest.raises(RunnerError, match="file set"):
+        verify_repository_archive(repository, source_archive, commit)
 
 
 def test_runtime_directories_are_group_writable_regardless_of_umask(tmp_path: Path) -> None:
@@ -350,11 +380,14 @@ def test_staged_files_keep_declared_modes_regardless_of_umask(tmp_path: Path) ->
 
 def test_argument_boundary_separates_actual_and_noop_observation(tmp_path: Path) -> None:
     repository = Path(__file__).resolve().parents[3]
+    source_archive = tmp_path / "source.tar.gz"
+    source_archive.write_bytes(b"archive")
     common: dict[str, object] = {
         "run_id": "86400-actual-a",
         "output_dir": tmp_path / "new-output",
         "generator_image": _image(),
         "generator_source_commit": "a" * 40,
+        "source_archive": source_archive,
         "processing_image": _image(),
         "processing_source_commit": "b" * 40,
         "mean_fill_duration_s": 86_400,
