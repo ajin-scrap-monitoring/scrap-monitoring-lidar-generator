@@ -54,7 +54,7 @@ simulator가 통과하고 `lidar-processing`만 실패하면 `lidar-processing`,
 - 검증 계정에서 성공하는 `docker info` 또는 passwordless `sudo -n /usr/bin/docker info`
 - 검증 계정에서 성공하는 `vcgencmd get_throttled`와 온도 파일 읽기
 - `vcgencmd get_throttled` 결과 `0x0`
-- Simulator image의 source revision과 같은 commit인 clean Repository checkout
+- Candidate workflow가 같은 source revision에서 만든 검증 source archive와 그 정확한 추출본
 - `linux/arm64`, runtime UID 10001, registry digest와 source revision label을 갖춘 simulator image
 - `SOURCE.json`의 `validation_image` source와 일치하고 UDS(Unix Domain Socket)
   gRPC(Google Remote Procedure Call) authority 및 runtime sequence 집계 호환성을 포함한
@@ -65,9 +65,26 @@ Simulator image는 `repository@sha256:<digest>` 형식으로 지정한다. Proce
 digest 형식 또는 홈서버에서 만든 archive를 load한 뒤 확인한 `sha256:<image-id>` 형식으로 지정한다.
 각 `--source-commit` 값은 image의 `org.opencontainers.image.revision` label과 같은 40자리 lowercase
 commit SHA여야 한다. Processing source commit은 `SOURCE.json`의 `validation_image.commit`과 같아야
-한다. Edge는 image를 pull 또는 load하고 실행할 뿐이며 compiler와 build tool을 설치하지 않는다.
-Runner는 Repository root, HEAD, tracked 및 untracked 변경 유무를 확인하며 결과 디렉토리를
-Repository 바깥에 둔다.
+한다. Edge는 image를 pull 또는 load하고 실행할 뿐이며 Git, compiler와 build tool을 설치하지
+않는다. Runner는 Git archive의 PAX(Portable Archive Interchange) commit 표식, 압축 및 확장 크기,
+전체 파일 내용, 실행 mode, symlink와 추가 파일 부재를 확인한다. 결과 디렉토리와 archive는 추출
+directory 바깥에 둔다.
+
+Candidate workflow artifact의 `edge-validation-source.tar.gz`와
+`edge-validation-source.sha256`을 검증 제어 장비에서 내려받는다. 두 파일과
+`edge-candidate-image.txt`, `edge-candidate-source-sha.txt`를 edge로 전달하고 source archive를 새
+directory에 추출한다.
+
+```bash
+SOURCE_ARCHIVE="$HOME/edge-validation-source.tar.gz"
+SOURCE_ARCHIVE_SHA256="$(sed -n '1p' "$HOME/edge-validation-source.sha256")"
+VALIDATION_REPOSITORY="$HOME/edge-validation-source"
+
+test "$(sha256sum "$SOURCE_ARCHIVE" | awk '{print $1}')" = "$SOURCE_ARCHIVE_SHA256"
+mkdir "$VALIDATION_REPOSITORY"
+tar -xzf "$SOURCE_ARCHIVE" -C "$VALIDATION_REPOSITORY"
+cd "$VALIDATION_REPOSITORY"
+```
 
 edge에서는 네 case 모두 같은 비특권 계정으로 실행한다. Runner가 만든 결과 디렉토리와 handoff
 디렉토리도 이 계정이 소유하므로 observation 결과를 넘기기 위해 root 권한을 사용하지 않는다.
@@ -77,8 +94,7 @@ edge에서는 네 case 모두 같은 비특권 계정으로 실행한다. Runner
 GENERATOR_SOURCE_COMMIT="<generator-commit>"
 DOCKER_COMMAND="$PWD/tests/edge/sudo-docker"
 
-test "$(git rev-parse HEAD)" = "$GENERATOR_SOURCE_COMMIT"
-test -z "$(git status --porcelain=v1 --untracked-files=all)"
+test -s "$SOURCE_ARCHIVE"
 "$DOCKER_COMMAND" info >/dev/null
 test "$(vcgencmd get_throttled)" = "throttled=0x0"
 test -r /sys/class/thermal/thermal_zone0/temp
@@ -93,13 +109,14 @@ test -r /sys/class/thermal/thermal_zone0/temp
 
 ## 공통 실행 변수
 
-edge의 clean Repository checkout에서 image digest, source commit과 결과 root를 준비한다. 결과 root는
-Repository 밖의 공백 없는 사용자 쓰기 가능 경로로 정한다. 사설 주소와 자격 증명은 Repository
-파일에 기록하지 않는다.
+edge의 검증 source 추출본에서 image digest, source commit, source archive와 결과 root를 준비한다.
+Archive와 결과 root는 Repository 밖의 공백 없는 사용자 쓰기 가능 경로로 정한다. 사설 주소와
+자격 증명은 Repository 파일에 기록하지 않는다.
 
 ```bash
 GENERATOR_IMAGE="ghcr.io/example/simulator@sha256:<generator-digest>"
 GENERATOR_SOURCE_COMMIT="<generator-commit>"
+SOURCE_ARCHIVE="$HOME/edge-validation-source.tar.gz"
 PROCESSING_IMAGE="sha256:<processing-image-id>"
 PROCESSING_SOURCE_COMMIT="55b2e9d9401682c237a42945d9f548a4c912951f"
 RESULT_ROOT="$HOME/lidar-long-validation"
@@ -177,6 +194,7 @@ tests/edge/long_validation/run-case.sh \
   --output-dir "$CASE_ROOT" \
   --generator-image "$GENERATOR_IMAGE" \
   --generator-source-commit "$GENERATOR_SOURCE_COMMIT" \
+  --source-archive "$SOURCE_ARCHIVE" \
   --processing-image "$PROCESSING_IMAGE" \
   --processing-source-commit "$PROCESSING_SOURCE_COMMIT" \
   --mean-fill-duration-s "$FILL_DURATION_S" \
@@ -258,6 +276,7 @@ run_noop_case() {
     --output-dir "$CASE_ROOT" \
     --generator-image "$GENERATOR_IMAGE" \
     --generator-source-commit "$GENERATOR_SOURCE_COMMIT" \
+    --source-archive "$SOURCE_ARCHIVE" \
     --processing-image "$PROCESSING_IMAGE" \
     --processing-source-commit "$PROCESSING_SOURCE_COMMIT" \
     --mean-fill-duration-s "$FILL_DURATION_S" \

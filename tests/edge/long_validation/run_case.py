@@ -11,12 +11,13 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import FrameType
 from typing import cast
 
@@ -38,6 +39,9 @@ _EXPECTED_LOGICAL_CPU_COUNT = 4
 _MIN_PI5_8GB_MEMORY_BYTES = 7 * 1_073_741_824
 _MAX_PI5_8GB_MEMORY_BYTES = 9 * 1_073_741_824
 _EXPECTED_OBSERVATION_RECORDS = 3_901
+_MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
+_MAX_SOURCE_ARCHIVE_FILES = 10_000
+_MAX_SOURCE_ARCHIVE_EXPANDED_BYTES = 512 * 1024 * 1024
 _OBSERVATION_RESULT_FIELDS = {
     "schema_version",
     "run_id",
@@ -453,8 +457,18 @@ def _load_staged_public_configuration(
     )
 
 
+def _sha256_stream(source: object) -> str:
+    digest = hashlib.sha256()
+    read = getattr(source, "read", None)
+    if not callable(read):
+        raise RunnerError("source archive contains an unreadable file")
+    while chunk := read(1024 * 1024):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
 def verify_repository_checkout(repository: Path, expected_commit: str) -> None:
-    """Require the runner and configuration checkout to match the candidate source."""
+    """Require a development-side checkout that matches the candidate source."""
     commands = (
         (["rev-parse", "--show-toplevel"], "repository root"),
         (["rev-parse", "HEAD"], "repository HEAD"),
@@ -483,6 +497,105 @@ def verify_repository_checkout(repository: Path, expected_commit: str) -> None:
         raise RunnerError("validation checkout HEAD differs from generator source commit")
     if status:
         raise RunnerError("validation checkout contains tracked or untracked changes")
+
+
+def _archive_member_path(repository: Path, member: tarfile.TarInfo) -> tuple[Path, str]:
+    raw_name = member.name.rstrip("/")
+    relative = PurePosixPath(raw_name)
+    if (
+        not raw_name
+        or relative.is_absolute()
+        or relative.as_posix() != raw_name
+        or any(part in ("", ".", "..") for part in relative.parts)
+    ):
+        raise RunnerError("source archive contains an unsafe path")
+    return repository.joinpath(*relative.parts), relative.as_posix()
+
+
+def _verify_regular_archive_member(
+    archive: tarfile.TarFile, member: tarfile.TarInfo, target: Path
+) -> None:
+    if target.is_symlink() or not target.is_file():
+        raise RunnerError("source tree file differs from its archive")
+    archived = archive.extractfile(member)
+    if archived is None:
+        raise RunnerError("source archive contains an unreadable file")
+    with archived, target.open("rb") as current:
+        if _sha256_stream(archived) != _sha256_stream(current):
+            raise RunnerError("source tree file content differs from its archive")
+    expected_executable = bool(member.mode & 0o111)
+    actual_executable = bool(target.stat().st_mode & 0o111)
+    if actual_executable != expected_executable:
+        raise RunnerError("source tree file mode differs from its archive")
+
+
+def _verify_archive_member(
+    archive: tarfile.TarFile, repository: Path, member: tarfile.TarInfo
+) -> tuple[str, int | None]:
+    target, relative_name = _archive_member_path(repository, member)
+    if member.isdir():
+        if target.is_symlink() or not target.is_dir():
+            raise RunnerError("source tree directory differs from its archive")
+        return relative_name, None
+    if member.isfile():
+        _verify_regular_archive_member(archive, member, target)
+        return relative_name, member.size
+    if member.issym():
+        if not target.is_symlink() or os.readlink(target) != member.linkname:
+            raise RunnerError("source tree symlink differs from its archive")
+        return relative_name, 0
+    raise RunnerError("source archive contains an unsupported entry type")
+
+
+def _verify_archive_contents(
+    archive: tarfile.TarFile, repository: Path, expected_commit: str
+) -> set[str]:
+    if archive.pax_headers.get("comment") != expected_commit:
+        raise RunnerError("source archive commit differs from generator source commit")
+    archived_entries: set[str] = set()
+    archived_files: set[str] = set()
+    expanded_bytes = 0
+    for index, member in enumerate(archive):
+        if index >= _MAX_SOURCE_ARCHIVE_FILES:
+            raise RunnerError("source archive contains too many entries")
+        if member.isfile() and expanded_bytes + member.size > _MAX_SOURCE_ARCHIVE_EXPANDED_BYTES:
+            raise RunnerError("source archive exceeds the expanded size limit")
+        relative_name, file_size = _verify_archive_member(archive, repository, member)
+        if relative_name in archived_entries:
+            raise RunnerError("source archive contains a duplicate path")
+        archived_entries.add(relative_name)
+        if file_size is None:
+            continue
+        archived_files.add(relative_name)
+        expanded_bytes += file_size
+    return archived_files
+
+
+def verify_repository_archive(repository: Path, source_archive: Path, expected_commit: str) -> str:
+    """Require an exact extraction of one commit-addressed Git archive."""
+    try:
+        archive_stat = source_archive.stat()
+    except OSError as error:
+        raise RunnerError("cannot inspect the source archive") from error
+    if source_archive.is_symlink() or not source_archive.is_file():
+        raise RunnerError("source archive must be a regular file")
+    if archive_stat.st_size > _MAX_SOURCE_ARCHIVE_BYTES:
+        raise RunnerError("source archive exceeds the compressed size limit")
+    archive_sha256 = hashlib.sha256(source_archive.read_bytes()).hexdigest()
+    try:
+        with tarfile.open(source_archive, mode="r:*") as archive:
+            archived_files = _verify_archive_contents(archive, repository, expected_commit)
+    except (OSError, tarfile.TarError, UnicodeError) as error:
+        raise RunnerError("cannot verify the source archive") from error
+
+    current_files = {
+        path.relative_to(repository).as_posix()
+        for path in repository.rglob("*")
+        if path.is_symlink() or not path.is_dir()
+    }
+    if current_files != archived_files:
+        raise RunnerError("source tree file set differs from its archive")
+    return archive_sha256
 
 
 class Docker:
@@ -958,8 +1071,10 @@ class CaseRunner:
 
     def run(self) -> int:
         configuration = load_public_configuration(self.arguments.repository)
-        verify_repository_checkout(
-            self.arguments.repository, self.arguments.generator_source_commit
+        source_archive_sha256 = verify_repository_archive(
+            self.arguments.repository,
+            self.arguments.source_archive,
+            self.arguments.generator_source_commit,
         )
         if (
             self.arguments.processing_source_commit
@@ -986,16 +1101,24 @@ class CaseRunner:
         paths = _make_paths(self.arguments.output_dir)
         for source in configuration.source_paths:
             _copy_exclusive(source, paths.config / source.name)
-        verify_repository_checkout(
-            self.arguments.repository, self.arguments.generator_source_commit
-        )
+        if source_archive_sha256 != verify_repository_archive(
+            self.arguments.repository,
+            self.arguments.source_archive,
+            self.arguments.generator_source_commit,
+        ):
+            raise RunnerError("source archive changed during validation setup")
         configuration = _load_staged_public_configuration(
             paths.config,
             configuration.pinned_processing_source_commit,
             configuration.validation_processing_source_commit,
         )
         try:
-            return self._run_containers(configuration, device, paths, initial_throttled)
+            return self._run_containers(
+                configuration,
+                device,
+                paths,
+                initial_throttled,
+            )
         finally:
             self.cleanup()
 
@@ -1352,18 +1475,22 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
         raise RunnerError("noop observation must not provide --observation-host")
     if not arguments.cooling or any(character in arguments.cooling for character in "\r\n"):
         raise RunnerError("cooling description must be one non-empty line")
-    _validate_repository_paths(arguments.repository, arguments.output_dir)
+    _validate_repository_paths(arguments.repository, arguments.output_dir, arguments.source_archive)
     if not arguments.temperature_path.is_absolute() or not str(
         arguments.temperature_path
     ).startswith("/sys/"):
         raise RunnerError("temperature path must be an absolute /sys path")
 
 
-def _validate_repository_paths(repository: Path, output_dir: Path) -> None:
+def _validate_repository_paths(repository: Path, output_dir: Path, source_archive: Path) -> None:
     if not repository.is_absolute() or not repository.is_dir():
         raise RunnerError("repository path must be an existing absolute directory")
     if output_dir.resolve().is_relative_to(repository.resolve()):
         raise RunnerError("output directory must be outside the validation repository")
+    if not source_archive.is_absolute() or not source_archive.is_file():
+        raise RunnerError("source archive must be an existing absolute file")
+    if source_archive.resolve().is_relative_to(repository.resolve()):
+        raise RunnerError("source archive must be outside the validation repository")
 
 
 def _port(value: str) -> int:
@@ -1394,6 +1521,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--generator-image", required=True)
     parser.add_argument("--generator-source-commit", required=True)
+    parser.add_argument("--source-archive", required=True, type=Path)
     parser.add_argument("--processing-image", required=True)
     parser.add_argument("--processing-source-commit", required=True)
     parser.add_argument("--mean-fill-duration-s", required=True, type=int, choices=(600, 86_400))

@@ -266,6 +266,12 @@ jobs:
           install -d dist
           printf '%s@%s\n' "$IMAGE_NAME" "$IMAGE_DIGEST" > dist/edge-candidate-image.txt
           printf '%s\n' "$GITHUB_SHA" > dist/edge-candidate-source-sha.txt
+          git archive \
+            --format=tar.gz \
+            --output=dist/edge-validation-source.tar.gz \
+            "$GITHUB_SHA"
+          sha256sum dist/edge-validation-source.tar.gz \
+            | awk '{print $1}' > dist/edge-validation-source.sha256
 
       - name: Upload candidate reference
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -274,5 +280,7 @@ jobs:
           path: |
             dist/edge-candidate-image.txt
             dist/edge-candidate-source-sha.txt
+            dist/edge-validation-source.tar.gz
+            dist/edge-validation-source.sha256
           if-no-files-found: error
           retention-days: 30

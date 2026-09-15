@@ -4,6 +4,7 @@ import json
 import os
 import stat
 import subprocess
+import tarfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from .run_case import (
     parse_digest_reference,
     parse_processing_image_reference,
     parse_throttled,
-    verify_repository_checkout,
+    verify_repository_archive,
 )
 
 
@@ -310,34 +311,31 @@ def test_container_wait_uses_a_bounded_timeout() -> None:
     assert docker.observed_timeout == 5.0
 
 
-def test_repository_checkout_requires_expected_clean_head(tmp_path: Path) -> None:
+def test_repository_archive_requires_exact_tree_and_commit(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
-    commands = (
-        ("init", "--quiet"),
-        ("config", "user.name", "Test User"),
-        ("config", "user.email", "test@example.invalid"),
-    )
-    for command in commands:
-        subprocess.run(["git", "-C", str(repository), *command], check=True)
     (repository / "tracked.txt").write_text("one\n", encoding="ascii")
-    subprocess.run(["git", "-C", str(repository), "add", "tracked.txt"], check=True)
-    subprocess.run(
-        ["git", "-C", str(repository), "commit", "--quiet", "-m", "test: fixture"],
-        check=True,
-    )
-    head = subprocess.run(
-        ["git", "-C", str(repository), "rev-parse", "HEAD"],
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-    ).stdout.strip()
+    source_archive = tmp_path / "source.tar.gz"
+    commit = "a" * 40
+    with tarfile.open(
+        source_archive,
+        mode="w:gz",
+        format=tarfile.PAX_FORMAT,
+        pax_headers={"comment": commit},
+    ) as archive:
+        archive.add(repository / "tracked.txt", arcname="tracked.txt")
 
-    verify_repository_checkout(repository, head)
+    assert (
+        verify_repository_archive(repository, source_archive, commit)
+        == hashlib.sha256(source_archive.read_bytes()).hexdigest()
+    )
+
+    with pytest.raises(RunnerError, match="archive commit"):
+        verify_repository_archive(repository, source_archive, "b" * 40)
 
     (repository / "untracked.txt").write_text("two\n", encoding="ascii")
-    with pytest.raises(RunnerError, match="tracked or untracked changes"):
-        verify_repository_checkout(repository, head)
+    with pytest.raises(RunnerError, match="file set"):
+        verify_repository_archive(repository, source_archive, commit)
 
 
 def test_runtime_directories_are_group_writable_regardless_of_umask(tmp_path: Path) -> None:
@@ -382,11 +380,14 @@ def test_staged_files_keep_declared_modes_regardless_of_umask(tmp_path: Path) ->
 
 def test_argument_boundary_separates_actual_and_noop_observation(tmp_path: Path) -> None:
     repository = Path(__file__).resolve().parents[3]
+    source_archive = tmp_path / "source.tar.gz"
+    source_archive.write_bytes(b"archive")
     common: dict[str, object] = {
         "run_id": "86400-actual-a",
         "output_dir": tmp_path / "new-output",
         "generator_image": _image(),
         "generator_source_commit": "a" * 40,
+        "source_archive": source_archive,
         "processing_image": _image(),
         "processing_source_commit": "b" * 40,
         "mean_fill_duration_s": 86_400,
