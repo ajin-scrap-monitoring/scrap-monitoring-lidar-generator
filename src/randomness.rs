@@ -97,8 +97,8 @@ impl ModelRng {
 
     fn from_digest(digest: [u8; 32]) -> Self {
         let mut state = [0; 4];
-        for (word, bytes) in state.iter_mut().zip(digest.chunks_exact(8)) {
-            *word = u64::from_be_bytes(bytes.try_into().expect("digest word has eight bytes"));
+        for (word, bytes) in state.iter_mut().zip(digest.as_chunks::<8>().0) {
+            *word = u64::from_be_bytes(*bytes);
         }
         if state == [0; 4] {
             state[0] = 1;

@@ -272,25 +272,99 @@ jobs:
 
           manifest_path="$RUNNER_TEMP/release-manifest.json"
           docker buildx imagetools inspect --raw "$VERSION_REF" > "$manifest_path"
-          python - "$manifest_path" <<'PY'
+          mapfile -t manifest_digests < <(python - "$manifest_path" <<'PY'
+          import json
+          import re
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as source:
+              manifest = json.load(source)
+          if manifest.get("mediaType") != "application/vnd.oci.image.index.v1+json":
+              raise SystemExit("release image must be an OCI image index")
+
+          entries = manifest.get("manifests", ())
+          runnable = [
+              entry
+              for entry in entries
+              if entry.get("platform", {}).get("os") != "unknown"
+          ]
+          platforms = [
+              (
+                  entry.get("platform", {}).get("os"),
+                  entry.get("platform", {}).get("architecture"),
+              )
+              for entry in runnable
+          ]
+          if platforms != [("linux", "arm64")]:
+              raise SystemExit(
+                  "release manifest must contain one linux/arm64 runnable image: "
+                  f"observed {platforms}"
+              )
+
+          runnable_digest = runnable[0].get("digest")
+          if not isinstance(runnable_digest, str) or not re.fullmatch(
+              r"sha256:[0-9a-f]{64}", runnable_digest
+          ):
+              raise SystemExit("runnable image has an invalid digest")
+          attestations = [
+              entry
+              for entry in entries
+              if entry.get("platform") == {"architecture": "unknown", "os": "unknown"}
+              and entry.get("annotations", {}).get("vnd.docker.reference.type")
+              == "attestation-manifest"
+              and entry.get("annotations", {}).get("vnd.docker.reference.digest")
+              == runnable_digest
+          ]
+          if len(attestations) != 1 or len(entries) != 2:
+              raise SystemExit(
+                  "release index must contain one runnable image and its attestation manifest"
+              )
+          attestation_digest = attestations[0].get("digest")
+          if not isinstance(attestation_digest, str) or not re.fullmatch(
+              r"sha256:[0-9a-f]{64}", attestation_digest
+          ):
+              raise SystemExit("release attestation has an invalid digest")
+          print(runnable_digest)
+          print(attestation_digest)
+          PY
+          )
+          if [[ "${#manifest_digests[@]}" -ne 2 ]]; then
+            echo "release manifest validation did not return both digests" >&2
+            exit 1
+          fi
+
+          runnable_digest="${manifest_digests[0]}"
+          attestation_digest="${manifest_digests[1]}"
+          attestation_path="$RUNNER_TEMP/release-attestation.json"
+          docker buildx imagetools inspect --raw \
+            "$IMAGE_NAME@$attestation_digest" > "$attestation_path"
+          python - "$attestation_path" "$runnable_digest" <<'PY'
           import json
           import sys
 
           with open(sys.argv[1], encoding="utf-8") as source:
               manifest = json.load(source)
-          runnable_platforms = {
-              (
-                  entry.get("platform", {}).get("os"),
-                  entry.get("platform", {}).get("architecture"),
-              )
-              for entry in manifest.get("manifests", ())
-              if entry.get("platform", {}).get("os") != "unknown"
+          if manifest.get("artifactType") != "application/vnd.docker.attestation.manifest.v1+json":
+              raise SystemExit("release attestation has an unexpected artifact type")
+          if manifest.get("subject", {}).get("digest") != sys.argv[2]:
+              raise SystemExit("release attestation subject differs from the runnable image")
+
+          layers = manifest.get("layers", ())
+          if any(layer.get("mediaType") != "application/vnd.in-toto+json" for layer in layers):
+              raise SystemExit("release attestation layers must use the in-toto media type")
+          predicates = {
+              layer.get("annotations", {}).get("in-toto.io/predicate-type")
+              for layer in layers
           }
-          expected = {("linux", "arm64")}
-          if runnable_platforms != expected:
+          if None in predicates:
+              raise SystemExit("release attestation layer is missing its predicate type")
+          required = {
+              "https://spdx.dev/Document",
+              "https://slsa.dev/provenance/v1",
+          }
+          if not required.issubset(predicates):
               raise SystemExit(
-                  f"release manifest platforms must be {sorted(expected)}: "
-                  f"observed {sorted(runnable_platforms)}"
+                  f"release attestation predicates are incomplete: observed {sorted(predicates)}"
               )
           PY
 

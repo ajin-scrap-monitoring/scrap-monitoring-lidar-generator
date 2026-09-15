@@ -22,7 +22,7 @@ ARM64 OCI(Open Container Initiative) image에는 정적으로 link한 Rust 실�
 고지만 포함한다.
 
 Raspberry Pi 5 연계 검증은 두 sensor의 기준 광선 구성, scan sequence, 처리 높이와 적재율 추세,
-생성기 자원 및 생명주기를 실제 `lidar-processing` 실행 결과와 함께 확인한다. 조건과 관측값은
+생성기 자원 및 생명주기를 실제 `lidar-processing` 실행 결과와 함께 확인했다. 조건과 관측값은
 [`performance.md`](performance.md)가 정본이다.
 
 ## 채택한 구조
@@ -96,12 +96,11 @@ CPU 100 percent는 논리 core 하나로 해석한다.
 | 데이터 의미 | 생성 scan과 처리 높이 및 적재율 검증 통과 |
 | 장비 상태 | OOM, container restart와 thermal throttling 0회 |
 
-## 다음 작업
+## 다음 갱신 조건
 
-남은 작업은 2개다.
+다음 외부 계약 갱신 조건은 1개다.
 
-1. Release image와 `lidar-processing`을 함께 실행한 지속 자원 및 처리 추세 결과를 확정한다.
-2. 교체될 처리 구성 요소의 계약이 고정되면 `SOURCE.json`, Proto, exporter와 직접 호환 검사를 함께 갱신한다.
+1. 교체될 처리 구성 요소의 계약이 고정되면 `SOURCE.json`, Proto, exporter와 직접 호환 검사를 함께 갱신한다.
 
 처리 구성 요소가 교체되기 전에는 현재 처리기의 보관 정책, 상태 counter와 계산 결과를 simulator
 결함으로 판정하지 않는다. 처리 호환 자료는 새 계약 갱신 전까지 현재 고정 version의 재현

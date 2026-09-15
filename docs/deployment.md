@@ -8,7 +8,7 @@ Docker Engine만 필요하며 source checkout과 build tool을 설치하지 않�
 
 ## 배포 산출물
 
-Release 산출물은 2개다.
+GitHub Release 첨부 파일은 2개다.
 
 | 산출물 | 용도 |
 | --- | --- |
@@ -102,9 +102,11 @@ cargo run --manifest-path "$RELEASE_SOURCE/Cargo.toml" --locked --release -- \
 생성기와 처리 설정의 `SITE_ID`, `EDGE_ID`, `CONFIG_REVISION`은 같아야 한다. 출력은 공개 합성
 환경의 검증에만 사용한다. exporter는 실제 현장 설정을 입력받거나 운영 보정값을 만들지 않는다.
 
-검증 제어 장비는 다음 6개 항목을 엣지의 새 전달 directory에 복사한다.
+검증 제어 장비는 다음 6개 파일을 엣지의 새 전달 directory에 복사한다.
 
-- `RELEASE_SOURCE/examples/`의 공개 JSON 3개
+- `RELEASE_SOURCE/examples/environment.v1.json`
+- `RELEASE_SOURCE/examples/generator.v2.json`
+- `RELEASE_SOURCE/examples/quality-profile.v1.json`
 - `RUN_ENV`의 `simulator.env`
 - `RELEASE_DIR/processing.synthetic.json`
 - `RELEASE_DIR/oci-image.txt`

@@ -107,7 +107,7 @@ fn generated_profiles_are_bounded_balanced_and_reproducible() {
         create_smooth_rate_profile(37.0, [0.4, 1.8], [2.0, 4.0], &mut rng()).unwrap()
     );
     assert_eq!(profile.segments().len() % 2, 0);
-    for pair in profile.segments().chunks_exact(2) {
+    for pair in profile.segments().as_chunks::<2>().0 {
         close(
             pair[0].duration_s() * pair[0].deviation() + pair[1].duration_s() * pair[1].deviation(),
             0.0,
