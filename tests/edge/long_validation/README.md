@@ -57,7 +57,7 @@ simulator가 통과하고 `lidar-processing`만 실패하면 `lidar-processing`,
 - 검증 계정에서 성공하는 `docker info` 또는 passwordless `sudo -n /usr/bin/docker info`
 - 검증 계정에서 성공하는 `vcgencmd get_throttled`와 온도 파일 읽기
 - `vcgencmd get_throttled` 결과 `0x0`
-- Candidate workflow가 같은 source revision에서 만든 검증 source archive와 그 정확한 추출본
+- GitHub Release가 같은 source revision에서 만든 검증 source archive와 그 정확한 추출본
 - `linux/arm64`, runtime UID 10001, registry digest와 source revision label을 갖춘 simulator image
 - `SOURCE.json`의 `validation_image` source와 일치하고 UDS(Unix Domain Socket)
   gRPC(Google Remote Procedure Call) authority 및 runtime sequence 집계 호환성을 포함한
@@ -73,15 +73,33 @@ commit SHA여야 한다. Processing source commit은 `SOURCE.json`의 `validatio
 전체 파일 내용, 실행 mode, symlink와 추가 파일 부재를 확인한다. 결과 디렉토리와 archive는 추출
 directory 바깥에 둔다.
 
-Candidate workflow artifact의 `edge-validation-source.tar.gz`와
-`edge-validation-source.sha256`을 검증 제어 장비에서 내려받는다. 두 파일과
-`edge-candidate-image.txt`, `edge-candidate-source-sha.txt`를 edge로 전달하고 source archive를 새
-directory에 추출한다.
+GitHub Release의 `edge-validation-source.tar.gz`, `edge-validation-source.sha256`과
+`oci-image.txt`를 검증 제어 장비에서 내려받는다. Release tag가 가리키는 commit도 함께 기록한 뒤
+네 파일을 edge로 전달하고 source archive를 새 directory에 추출한다.
+
+```bash
+REPOSITORY="ajin-scrap-monitoring/scrap-monitoring-lidar-simulator"
+RELEASE_TAG="$(gh release view --repo "$REPOSITORY" --json tagName --jq .tagName)"
+RELEASE_DIR="$(mktemp -d)"
+
+gh release download "$RELEASE_TAG" \
+  --repo "$REPOSITORY" \
+  --pattern edge-validation-source.tar.gz \
+  --pattern edge-validation-source.sha256 \
+  --pattern oci-image.txt \
+  --dir "$RELEASE_DIR"
+gh api "repos/$REPOSITORY/commits/$RELEASE_TAG" --jq .sha \
+  > "$RELEASE_DIR/generator-source-sha.txt"
+```
+
+다음 명령은 네 파일을 edge의 사용자 홈에 전달한 뒤 실행한다.
 
 ```bash
 SOURCE_ARCHIVE="$HOME/edge-validation-source.tar.gz"
 SOURCE_ARCHIVE_SHA256="$(sed -n '1p' "$HOME/edge-validation-source.sha256")"
 VALIDATION_REPOSITORY="$HOME/edge-validation-source"
+GENERATOR_IMAGE="$(sed -n '1p' "$HOME/oci-image.txt")"
+GENERATOR_SOURCE_COMMIT="$(sed -n '1p' "$HOME/generator-source-sha.txt")"
 
 test "$(sha256sum "$SOURCE_ARCHIVE" | awk '{print $1}')" = "$SOURCE_ARCHIVE_SHA256"
 mkdir "$VALIDATION_REPOSITORY"
@@ -94,7 +112,6 @@ edge에서는 네 case 모두 같은 비특권 계정으로 실행한다. Runner
 다음 사전 검사를 edge의 Repository root에서 실행한다.
 
 ```bash
-GENERATOR_SOURCE_COMMIT="<generator-commit>"
 DOCKER_COMMAND="$PWD/tests/edge/sudo-docker"
 
 test -s "$SOURCE_ARCHIVE"
@@ -117,8 +134,8 @@ Archive와 결과 root는 Repository 밖의 공백 없는 사용자 쓰기 가�
 자격 증명은 Repository 파일에 기록하지 않는다.
 
 ```bash
-GENERATOR_IMAGE="ghcr.io/example/simulator@sha256:<generator-digest>"
-GENERATOR_SOURCE_COMMIT="<generator-commit>"
+GENERATOR_IMAGE="$(sed -n '1p' "$HOME/oci-image.txt")"
+GENERATOR_SOURCE_COMMIT="$(sed -n '1p' "$HOME/generator-source-sha.txt")"
 SOURCE_ARCHIVE="$HOME/edge-validation-source.tar.gz"
 PROCESSING_IMAGE="sha256:<processing-image-id>"
 PROCESSING_SOURCE_COMMIT="55b2e9d9401682c237a42945d9f548a4c912951f"
@@ -129,7 +146,7 @@ DOCKER_COMMAND="$PWD/tests/edge/sudo-docker"
 mkdir -p "$RESULT_ROOT"
 ```
 
-공식 matrix는 다음 네 case를 사용한다. 각 `CASE_ROOT`는 실행 전에 존재하지 않아야 한다.
+선택적 matrix는 다음 네 case를 사용한다. 각 `CASE_ROOT`는 실행 전에 존재하지 않아야 한다.
 
 | `CASE_ID` | `FILL_DURATION_S` | 관찰 모드 |
 | --- | --- | --- |
@@ -302,7 +319,8 @@ SIGTERM 또는 SIGINT로 중단한 실행은 결과로 사용하지 않고 새 �
 ## Matrix 실행과 판정
 
 공통 실행 변수에 정의한 네 case는 각각 300초 준비와 3,600초 측정을 사용하므로 전체 측정에는 최소
-4시간 20분이 필요하다. Edge는 검증 image 실행과 증거 수집만 담당한다. 네 aggregate 결과를 clean
+4시간 20분이 필요하다. 이 matrix는 자동 실행하거나 후속 작업으로 예약하지 않으며 필요할 때만
+수동으로 실행한다. Edge는 검증 image 실행과 증거 수집만 담당한다. 네 aggregate 결과를 clean
 Repository checkout과 `uv`가 있는 receiver 또는 개발 장비로 복사하여 판정한다. 다음 경로에는
 공백을 사용하지 않는다.
 

@@ -181,8 +181,8 @@ UDS lane을 검증하는 별도 계약 검증을 통과한다. 이 검증은 미
 10001로 실행한다. Python은 계약, 장기 부하와 문서 자동화에만 사용하는 개발 도구다.
 
 Release 전 검증은 두 sensor scan 의미, ARM64 상태와 sequence 진행, 짧은 생성기 부하, 재시작,
-OOM(Out Of Memory)과 thermal throttling 상태를 확인한다. 처리 구성 요소의 교체 전에는 처리 결과와
-4개 case 장기 공유 부하 검증을 보류한다. 측정값과 후속 조건은
+OOM(Out Of Memory)과 thermal throttling 상태를 확인한다. 처리 구성 요소의 교체 전에는 현재
+처리기를 대상으로 한 추가 공유 부하 검증을 진행하지 않는다. 측정값과 후속 조건은
 [`docs/performance.md`](docs/performance.md)와 [`docs/development-plan.md`](docs/development-plan.md)가
 정본이다.
 

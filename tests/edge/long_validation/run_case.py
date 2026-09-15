@@ -481,7 +481,7 @@ def _sha256_stream(source: object) -> str:
 
 
 def verify_repository_checkout(repository: Path, expected_commit: str) -> None:
-    """Require a development-side checkout that matches the candidate source."""
+    """Require a development-side checkout that matches the release source."""
     commands = (
         (["rev-parse", "--show-toplevel"], "repository root"),
         (["rev-parse", "HEAD"], "repository HEAD"),
