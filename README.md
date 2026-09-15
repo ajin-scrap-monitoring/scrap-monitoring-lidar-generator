@@ -25,9 +25,9 @@ scan 생성과 gRPC 구독을 중단시키지 않는다.
 | 용도 | 요구 사항 |
 |---|---|
 | 시뮬레이터 개발 | Rust 1.96.0 |
-| 계약, 장기 부하 및 문서 검증 | Python 3.14.4, uv 0.12.15 |
+| 계약 및 문서 검증 | Python 3.14.4, uv 0.12.15 |
 | 엣지 검증 | 64-bit ARM Linux, Docker Engine |
-| 배포 제어 | Linux, Rust 1.96.0, GitHub CLI, Bash |
+| 배포 제어 | Linux, Git, Rust 1.96.0, GitHub CLI, Bash |
 
 엣지 검증 장비는 Python, uv, compiler와 이미지 빌드 도구를 설치하지 않는다. GitHub Container
 Registry에 게시된 `linux/arm64` 이미지를 digest로 받아 실행한다.
@@ -47,7 +47,7 @@ cargo test --locked --test scan_runtime
 ```
 
 두 번째 명령은 `/tmp/processing.synthetic.json`을 만들고 세 번째 명령은 sensor별 UDS(Unix
-Domain Socket) 구독과 상태 출력을 검증한다. 계약, 장기 부하와 문서 자동화를 검증하려면
+Domain Socket) 구독과 상태 출력을 검증한다. 계약과 문서 자동화를 검증하려면
 `uv sync --locked --all-groups`로 개발 도구 환경을 구성한다.
 
 ## 설정
@@ -153,7 +153,7 @@ cargo test --locked --all-targets --all-features
 uv run --locked rumdl check .
 uv run --locked ruff format --check .
 uv run --locked ruff check .
-uv run --locked mypy
+uv run --locked --group docs mypy
 uv run --locked pytest
 uv run --locked --group docs \
   python docs/synthetic-environment-specification/generate.py --check
@@ -163,7 +163,8 @@ uv run --locked --group docs \
 
 ```bash
 cargo build --release --locked --bin scrap-monitoring-lidar-simulator
-uv run --locked python -m tools.verify_rust_runtime_contract \
+uv run --locked --group integration \
+  python -m tools.verify_rust_runtime_contract \
   --runtime-binary target/release/scrap-monitoring-lidar-simulator \
   --edge-platform-root /path/to/ajin-edge-platform
 ```
@@ -178,11 +179,11 @@ UDS lane을 검증하는 별도 계약 검증을 통과한다. 이 검증은 미
 배포 대상은 실제 센서 운영 환경이 아니라 Raspberry Pi 5에서 `lidar-processing`과 연동하는 개발 및
 검증 환경이다. Release는 `linux/arm64` OCI(Open Container Initiative) image와 digest 참조를
 제공한다. 기본 image는 Python runtime과 빌드 도구가 없는 Rust 단일 실행 파일을 UID와 GID
-10001로 실행한다. Python은 계약, 장기 부하와 문서 자동화에만 사용하는 개발 도구다.
+10001로 실행한다. Python은 계약과 문서 자동화에만 사용하는 개발 도구다.
 
-Release 전 검증은 두 sensor scan 의미, ARM64 상태와 sequence 진행, 짧은 생성기 부하, 재시작,
-OOM(Out Of Memory)과 thermal throttling 상태를 확인한다. 처리 구성 요소의 교체 전에는 현재
-처리기를 대상으로 한 추가 공유 부하 검증을 진행하지 않는다. 측정값과 후속 조건은
+Release 전 검증은 두 sensor scan 의미, ARM64 상태와 sequence 진행 및 정상 종료를 확인한다.
+지속 부하와 처리 높이는 Raspberry Pi 5에서 Release image와 `lidar-processing`을 함께 실행해
+판정한다. 측정 방법, 현재 기준과 후속 조건은
 [`docs/performance.md`](docs/performance.md)와 [`docs/development-plan.md`](docs/development-plan.md)가
 정본이다.
 

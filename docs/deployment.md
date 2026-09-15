@@ -3,15 +3,16 @@
 이 문서의 배포 대상은 합성 LiDAR 시뮬레이터를 사용하는 개발 및 검증 환경이다. 실제 LiDAR를
 사용하는 운영 환경에는 이 시뮬레이터 image와 합성 처리 설정을 배포하지 않는다.
 
+검증 제어 장비에는 Git, Rust 1.96.0, GitHub CLI와 Docker Engine이 필요하다. 엣지 장비에는
+Docker Engine만 필요하며 source checkout과 build tool을 설치하지 않는다.
+
 ## 배포 산출물
 
-Release 산출물은 4개다.
+Release 산출물은 2개다.
 
 | 산출물 | 용도 |
 | --- | --- |
 | `edge-platform-integration-v1.tar.gz` | `ajin-edge-platform` 통합 인계 |
-| `edge-validation-source.tar.gz` | 엣지 검증 및 배포 설정용 고정 source archive |
-| `edge-validation-source.sha256` | Source archive SHA-256 |
 | `oci-image.txt` | ARM64 OCI image의 digest 고정 참조 |
 
 OCI(Open Container Initiative) image는 Raspberry Pi 5용 `linux/arm64` 단일 실행 platform이다.
@@ -28,20 +29,21 @@ RELEASE_TAG="$(gh release view \
   --repo ajin-scrap-monitoring/scrap-monitoring-lidar-simulator \
   --json tagName --jq .tagName)"
 
-RELEASE_DIR="$(mktemp -d)"
+WORK_DIR="$(mktemp -d)"
+RELEASE_DIR="$WORK_DIR/release"
+RELEASE_SOURCE="$WORK_DIR/source"
+mkdir "$RELEASE_DIR"
 gh release download "$RELEASE_TAG" \
   --repo ajin-scrap-monitoring/scrap-monitoring-lidar-simulator \
-  --pattern edge-validation-source.tar.gz \
-  --pattern edge-validation-source.sha256 \
   --pattern oci-image.txt \
   --dir "$RELEASE_DIR"
-test "$(sha256sum "$RELEASE_DIR/edge-validation-source.tar.gz" | awk '{print $1}')" = \
-  "$(sed -n '1p' "$RELEASE_DIR/edge-validation-source.sha256")"
-RELEASE_SOURCE="$RELEASE_DIR/source"
-mkdir "$RELEASE_SOURCE"
-tar --extract --gzip \
-  --file "$RELEASE_DIR/edge-validation-source.tar.gz" \
-  --directory "$RELEASE_SOURCE"
+git clone --branch "$RELEASE_TAG" --depth 1 \
+  https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-simulator.git \
+  "$RELEASE_SOURCE"
+EXPECTED_REVISION="$(gh api \
+  "repos/ajin-scrap-monitoring/scrap-monitoring-lidar-simulator/commits/$RELEASE_TAG" \
+  --jq .sha)"
+test "$(git -C "$RELEASE_SOURCE" rev-parse HEAD)" = "$EXPECTED_REVISION"
 IMAGE_REF="$(sed -n '1p' "$RELEASE_DIR/oci-image.txt")"
 printf '%s\n' "$IMAGE_REF"
 ```
@@ -50,7 +52,7 @@ printf '%s\n' "$IMAGE_REF"
 `name@sha256:<digest>` 값을 사용한다. Public GHCR(GitHub Container Registry) package이므로
 pull credential은 필요하지 않다.
 
-검증 제어 장비가 Release asset과 image를 선택하고 실행 환경 파일, 공개 JSON과 합성 처리 설정을
+검증 제어 장비가 Release tag와 image를 선택하고 실행 환경 파일, 공개 JSON과 합성 처리 설정을
 엣지에 전달한다. 엣지 장비는 Git checkout과 build tool 없이 image 실행, 설정 파일과 runtime
 directory만 관리한다.
 
@@ -110,7 +112,7 @@ cargo run --manifest-path "$RELEASE_SOURCE/Cargo.toml" --locked --release -- \
 ## Host 준비
 
 두 container는 UID와 GID 10001로 실행한다. 공용 socket directory는 두 process가 접근할 수
-있도록 10001:10001과 mode 0770으로 준비한다. 다음 명령은 검증 제어 장비에서 추출한 source의
+있도록 10001:10001과 mode 0770으로 준비한다. 다음 명령은 검증 제어 장비에서 선택한 tag의
 공개 파일을 엣지의 임시 전달 경로에 둔 뒤 엣지 장비에서 실행한다.
 
 ```bash
@@ -235,15 +237,15 @@ EXPECTED_REVISION="$(gh api \
 성공 출력은 `edge_validation=passed sensors=2`를 포함한다. 검증기는 두 sensor의 기준 교차와 최종
 측정점 의미, ARM64 runtime의 UDS 2개, sensor별 `HEALTHY` 상태와 sequence 진행 및 정상 종료를
 검사한다. 실제 gRPC 구독과 관찰 wire 계약은 Rust 통합 테스트와 고정 외부 구현 직접 호환 검사가
-담당한다. `lidar-processing`을 포함한 공유 부하 검증은 [`performance.md`](performance.md)의 장기
-검증 절차를 따른다.
+담당한다. `lidar-processing`을 포함한 지속 부하와 처리 높이 검증은
+[`performance.md`](performance.md)를 따른다.
 
 ## Release workflow
 
 Release workflow는 원격 `main` 이력에 포함된 `vMAJOR.MINOR.PATCH` tag만 처리한다. Tag version은
-`Cargo.toml`과 개발 도구용 `pyproject.toml` version과 같아야 한다. Workflow는 전체 검증, 외부 source 직접
-검증, integration bundle, 검증 source archive와 ARM64 image build를 수행한다. Image에는
-SBOM(Software Bill of Materials)과 provenance attestation을 포함한다.
+`Cargo.toml`과 개발 도구용 `pyproject.toml` version과 같아야 한다. Workflow는 전체 검증, 외부
+source 직접 검증, integration bundle과 ARM64 image build를 수행한다. Image에는 SBOM(Software
+Bill of Materials)과 provenance attestation을 포함한다.
 
 workflow는 version tag와 `sha-<full-git-sha>` tag가 같은 manifest digest인지, 실행 platform이
 `linux/arm64` 하나인지, GHCR package가 Public인지 확인한 뒤 Release를 게시한다. 게시한 tag,

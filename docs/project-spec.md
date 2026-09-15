@@ -142,7 +142,7 @@ JSON Lines 파일로 남기는 개발 검증 기능이다. 진단은 설정으�
 | 항목 | 적용 기준 |
 | --- | --- |
 | 기본 실행 구현 | Rust 1.96 |
-| 기준 구현과 개발 도구 | Python 3.14, uv |
+| 계약 및 문서 자동화 | Python 3.14, uv |
 | 배포 산출물 | Linux ARM64 단일 platform OCI image |
 | 실행 대상 | Raspberry Pi 5 개발 및 통합 검증 환경 |
 
@@ -170,6 +170,6 @@ GitHub Container Registry에 게시된 image를 digest로 받아 실행하며 im
 - 관찰 연결 실패와 느린 수신기가 scan 생성과 구독을 막지 않는다.
 - 합성 처리 설정과 두 sensor frame을 실제 `lidar-processing`이 `GOOD` 상태로 수락한다.
 - Linux ARM64 image가 빌드되고 digest 기준 반복 검증 절차를 제공한다.
-- Raspberry Pi 5에서 `lidar-processing`과 함께 짧은 기능, 데이터 의미, 자원 여유와 생명주기를 검증한다.
-- Release 이후 장기 공유 부하, sequence gap과 처리 지연을 재현하는 bounded 검증 절차를 제공한다.
+- Raspberry Pi 5에서 Release image와 `lidar-processing`을 함께 실행하여 scan 및 높이 의미,
+  자원 여유, 생명주기와 지속 안정성을 검증한다.
 - 고정한 S2E SDK와 외부 driver source의 frame 의미 및 정수 변환을 자동 검증한다.

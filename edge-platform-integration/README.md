@@ -10,7 +10,7 @@ Repository commit이다.
 |---|---|
 | `README.md` | 연결, 변환과 수락 기준 |
 | `SOURCE.json` | 외부 계약 정본 commit과 검토한 source 경로 |
-| `validation/lidar-processing-compatibility.mbox` | 장기 검증용 처리 image의 재현 가능한 최소 호환 patch |
+| `validation/lidar-processing-compatibility.mbox` | 고정 처리 구현의 UDS 연결을 재현하는 최소 호환 patch |
 | `v1/lidar.proto` | gRPC scan 계약의 고정 사본 |
 | `v1/processing.synthetic.json` | 공개 합성 환경의 완전한 처리 입력 fixture |
 
@@ -82,7 +82,7 @@ grpc.aio.insecure_channel(
 `lidar-processing` container와 연결하기 전에 해당 client가 이 option을 적용하는지 확인한다.
 `tools/verify_rust_runtime_contract.py`의 live 구독은 이 조건을 적용한다.
 
-## 장기 검증용 처리 image
+## 호환 검증용 처리 image
 
 `SOURCE.json`의 `commit`은 외부 계약을 읽는 기준 commit이다. `validation_image`는 이 commit에
 `validation/lidar-processing-compatibility.mbox`를 적용해 만드는 검증 전용 파생 image의 source를
@@ -127,10 +127,9 @@ docker image inspect \
   ajin-lidar-processing:0.1.0-validation-arm64
 ```
 
-엣지에서는 archive를 `docker load`로 읽고 마지막 명령이 출력한 `sha256:` image ID를 장기 검증
-runner의 `--processing-image`에 전달한다. `--processing-source-commit`에는
-`VALIDATION_COMMIT`을 전달한다. 원격 외부 Repository에는 branch, commit 또는 image를 게시하지
-않는다.
+엣지에서는 archive를 `docker load`로 읽고 마지막 명령이 출력한 `sha256:` image ID와
+`VALIDATION_COMMIT`을 연계 검증 기록에 남긴다. 원격 외부 Repository에는 branch, commit 또는
+image를 게시하지 않는다.
 
 ## 환경과 처리 설정
 
@@ -208,7 +207,8 @@ release profile 실행 파일을 요구하며 debug 실행 결과는 이 검증�
 ```shell
 cargo build --locked --release \
   --bin scrap-monitoring-lidar-simulator
-uv run --locked python -m tools.verify_rust_runtime_contract \
+uv run --locked --group integration \
+  python -m tools.verify_rust_runtime_contract \
   --runtime-binary target/release/scrap-monitoring-lidar-simulator \
   --edge-platform-root /path/to/ajin-edge-platform
 ```

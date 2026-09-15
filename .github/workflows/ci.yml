@@ -128,7 +128,7 @@ jobs:
         run: uv run --locked ruff check .
 
       - name: Check Python automation types
-        run: uv run --locked mypy
+        run: uv run --locked --group docs mypy
 
       - name: Test Python automation
         run: uv run --locked pytest
@@ -160,7 +160,8 @@ jobs:
         run: |
           cargo build --release --locked \
             --bin scrap-monitoring-lidar-simulator
-          uv run --locked python -m tools.verify_rust_runtime_contract \
+          uv run --locked --group integration \
+            python -m tools.verify_rust_runtime_contract \
             --runtime-binary target/release/scrap-monitoring-lidar-simulator \
             --edge-platform-root .contract/ajin-edge-platform
 
