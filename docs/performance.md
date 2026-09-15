@@ -89,13 +89,14 @@ Release 0.10.0 source revision `896696667a9f186042bf3deaf6b71ecb5deb7b3a`와 ARM
 교체 예정인 처리 구성 요소의 값은 simulator 생성 실패 판정에서 제외했다. 약식 수집기의 상태
 파일 표본은 host 권한 문제로 유효하지 않아 완료 후 파일을 직접 확인했다. 이 검증은 simulator의
 지속 생성과 관찰 전송에 이상이 없음을 확인하지만 frame 완료 지연, RSS P95와 처리 결과를 포함한
-공식 장기 matrix를 대신하지 않는다.
+선택적 장기 검증 결과를 대신하지 않는다.
 
 ## 공유 부하 측정 규칙
 
-장기 공유 부하 결과는 아직 없다. 아래 규칙은 Release 후 지속 안정성 측정에 적용하며 수치
-기준은 [`development-plan.md`](development-plan.md#release-전-단기-합격)가 정본이다. 단기 통합
-검증의 관측값은 장기 matrix 결과를 대신하지 않는다.
+장기 공유 부하 결과는 없다. 아래 규칙은 필요할 때 지속 안정성을 재현하는 선택적 절차이며 현재
+후속 작업으로 예약하지 않는다. 수치 기준은
+[`development-plan.md`](development-plan.md#release-전-단기-합격)가 정본이다. 단기 통합 검증의
+관측값은 이 절차의 결과를 대신하지 않는다.
 
 고정된 실행 명령, 증거 인계와 aggregate 결과 schema는
 [`../tests/edge/long_validation/README.md`](../tests/edge/long_validation/README.md)를 따른다.

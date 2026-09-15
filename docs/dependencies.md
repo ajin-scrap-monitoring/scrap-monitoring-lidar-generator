@@ -2,8 +2,8 @@
 
 ## 적용 범위
 
-현재 직접 사용하는 외부 의존성은 52개다. Python 자동화, 문서, CI(Continuous Integration),
-컨테이너와 라이선스 검증 경계는 31개를 사용하고 Rust 실행과 검증 경계는 toolchain 1개와 직접
+현재 직접 사용하는 외부 의존성은 51개다. Python 자동화, 문서, CI(Continuous Integration),
+컨테이너와 라이선스 검증 경계는 30개를 사용하고 Rust 실행과 검증 경계는 toolchain 1개와 직접
 crate 20개를 사용한다. NumPy, `grpcio`와 `protobuf`는 고정한 `lidar-processing` 구현을 사용한
 gRPC(Google Remote Procedure Call) 계약 검사에만 사용한다. Rust crate는 runtime, wire binding
 생성, 비동기 출력과 검증에 사용한다. 나머지 항목은 빌드, 개발 검증과 Release에 사용한다.
@@ -23,7 +23,6 @@ gRPC(Google Remote Procedure Call) 계약 검사에만 사용한다. Rust crate�
 | `types-grpcio` | `>=1.83.0.20260730,<1.84` | gRPC 사용 코드의 정적 type 검사 | [typeshed](https://github.com/python/typeshed) | Apache-2.0 |
 | `actions/checkout` | `v7.0.1` | GitHub Actions 실행 환경의 Repository checkout | [GitHub](https://github.com/actions/checkout) | MIT |
 | `actions/setup-python` | `v7.0.0` | GitHub Actions의 Python 3.14.4 설치 | [GitHub](https://github.com/actions/setup-python) | MIT |
-| `actions/upload-artifact` | `v7.0.1` | ARM64 후보 image 참조와 검증 source bundle 보관 | [GitHub](https://github.com/actions/upload-artifact) | MIT |
 | `astral-sh/setup-uv` | `v10.1.0` | GitHub Actions의 uv 설치 및 cache 구성 | [Astral](https://github.com/astral-sh/setup-uv) | MIT |
 | `docker/setup-qemu-action` | `v4.4.0` | GitHub Actions의 ARM64 image emulation 구성 | [Docker](https://github.com/docker/setup-qemu-action) | Apache-2.0 |
 | `tonistiigi/binfmt` | `qemu-v10.2.3-68` | ARM64 실행용 QEMU static binary 등록 | [GitHub](https://github.com/tonistiigi/binfmt) | MIT |
