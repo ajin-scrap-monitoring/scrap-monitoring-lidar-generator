@@ -8,14 +8,14 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from scrap_monitoring_lidar_generator.configuration import (
+from scrap_monitoring_lidar_simulator.configuration import (
     ConfigurationError,
     load_generator_inputs,
 )
-from scrap_monitoring_lidar_generator.geometry import HitKind, Vec2
-from scrap_monitoring_lidar_generator.measurement import MeasurementResult
-from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import HQ_DISTANCE_STEP_M
-from scrap_monitoring_lidar_generator.runtime import (
+from scrap_monitoring_lidar_simulator.geometry import HitKind, Vec2
+from scrap_monitoring_lidar_simulator.measurement import MeasurementResult
+from scrap_monitoring_lidar_simulator.measurement.sdk_compatibility import HQ_DISTANCE_STEP_M
+from scrap_monitoring_lidar_simulator.runtime import (
     MeasurementGenerationRuntime,
     build_measurement_generation_runtime,
     build_measurement_generators,
@@ -23,7 +23,7 @@ from scrap_monitoring_lidar_generator.runtime import (
     build_rotation_schedulers,
     build_scenario_simulator,
 )
-from scrap_monitoring_lidar_generator.scenario import (
+from scrap_monitoring_lidar_simulator.scenario import (
     FillPlan,
     ScenarioPhase,
     ScenarioSnapshot,

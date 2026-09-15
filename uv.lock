@@ -513,7 +513,7 @@ wheels = [
 ]
 
 [[package]]
-name = "scrap-monitoring-lidar-generator"
+name = "scrap-monitoring-lidar-simulator"
 version = "0.9.0"
 source = { editable = "." }
 dependencies = [

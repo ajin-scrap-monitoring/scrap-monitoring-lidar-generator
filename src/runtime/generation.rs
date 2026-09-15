@@ -19,8 +19,8 @@ use crate::{
         SpatialDistortionTimeline, VoidSettings, create_seeded_rotation_scheduler,
     },
     scenario::{
-        ScenarioError, ScenarioModelSnapshot, ScenarioSimulator, build_scenario_simulator,
-        scale_duration_range, scenario_time_scale,
+        ScenarioError, ScenarioModelSnapshot, ScenarioPhase, ScenarioSimulator,
+        build_scenario_simulator, scale_duration_range, scenario_time_scale,
     },
 };
 
@@ -69,6 +69,14 @@ pub struct GenerationRuntimeStats {
 pub struct GenerationBatch {
     pub completed_at_s: f64,
     pub scans: Vec<MeasurementResult>,
+    pub scenario_transitions: Vec<ScenarioPhaseTransition>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScenarioPhaseTransition {
+    pub elapsed_s: f64,
+    pub cycle_index: u64,
+    pub phase: ScenarioPhase,
 }
 
 struct SensorCoordinator {
@@ -195,7 +203,7 @@ impl GenerationRuntime {
         if !completion_s.is_finite() {
             return Err(GenerationRuntimeError::SensorConfiguration);
         }
-        self.advance_scenario_and_distortions(completion_s)?;
+        let scenario_transitions = self.advance_scenario_and_distortions(completion_s)?;
 
         let snapshots = Arc::new(self.snapshots.clone());
         let spatial = self
@@ -313,15 +321,20 @@ impl GenerationRuntime {
         Ok(GenerationBatch {
             completed_at_s: completion_s,
             scans,
+            scenario_transitions,
         })
     }
 
-    fn advance_scenario_and_distortions(&mut self, through_s: f64) -> Result<()> {
+    fn advance_scenario_and_distortions(
+        &mut self,
+        through_s: f64,
+    ) -> Result<Vec<ScenarioPhaseTransition>> {
         let mut scenario = self.scenario.clone();
         let mut snapshots = self.snapshots.clone();
         let mut spatial = self.spatial.clone();
         let scenario_event_limit = scenario.event_output_limit()?;
         let mut scenario_events = 0_usize;
+        let mut transitions = Vec::new();
 
         while scenario.elapsed_s() < through_s {
             let started_at_s = scenario.elapsed_s();
@@ -350,6 +363,13 @@ impl GenerationRuntime {
                 .into());
             }
             for event in advance.events {
+                if event.phase_transition_due {
+                    transitions.push(ScenarioPhaseTransition {
+                        elapsed_s: event.elapsed_s,
+                        cycle_index: event.model.state.cycle_index,
+                        phase: event.model.state.phase,
+                    });
+                }
                 snapshots.push_event(event.elapsed_s, event.model.surface)?;
             }
         }
@@ -357,7 +377,7 @@ impl GenerationRuntime {
         self.scenario = scenario;
         self.snapshots = snapshots;
         self.spatial = spatial;
-        Ok(())
+        Ok(transitions)
     }
 
     pub fn shutdown(&mut self) -> Result<()> {

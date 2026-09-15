@@ -1,4 +1,4 @@
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     configuration::{GeneratorInputs, load_generator_inputs},
     geometry::{Polygon2, Vec2},
     measurement::{

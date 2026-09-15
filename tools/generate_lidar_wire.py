@@ -8,7 +8,7 @@ from pathlib import Path
 
 _ROOT = Path(__file__).parents[1]
 _PROTO_DIRECTORY = _ROOT / "contracts" / "lidar" / "v1"
-_TARGET_DIRECTORY = _ROOT / "src" / "scrap_monitoring_lidar_generator" / "wire"
+_TARGET_DIRECTORY = _ROOT / "src" / "scrap_monitoring_lidar_simulator" / "wire"
 _GENERATED_NAMES = ("lidar_pb2.py", "lidar_pb2.pyi", "lidar_pb2_grpc.py")
 
 

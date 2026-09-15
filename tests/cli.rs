@@ -1,6 +1,6 @@
 use std::{path::Path, process::Command};
 
-use scrap_monitoring_lidar_generator::cli::{
+use scrap_monitoring_lidar_simulator::cli::{
     self, Environment, RuntimeSettingOverrides, resolve_model_overrides, resolve_runtime_settings,
 };
 
@@ -163,7 +163,7 @@ fn numeric_overrides_accept_python_digit_separators() {
 
 #[test]
 fn check_cli_has_success_error_and_help_exit_codes() {
-    let binary = env!("CARGO_BIN_EXE_scrap-monitoring-lidar-generator-rust");
+    let binary = env!("CARGO_BIN_EXE_scrap-monitoring-lidar-simulator");
     let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/generator.v2.json");
     let result = Command::new(binary)
         .env_clear()
@@ -212,7 +212,7 @@ fn check_cli_has_success_error_and_help_exit_codes() {
 
 #[test]
 fn repeated_cli_options_validate_every_occurrence_before_using_the_last() {
-    let binary = env!("CARGO_BIN_EXE_scrap-monitoring-lidar-generator-rust");
+    let binary = env!("CARGO_BIN_EXE_scrap-monitoring-lidar-simulator");
     let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/generator.v2.json");
     let result = Command::new(binary)
         .env_clear()

@@ -8,7 +8,7 @@ use std::{
 };
 
 use hyper_util::rt::TokioIo;
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     scan_runtime::{
         ClockReading, GrpcScanRuntime, RuntimeClock, RuntimeIdSource, ScanRuntimeConfig,
         ScanRuntimeError,
@@ -382,10 +382,11 @@ async fn status_has_exact_schema_and_transitions_to_healthy() {
     assert_eq!(second_status["sensor_id"], "lidar_2");
 
     let instance = runtime.instance_ids()["lidar_1"].clone();
-    runtime
+    let receipt = runtime
         .publish(frame("lidar_1", &instance, 7))
         .await
         .unwrap();
+    assert_eq!(receipt.published_at_monotonic_ns, 2_000_000_000);
     tokio::time::sleep(Duration::from_millis(2_100)).await;
     let healthy: Value = serde_json::from_slice(&fs::read(&status_path).unwrap()).unwrap();
     assert_eq!(healthy.as_object().unwrap().len(), 19);

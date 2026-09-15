@@ -9,8 +9,8 @@ from typing import Any, cast
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.configuration import GeneratorInputs, load_generator_inputs
-from scrap_monitoring_lidar_generator.runtime import (
+from scrap_monitoring_lidar_simulator.configuration import GeneratorInputs, load_generator_inputs
+from scrap_monitoring_lidar_simulator.runtime import (
     JsonLinesDiagnosticsWriter,
     build_diagnostics_writer,
     build_measurement_generation_runtime,

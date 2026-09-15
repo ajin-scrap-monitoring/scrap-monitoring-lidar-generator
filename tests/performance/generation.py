@@ -15,14 +15,14 @@ from typing import Any, cast
 
 import grpc
 
-from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.runtime import (
+from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_simulator.runtime import (
     PerformanceRecorder,
     PerformanceStage,
     build_measurement_generation_runtime,
 )
-from scrap_monitoring_lidar_generator.scan_stream import GrpcScanServer, ScanFrameFactory
-from scrap_monitoring_lidar_generator.wire import lidar_pb2, lidar_pb2_grpc
+from scrap_monitoring_lidar_simulator.scan_stream import GrpcScanServer, ScanFrameFactory
+from scrap_monitoring_lidar_simulator.wire import lidar_pb2, lidar_pb2_grpc
 
 
 def _positive_integer(value: str) -> int:
@@ -69,7 +69,7 @@ async def _run_benchmark(config_path: Path, scans_per_sensor: int) -> dict[str, 
     process_started_s = time.process_time()
     wall_started_ns = time.perf_counter_ns()
 
-    with tempfile.TemporaryDirectory(prefix="lidar-generator-benchmark-") as directory:
+    with tempfile.TemporaryDirectory(prefix="lidar-simulator-benchmark-") as directory:
         root = Path(directory)
         server = GrpcScanServer(
             sensor_ids=runtime.sensor_ids,

@@ -102,7 +102,7 @@ sequence gap으로 확인한다.
 
 ## 의존성과 검증
 
-생성기는 RPLIDAR SDK에 link하지 않는다. SDK source, compiler와 build 산출물도 생성기 image에
+생성기는 RPLIDAR SDK에 link하지 않는다. SDK source, compiler와 build 산출물도 시뮬레이터 image에
 포함하지 않는다. 외부 SDK는 BSD-2-Clause license를 따른다.
 
 자동 검증은 HQ 표현 가능성, 정수 변환 경계, 0 거리, quality 이동, 안정 angle 정렬, 첫 scan

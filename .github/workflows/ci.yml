@@ -11,23 +11,29 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ci:
     name: CI
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14.4"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.12"
           enable-cache: true
@@ -49,29 +55,70 @@ jobs:
           test -L .claude/CLAUDE.md
           test "$(readlink .claude/CLAUDE.md)" = "../.agents/AGENTS.md"
           test "$(git ls-files docs/internal)" = "docs/internal/README.md"
+          python3 - <<'PY'
+          import tomllib
+
+          with open("Cargo.toml", "rb") as source:
+              cargo_version = tomllib.load(source)["package"]["version"]
+          with open("pyproject.toml", "rb") as source:
+              python_version = tomllib.load(source)["project"]["version"]
+          if cargo_version != python_version:
+              raise SystemExit("Cargo and Python package versions differ")
+          PY
+
+      - name: Validate GitHub Actions workflows
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $archive" \
+            | sha256sum --check --strict
+          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" .github/workflows/*.yml
+          python3 - <<'PY'
+          import pathlib
+          import re
+
+          invalid = []
+          for path in sorted(pathlib.Path(".github/workflows").glob("*.yml")):
+              for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                  match = re.search(r"\buses:\s*([^\s#]+)", line)
+                  if match is None or match.group(1).startswith("./"):
+                      continue
+                  reference = match.group(1).rsplit("@", 1)[-1]
+                  if re.fullmatch(r"[0-9a-f]{40}", reference) is None:
+                      invalid.append(f"{path}:{number}: action is not pinned by full SHA")
+          if invalid:
+              raise SystemExit("\n".join(invalid))
+          PY
 
       - name: Check Rust formatting
         run: cargo fmt --check
 
-      - name: Lint Rust
+      - name: Lint Rust default features
         run: cargo clippy --locked --all-targets -- -D warnings
 
-      - name: Test Rust
-        run: cargo test --locked
+      - name: Lint Rust all features
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Test Rust default features
+        run: cargo test --locked --all-targets
+
+      - name: Test Rust all features
+        run: cargo test --locked --all-targets --all-features
+
+      - name: Check third-party notices
+        run: |
+          cargo install --locked --version 0.9.2 --features cli cargo-about
+          python3 tools/generate_third_party_notices.py --check
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
-
-      - name: Build and smoke test Rust ARM64 binary
-        run: |
-          rustup target add aarch64-unknown-linux-musl --toolchain 1.96.0
-          RUST_LLD_PATH="$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld"
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER="$RUST_LLD_PATH" \
-            cargo build --locked --release \
-            --target aarch64-unknown-linux-musl \
-            --bin scrap-monitoring-lidar-generator-rust
-          target/aarch64-unknown-linux-musl/release/scrap-monitoring-lidar-generator-rust \
-            check --config examples/generator.v2.json
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3-68@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
 
       - name: Check Python formatting
         run: uv run --locked ruff format --check .
@@ -93,18 +140,28 @@ jobs:
       - name: Verify generated LiDAR wire modules
         run: uv run --locked python -m tools.generate_lidar_wire --check
 
+      - name: Resolve pinned edge platform contract
+        id: edge-contract
+        run: |
+          commit="$(python3 -c 'import json; print(json.load(open("edge-platform-integration/SOURCE.json"))["commit"])')"
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "edge platform source commit is invalid" >&2
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
       - name: Check out pinned edge platform contract
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ajin-scrap-monitoring/ajin-edge-platform
-          ref: 666ca6067a3bb86833b74140cb659049025d0dae
+          ref: ${{ steps.edge-contract.outputs.commit }}
           path: .contract/ajin-edge-platform
           persist-credentials: false
 
       - name: Verify edge platform processing compatibility
         run: |
           cargo run --locked --quiet \
-            --bin scrap-monitoring-lidar-generator-rust -- \
+            --bin scrap-monitoring-lidar-simulator -- \
             export-synthetic-processing-config \
             --generator-config examples/generator.v2.json \
             --socket-dir /sockets \
@@ -119,29 +176,72 @@ jobs:
       - name: Verify Rust runtime processing compatibility
         run: |
           cargo build --release --locked \
-            --bin scrap-monitoring-lidar-generator-rust
+            --bin scrap-monitoring-lidar-simulator
           uv run --locked python -m tools.verify_rust_runtime_contract \
-            --runtime-binary target/release/scrap-monitoring-lidar-generator-rust \
+            --runtime-binary target/release/scrap-monitoring-lidar-simulator \
             --edge-platform-root .contract/ajin-edge-platform
 
       - name: Smoke test CLI
         run: |
-          uv run --locked scrap-monitoring-lidar-generator --help
-          uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config --help
+          uv run --locked scrap-monitoring-lidar-simulator --help
+          uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config --help
 
       - name: Build package
         run: uv build --no-sources
 
+      - name: Verify built package
+        shell: bash
+        run: |
+          uv pip uninstall --python .venv/bin/python scrap-monitoring-lidar-simulator
+          uv pip install --python .venv/bin/python --no-deps dist/*.whl
+          .venv/bin/scrap-monitoring-lidar-simulator --help
+          .venv/bin/scrap-monitoring-lidar-simulator-export-synthetic-processing-config --help
+          test ! -e .venv/bin/scrap-monitoring-lidar-generator
+          .venv/bin/python - <<'PY'
+          import importlib.util
+
+          if importlib.util.find_spec("scrap_monitoring_lidar_generator") is not None:
+              raise SystemExit("legacy Python package remains installed")
+          if importlib.util.find_spec("scrap_monitoring_lidar_simulator") is None:
+              raise SystemExit("simulator Python package is not installed")
+          PY
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          version: v0.37.1
+          driver-opts: |
+            image=docker.io/moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
+
+      - name: Build Rust ARM64 candidate image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.rust-candidate
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: scrap-monitoring-lidar-simulator:ci-rust-candidate
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=candidate-${{ github.sha }}
+          cache-from: type=gha,scope=ci-rust-candidate
+          cache-to: type=gha,mode=max,scope=ci-rust-candidate
+
+      - name: Verify Rust ARM64 candidate image
+        run: |
+          tests/edge/verify-rust-candidate-image.sh \
+            scrap-monitoring-lidar-simulator:ci-rust-candidate \
+            examples \
+            "$GITHUB_SHA"
 
       - name: Build ARM64 OCI image
         run: |
           docker buildx build \
             --platform linux/arm64 \
             --load \
-            --tag scrap-monitoring-lidar-generator:ci \
+            --tag scrap-monitoring-lidar-simulator:ci \
             .
 
       - name: Smoke test OCI image
-        run: docker run --rm --platform linux/arm64 scrap-monitoring-lidar-generator:ci --help
+        run: docker run --rm --platform linux/arm64 scrap-monitoring-lidar-simulator:ci --help

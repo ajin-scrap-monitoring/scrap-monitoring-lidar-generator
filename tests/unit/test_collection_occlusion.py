@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import (
+from scrap_monitoring_lidar_simulator.geometry import (
     EnvironmentScene,
     HitKind,
     Polygon2,
@@ -11,7 +11,7 @@ from scrap_monitoring_lidar_generator.geometry import (
     Vec2,
     Vec3,
 )
-from scrap_monitoring_lidar_generator.measurement import (
+from scrap_monitoring_lidar_simulator.measurement import (
     CollectionOcclusionEvent,
     CollectionOcclusionSettings,
     ReferencePoint,
@@ -21,7 +21,7 @@ from scrap_monitoring_lidar_generator.measurement import (
     TimedReferenceScan,
     resolve_collection_occlusion_distances,
 )
-from scrap_monitoring_lidar_generator.scenario import (
+from scrap_monitoring_lidar_simulator.scenario import (
     HeightField,
     ScenarioSettings,
     ScenarioSimulator,

@@ -1,0 +1,60 @@
+{
+  "window_started_elapsed_s": 0.0,
+  "window_ended_elapsed_s": 3900.0,
+  "observed_through_elapsed_s": 3900.0,
+  "initial_state": {
+    "cycle_index": 0,
+    "phase": "filling"
+  },
+  "final_state": {
+    "cycle_index": 1,
+    "phase": "filling"
+  },
+  "transition_capacity": 64,
+  "transition_count": 2,
+  "overflowed": false,
+  "transitions": [
+    {
+      "transitioned_at_elapsed_s": 300.15,
+      "from": {
+        "cycle_index": 0,
+        "phase": "filling"
+      },
+      "to": {
+        "cycle_index": 0,
+        "phase": "collecting"
+      },
+      "before_batch": {
+        "deadline_monotonic_ns": 400100000000,
+        "published_monotonic_ns": 400104000000,
+        "latency_ns": 4000000
+      },
+      "after_batch": {
+        "deadline_monotonic_ns": 400200000000,
+        "published_monotonic_ns": 400205000000,
+        "latency_ns": 5000000
+      }
+    },
+    {
+      "transitioned_at_elapsed_s": 300.18,
+      "from": {
+        "cycle_index": 0,
+        "phase": "collecting"
+      },
+      "to": {
+        "cycle_index": 1,
+        "phase": "filling"
+      },
+      "before_batch": {
+        "deadline_monotonic_ns": 400100000000,
+        "published_monotonic_ns": 400104000000,
+        "latency_ns": 4000000
+      },
+      "after_batch": {
+        "deadline_monotonic_ns": 400200000000,
+        "published_monotonic_ns": 400205000000,
+        "latency_ns": 5000000
+      }
+    }
+  ]
+}

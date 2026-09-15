@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.measurement import (
+from scrap_monitoring_lidar_simulator.measurement import (
     ScheduledScan,
     SensorRotationScheduler,
     create_seeded_rotation_scheduler,
 )
-from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import HQ_ANGLE_STEP_DEG
+from scrap_monitoring_lidar_simulator.measurement.sdk_compatibility import HQ_ANGLE_STEP_DEG
 
 
 def test_integer_rate_ratio_produces_one_ordered_full_rotation() -> None:

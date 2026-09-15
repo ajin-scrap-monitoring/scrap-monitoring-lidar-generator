@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import (
+from scrap_monitoring_lidar_simulator.geometry import (
     EnvironmentScene,
     HitKind,
     Polygon2,
@@ -12,16 +12,16 @@ from scrap_monitoring_lidar_generator.geometry import (
     Vec2,
     Vec3,
 )
-from scrap_monitoring_lidar_generator.measurement import (
+from scrap_monitoring_lidar_simulator.measurement import (
     ReferenceScanner,
     SensorRotationScheduler,
 )
-from scrap_monitoring_lidar_generator.runtime import (
+from scrap_monitoring_lidar_simulator.runtime import (
     PerformanceRecorder,
     PerformanceStage,
     ReferenceGenerationRuntime,
 )
-from scrap_monitoring_lidar_generator.scenario import (
+from scrap_monitoring_lidar_simulator.scenario import (
     HeightField,
     ScenarioSettings,
     ScenarioSimulator,

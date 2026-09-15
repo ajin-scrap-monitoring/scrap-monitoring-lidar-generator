@@ -1,4 +1,4 @@
-use scrap_monitoring_lidar_generator::randomness::{
+use scrap_monitoring_lidar_simulator::randomness::{
     ModelRng, RandomError, RandomSource, StreamScope, derive_stream_seed,
 };
 

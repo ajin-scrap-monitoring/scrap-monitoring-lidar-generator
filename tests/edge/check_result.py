@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from scrap_monitoring_lidar_generator.configuration import load_environment
+from scrap_monitoring_lidar_simulator.configuration import load_environment
 
 
 def _parse_key_values(line: str, prefix: str) -> dict[str, str]:

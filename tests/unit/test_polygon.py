@@ -2,8 +2,8 @@
 
 import pytest
 
-from scrap_monitoring_lidar_generator._limits import MAX_POLYGON_VERTICES
-from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
+from scrap_monitoring_lidar_simulator._limits import MAX_POLYGON_VERTICES
+from scrap_monitoring_lidar_simulator.geometry import Polygon2, Vec2
 
 
 def test_calculates_signed_area_for_both_windings() -> None:

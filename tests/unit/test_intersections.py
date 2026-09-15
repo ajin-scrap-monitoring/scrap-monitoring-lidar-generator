@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import Ray, Triangle, Vec3, intersect_triangle
+from scrap_monitoring_lidar_simulator.geometry import Ray, Triangle, Vec3, intersect_triangle
 
 
 @pytest.fixture

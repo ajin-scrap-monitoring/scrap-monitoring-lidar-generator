@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     MAX_INLET_POSITIONS,
     configuration::{GeneratorInputs, load_generator_inputs},
     randomness::SIMULATION_MODEL_VERSION,

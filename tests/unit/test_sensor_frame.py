@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import SensorFrame, Vec3
+from scrap_monitoring_lidar_simulator.geometry import SensorFrame, Vec3
 
 
 @pytest.fixture

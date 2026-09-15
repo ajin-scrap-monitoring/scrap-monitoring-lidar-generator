@@ -7,13 +7,13 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.edge_integration import build_synthetic_processing_config
-from scrap_monitoring_lidar_generator.observation import (
+from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_simulator.edge_integration import build_synthetic_processing_config
+from scrap_monitoring_lidar_simulator.observation import (
     decode_observation_header_line,
     decode_observation_line,
 )
-from scrap_monitoring_lidar_generator.wire import lidar_pb2
+from scrap_monitoring_lidar_simulator.wire import lidar_pb2
 
 _ROOT = Path(__file__).parents[2]
 _ENVIRONMENT_SCHEMA = _ROOT / "contracts" / "environment" / "v1" / "environment.schema.json"

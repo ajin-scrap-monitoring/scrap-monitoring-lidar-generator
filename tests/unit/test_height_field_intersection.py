@@ -5,7 +5,7 @@ import random
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import (
+from scrap_monitoring_lidar_simulator.geometry import (
     EnvironmentScene,
     HitKind,
     Polygon2,
@@ -14,7 +14,7 @@ from scrap_monitoring_lidar_generator.geometry import (
     Vec2,
     Vec3,
 )
-from scrap_monitoring_lidar_generator.scenario import HeightField
+from scrap_monitoring_lidar_simulator.scenario import HeightField
 
 
 @pytest.fixture

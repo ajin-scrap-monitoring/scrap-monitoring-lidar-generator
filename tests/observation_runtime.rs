@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     configuration::{GeneratorInputs, load_generator_inputs},
     observation::{
         DEFAULT_OBSERVATION_PORT, ObservationError, ObservationPublisherConfig, ObservationScene,
@@ -151,7 +151,7 @@ async fn publisher_keeps_only_the_latest_pending_record_and_streams_header_first
     );
     assert_eq!(
         publisher.stats(),
-        scrap_monitoring_lidar_generator::observation::ObservationPublisherStats {
+        scrap_monitoring_lidar_simulator::observation::ObservationPublisherStats {
             accepted_records: 2,
             sent_records: 1,
             dropped_records: 1,

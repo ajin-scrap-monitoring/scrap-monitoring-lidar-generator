@@ -17,7 +17,7 @@ publisher는 전송 대기 중인 최신 레코드 1개만 보관한다. 새 레
 재연결하고 과거 상태를 누적하거나 재전송하지 않는다. 엣지 장비는 관찰 파일과 영상을
 생성하지 않는다.
 
-생성기 image에는 관찰 JSON Lines(JavaScript Object Notation Lines) producer만 포함한다.
+시뮬레이터 image에는 관찰 JSON Lines(JavaScript Object Notation Lines) producer만 포함한다.
 FFmpeg와 3D rendering 코드 및 의존성은 포함하지 않는다.
 
 ## 전송 계약
@@ -44,7 +44,7 @@ wire 형식, 전달 의미와 field 의미는
 | `--observation-interval-s` | `1.0` | 시뮬레이션 초 기준 전송 간격 |
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator \
+uv run --locked scrap-monitoring-lidar-simulator \
   --config /path/to/generator.v2.json \
   --grpc-socket-dir /run/lidar \
   --status-dir /status \

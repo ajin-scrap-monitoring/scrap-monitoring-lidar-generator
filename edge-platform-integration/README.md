@@ -29,7 +29,7 @@ Repository commit이다.
 Socket) endpoint로 제공한다. `lidar-processing`이 각 endpoint의 `SubscribeScans`를 호출한다.
 
 ```text
-Generator container                     Processing container
+Simulator container                     Processing container
 +-----------------------------+         +-----------------------------+
 | Shared synthetic load model |         | lidar-processing            |
 | lidar_1 gRPC server          |<--------| subscriber for lidar_1      |
@@ -77,7 +77,7 @@ grpc.aio.insecure_channel(
 )
 ```
 
-이 값은 생성기 환경변수나 Proto 필드가 아니라 구독 client의 channel option이다. 실제
+이 값은 simulator 환경변수나 Proto 필드가 아니라 구독 client의 channel option이다. 실제
 `lidar-processing` container와 연결하기 전에 해당 client가 이 option을 적용하는지 확인한다.
 `tools/verify_rust_runtime_contract.py`의 live 구독은 이 조건을 적용한다.
 
@@ -88,7 +88,7 @@ schema를 직접 읽지 않는다. 합성 통합 검증을 준비할 때 다음 
 `lidar-processing` JSON으로 변환한다.
 
 ```shell
-scrap-monitoring-lidar-generator-export-synthetic-processing-config \
+scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -166,9 +166,9 @@ Python helper의 결과는 이 검증을 대신하지 않는다.
 
 ```shell
 cargo build --locked --release \
-  --bin scrap-monitoring-lidar-generator-rust
+  --bin scrap-monitoring-lidar-simulator
 uv run --locked python -m tools.verify_rust_runtime_contract \
-  --runtime-binary target/release/scrap-monitoring-lidar-generator-rust \
+  --runtime-binary target/release/scrap-monitoring-lidar-simulator \
   --edge-platform-root /path/to/ajin-edge-platform
 ```
 

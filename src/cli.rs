@@ -1,11 +1,19 @@
-//! Deployment setting resolution and a non-running configuration validation command.
+//! Deployment setting resolution and command-line execution boundaries.
 
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
+#[cfg(feature = "edge-validation")]
+use clap::ValueEnum;
 use clap::{Args, Parser, Subcommand};
+
+#[cfg(feature = "edge-validation")]
+use crate::runtime::{
+    DEFAULT_MEASUREMENT_DURATION_S, DEFAULT_SAMPLE_CAPACITY, DEFAULT_WARMUP_DURATION_S,
+    MAX_SAMPLE_CAPACITY,
+};
 
 use crate::{
     configuration::{GeneratorInputs, load_generator_inputs},
@@ -29,7 +37,7 @@ pub type Environment = BTreeMap<String, String>;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "scrap-monitoring-lidar-generator-rust",
+    name = "scrap-monitoring-lidar-simulator",
     version,
     about = "Run and validate the deterministic synthetic LiDAR simulator."
 )]
@@ -55,9 +63,61 @@ pub enum Command {
         #[command(flatten)]
         overrides: Box<RuntimeSettingOverrides>,
     },
+    /// Run bounded Raspberry Pi frame latency telemetry.
+    #[cfg(feature = "edge-validation")]
+    #[command(
+        name = "edge-validation",
+        args_override_self = true,
+        infer_long_args = true
+    )]
+    EdgeValidation(EdgeValidationArgs),
     /// Export the public synthetic environment for pinned lidar-processing.
     #[command(name = "export-synthetic-processing-config")]
     ExportSyntheticProcessingConfig(ExportSyntheticProcessingConfigArgs),
+}
+
+#[cfg(feature = "edge-validation")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum EdgeValidationObservationArg {
+    Actual,
+    NoOp,
+}
+
+#[cfg(feature = "edge-validation")]
+#[derive(Clone, Debug, Args)]
+pub struct EdgeValidationArgs {
+    #[command(flatten)]
+    pub overrides: Box<RuntimeSettingOverrides>,
+    /// Use the production observation publisher or the benchmark no-op boundary.
+    #[arg(long, value_enum, default_value = "actual")]
+    pub observation_mode: EdgeValidationObservationArg,
+    /// Exclude this many whole seconds before latency collection.
+    #[arg(
+        long,
+        default_value_t = DEFAULT_WARMUP_DURATION_S,
+        value_parser = cli_positive_u64
+    )]
+    pub warmup_duration_s: u64,
+    /// Collect every scheduled frame completion in this many whole seconds.
+    #[arg(
+        long,
+        default_value_t = DEFAULT_MEASUREMENT_DURATION_S,
+        value_parser = cli_positive_u64
+    )]
+    pub measurement_duration_s: u64,
+    /// Bound each sensor series and the batch maximum series to this many samples.
+    #[arg(
+        long,
+        default_value_t = DEFAULT_SAMPLE_CAPACITY,
+        value_parser = cli_sample_capacity
+    )]
+    pub max_samples: usize,
+    /// Start generation at this future host CLOCK_MONOTONIC nanosecond value.
+    #[arg(long, value_parser = cli_positive_u64)]
+    pub start_at_monotonic_ns: Option<u64>,
+    /// Create this absolute JSON result path atomically without replacement.
+    #[arg(long, value_parser = cli_absolute_path_buf)]
+    pub output: PathBuf,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -298,6 +358,11 @@ pub fn check(command: &Command, environment: &Environment) -> Result<GeneratorIn
         Command::Run { .. } => Err(invalid(
             "command",
             "run command cannot be used as a configuration check",
+        )),
+        #[cfg(feature = "edge-validation")]
+        Command::EdgeValidation(_) => Err(invalid(
+            "command",
+            "edge validation command cannot be used as a configuration check",
         )),
     }
 }
@@ -544,4 +609,35 @@ fn cli_observation_interval(value: &str) -> std::result::Result<String, String> 
 
 fn cli_collection_threshold(value: &str) -> std::result::Result<String, String> {
     validate_cli(value, collection_threshold)
+}
+
+#[cfg(feature = "edge-validation")]
+fn cli_absolute_path_buf(value: &str) -> std::result::Result<PathBuf, String> {
+    absolute_path(value, "CLI value").map_err(|error| error.to_string())
+}
+
+#[cfg(feature = "edge-validation")]
+fn cli_non_negative_u64(value: &str) -> std::result::Result<u64, String> {
+    numeric_text(value, "CLI value")
+        .map_err(|error| error.to_string())?
+        .parse::<u64>()
+        .map_err(|_| invalid("CLI value", "must be a non-negative integer").to_string())
+}
+
+#[cfg(feature = "edge-validation")]
+fn cli_positive_u64(value: &str) -> std::result::Result<u64, String> {
+    cli_non_negative_u64(value).and_then(|parsed| {
+        (parsed > 0)
+            .then_some(parsed)
+            .ok_or_else(|| invalid("CLI value", "must be a positive integer").to_string())
+    })
+}
+
+#[cfg(feature = "edge-validation")]
+fn cli_sample_capacity(value: &str) -> std::result::Result<usize, String> {
+    let parsed = cli_positive_u64(value)?;
+    usize::try_from(parsed)
+        .ok()
+        .filter(|parsed| *parsed <= MAX_SAMPLE_CAPACITY)
+        .ok_or_else(|| invalid("CLI value", "must be an integer from 1 through 100000").to_string())
 }

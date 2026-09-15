@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import (
+from scrap_monitoring_lidar_simulator.measurement.sdk_compatibility import (
     HQ_ANGLE_STEP_DEG,
     HQ_DISTANCE_STEP_M,
     quantize_hq_angles_deg,

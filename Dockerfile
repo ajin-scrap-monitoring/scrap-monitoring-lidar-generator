@@ -20,7 +20,7 @@ RUN uv sync --locked --no-dev --no-editable
 FROM ${PYTHON_IMAGE}
 
 LABEL org.opencontainers.image.source="https://github.com/ajin-scrap-monitoring/scrap-monitoring-lidar-generator" \
-      org.opencontainers.image.title="Scrap Monitoring LiDAR Generator"
+      org.opencontainers.image.title="Scrap Monitoring LiDAR Simulator"
 
 RUN groupadd --gid 10001 generator \
     && useradd --uid 10001 --gid generator --no-create-home \
@@ -39,4 +39,4 @@ USER 10001:10001
 WORKDIR /data
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["scrap-monitoring-lidar-generator"]
+ENTRYPOINT ["scrap-monitoring-lidar-simulator"]

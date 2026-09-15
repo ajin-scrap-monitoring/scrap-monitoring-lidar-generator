@@ -2,7 +2,7 @@
 
 import pytest
 
-from scrap_monitoring_lidar_generator.runtime import PerformanceRecorder, PerformanceStage
+from scrap_monitoring_lidar_simulator.runtime import PerformanceRecorder, PerformanceStage
 
 
 def test_recorder_aggregates_each_stage_without_retaining_samples() -> None:

@@ -76,6 +76,11 @@ pub struct ScanRuntimeStats {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScanPublishReceipt {
+    pub published_at_monotonic_ns: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct SocketIdentity {
     device: u64,
     inode: u64,
@@ -421,7 +426,7 @@ impl GrpcScanRuntime {
         }
     }
 
-    pub async fn publish(&self, frame: ScanFrame) -> Result<()> {
+    pub async fn publish(&self, frame: ScanFrame) -> Result<ScanPublishReceipt> {
         let lane = self
             .lanes
             .iter()
@@ -442,27 +447,32 @@ impl GrpcScanRuntime {
                 "gRPC frame identity does not match its sensor lane".to_owned(),
             ));
         }
-        let reading = self.clock.read()?;
         let sequence = frame.sequence;
         let last_scan_unix_ms = frame.acquired_at_unix_ms;
         lane.buffer
             .publish(frame)
             .await
             .map_err(|error| ScanRuntimeError::Grpc(error.to_string()))?;
+        // The validation latency endpoint is the first clock reading after the latest-two buffer
+        // has accepted the frame. Status progress uses the same reading so both views share the
+        // publication boundary.
+        let published_at = self.clock.read()?;
         {
             let mut progress = lane.progress.lock().map_err(|_| {
                 ScanRuntimeError::Grpc("scan lane progress lock is poisoned".to_owned())
             })?;
             progress.sequence = sequence;
             progress.last_scan_unix_ms = last_scan_unix_ms;
-            progress.last_progress_monotonic_ns = Some(reading.monotonic_ns);
+            progress.last_progress_monotonic_ns = Some(published_at.monotonic_ns);
         }
         lane.published_frames
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_add(1)
             })
             .map_err(|_| ScanRuntimeError::Exhausted("published frame counter is exhausted"))?;
-        Ok(())
+        Ok(ScanPublishReceipt {
+            published_at_monotonic_ns: published_at.monotonic_ns,
+        })
     }
 
     pub async fn close(&mut self) {

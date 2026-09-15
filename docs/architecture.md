@@ -6,7 +6,7 @@
 
 | 구성 요소 | 위치 | 책임 |
 | --- | --- | --- |
-| 합성 생성기 | 이 Repository의 container | 적재 모델, 센서별 scan, 관찰 stream과 상태 생성 |
+| 합성 LiDAR 시뮬레이터 | 이 Repository의 container | 적재 모델, 센서별 scan, 관찰 stream과 상태 생성 |
 | `lidar-processing` | 같은 edge 장비의 별도 container | 센서별 scan 구독, 단면 높이 계산과 융합 |
 | 상태 수집기 | edge platform | 생성기 상태 파일 수집 |
 | 시각화 프로그램 | 별도 개발 장비 | 관찰 stream의 3D 표시, 기록과 MP4 생성 |
@@ -33,7 +33,7 @@ gRPC(Google Remote Procedure Call) server이고 `lidar-processing`이 server-str
 ## 패키지 경계
 
 기본 생성기 진입점과 container는 Python 구현을 실행한다. Python 패키지는
-`src/scrap_monitoring_lidar_generator/` 아래에 있다.
+`src/scrap_monitoring_lidar_simulator/` 아래에 있다.
 
 | 패키지 | 책임 |
 | --- | --- |
@@ -71,7 +71,7 @@ scenario -> geometry
 ## Rust 애플리케이션 경계
 
 Rust 애플리케이션 경계는 10개다. `src/lib.rs`는 설정, 계산, 출력과 wire API를 공개하며
-`scrap-monitoring-lidar-generator-rust` binary는 `check`, `run`과
+`scrap-monitoring-lidar-simulator` binary는 `check`, `run`과
 `export-synthetic-processing-config` 명령을 제공한다.
 
 | 경로 | 책임 |
@@ -192,6 +192,10 @@ exporter 출력을 고정한 loader 및 높이 계산 engine에 넣는다.
 `tools/verify_rust_runtime_contract.py`는 실제 Rust `run` process의 두 UDS lane에서 frame을
 구독하고 같은 engine의 수락 결과와 상태, 관찰 및 종료 계약을 검사한다.
 
+이미 공개된 JSON schema의 `$id`에 포함된 기존 Repository 경로는 계약 식별자이므로 프로젝트
+이름과 함께 바꾸지 않는다. 배포 환경변수와 설정 파일 이름의 호환 경계는
+[`configuration.md`](configuration.md)가 정본이다.
+
 ## 적재 모델과 측정
 
 `scenario.HeightField`는 경계 다각형 안의 node별 높이와 node 면적을 유지한다. 투입은 활성
@@ -308,7 +312,7 @@ src/
   runtime/
   scan_runtime/
   scenario/
-src/scrap_monitoring_lidar_generator/
+src/scrap_monitoring_lidar_simulator/
   configuration/
   edge_integration/
   geometry/

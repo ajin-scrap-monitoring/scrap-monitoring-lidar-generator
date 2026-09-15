@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.measurement import SensorDropoutScheduler
+from scrap_monitoring_lidar_simulator.measurement import SensorDropoutScheduler
 
 
 def test_marks_non_overlapping_intervals_across_point_batches() -> None:

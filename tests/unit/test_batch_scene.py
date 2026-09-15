@@ -4,7 +4,7 @@ import random
 
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import (
+from scrap_monitoring_lidar_simulator.geometry import (
     EnvironmentScene,
     Polygon2,
     Ray,
@@ -13,7 +13,7 @@ from scrap_monitoring_lidar_generator.geometry import (
     Vec2,
     Vec3,
 )
-from scrap_monitoring_lidar_generator.scenario import HeightField
+from scrap_monitoring_lidar_simulator.scenario import HeightField
 
 
 def test_batch_scene_matches_scalar_first_hits() -> None:

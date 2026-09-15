@@ -8,17 +8,17 @@ from typing import Any
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.edge_integration import (
+from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_simulator.edge_integration import (
     ProcessingConfigError,
     build_synthetic_processing_config,
 )
-from scrap_monitoring_lidar_generator.edge_integration.cli import main
-from scrap_monitoring_lidar_generator.edge_integration.synthetic_processing_config import (
+from scrap_monitoring_lidar_simulator.edge_integration.cli import main
+from scrap_monitoring_lidar_simulator.edge_integration.synthetic_processing_config import (
     _millimetres,
     _segment_is_inside_boundary,
 )
-from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
+from scrap_monitoring_lidar_simulator.geometry import Polygon2, Vec2
 
 _ROOT = Path(__file__).parents[2]
 _GENERATOR_CONFIG = _ROOT / "examples" / "generator.v2.json"

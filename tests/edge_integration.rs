@@ -1,6 +1,6 @@
 use std::{fs, path::Path, process::Command};
 
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     configuration::{GeneratorInputs, load_generator_inputs},
     edge_integration::{build_synthetic_processing_config, write_synthetic_processing_config},
 };
@@ -251,7 +251,7 @@ fn writer_is_deterministic_and_cli_uses_only_processing_identity_values() {
     assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap());
     assert!(fs::read(&first).unwrap().ends_with(b"\n"));
 
-    let binary = env!("CARGO_BIN_EXE_scrap-monitoring-lidar-generator-rust");
+    let binary = env!("CARGO_BIN_EXE_scrap-monitoring-lidar-simulator");
     let cli_output = temporary.join("cli/processing.json");
     let result = Command::new(binary)
         .env_clear()

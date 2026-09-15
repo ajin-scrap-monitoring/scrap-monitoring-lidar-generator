@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     configuration::load_generator_inputs,
     geometry::{GeometryError, MAX_POLYGON_VERTICES, Polygon2, Ray, Triangle, Vec2, Vec3},
     scenario::{CellCoverage, HeightField, MAX_GRID_NODES, MAX_SLOPE_RELAXATION_ITERATIONS},

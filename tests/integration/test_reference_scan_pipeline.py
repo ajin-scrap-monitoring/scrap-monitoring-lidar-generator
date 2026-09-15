@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from scrap_monitoring_lidar_generator.configuration import (
+from scrap_monitoring_lidar_simulator.configuration import (
     build_environment_scene,
     build_sensor_frame,
     load_environment,
 )
-from scrap_monitoring_lidar_generator.geometry import HitKind, Polygon2, Vec2
-from scrap_monitoring_lidar_generator.measurement import ReferenceScanner
-from scrap_monitoring_lidar_generator.scenario import HeightField
+from scrap_monitoring_lidar_simulator.geometry import HitKind, Polygon2, Vec2
+from scrap_monitoring_lidar_simulator.measurement import ReferenceScanner
+from scrap_monitoring_lidar_simulator.scenario import HeightField
 
 _ROOT = Path(__file__).parents[2]
 

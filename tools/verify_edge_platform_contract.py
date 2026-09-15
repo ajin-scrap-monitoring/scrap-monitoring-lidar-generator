@@ -12,12 +12,12 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.edge_integration import build_synthetic_processing_config
-from scrap_monitoring_lidar_generator.runtime import (
+from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_simulator.edge_integration import build_synthetic_processing_config
+from scrap_monitoring_lidar_simulator.runtime import (
     build_measurement_generation_runtime,
 )
-from scrap_monitoring_lidar_generator.scan_stream import ScanFrameFactory
+from scrap_monitoring_lidar_simulator.scan_stream import ScanFrameFactory
 
 _ROOT = Path(__file__).parents[1]
 _SOURCE = _ROOT / "contracts" / "lidar" / "v1" / "upstream.json"

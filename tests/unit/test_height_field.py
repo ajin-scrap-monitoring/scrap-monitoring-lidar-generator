@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from scrap_monitoring_lidar_generator.geometry import Polygon2, Vec2
-from scrap_monitoring_lidar_generator.scenario import HeightField
+from scrap_monitoring_lidar_simulator.geometry import Polygon2, Vec2
+from scrap_monitoring_lidar_simulator.scenario import HeightField
 
 
 @pytest.fixture

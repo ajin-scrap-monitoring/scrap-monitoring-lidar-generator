@@ -1,9 +1,9 @@
-# LiDAR 측정 데이터 생성 프로그램 프로젝트 명세
+# 합성 LiDAR 시뮬레이터 프로젝트 명세
 
 ## 목적
 
 이 프로그램은 스크랩 적재 모니터링의 개발 및 통합 검증에 사용하는 합성 LiDAR(Light
-Detection and Ranging) 생성기다. 공개 합성 환경에서 RPLIDAR S2E 센서 2대의 회전 단위 scan을
+Detection and Ranging) 시뮬레이터다. 공개 합성 환경에서 RPLIDAR S2E 센서 2대의 회전 단위 scan을
 만들고, `ajin-edge-platform`의 `lidar-processing`이 실제 LiDAR driver와 같은 계약으로 구독할
 수 있게 한다.
 
@@ -128,7 +128,7 @@ snapshot을 보낸다.
 publisher는 최신 대기 snapshot 1개만 보관한다. 관찰 수신기 연결 실패와 느린 처리는 scan 생성,
 gRPC 구독과 적재 시나리오를 중단하지 않는다. 재연결하면 정적 header부터 다시 보낸다.
 
-실시간 3D 표시, 관찰 기록과 MP4 생성은 별도 시각화 프로그램이 수행한다. 생성기 image는 3D
+실시간 3D 표시, 관찰 기록과 MP4 생성은 별도 시각화 프로그램이 수행한다. 시뮬레이터 image는 3D
 renderer, FFmpeg와 시각화 개발 의존성을 포함하지 않는다.
 
 ## 진단 기록

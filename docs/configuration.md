@@ -51,6 +51,10 @@ Rust `check --runtime`은 모든 배포 설정을 검증하지만 socket이나 �
 Rust `run`은 검증된 설정만으로 실제 생성과 외부 출력을 시작하며 별도 비공개 fallback을 두지
 않는다.
 
+`SCRAP_LIDAR_GENERATOR_*` 환경변수 prefix와 `generator.v2.json` 파일 이름은 기존 배포 및 설정
+계약의 고정 식별자다. 프로젝트와 실행 파일 이름은 `scrap-monitoring-lidar-simulator`를 사용하지만
+이 계약 식별자는 변경하지 않는다.
+
 ## 환경변수
 
 환경변수는 14개다.
@@ -104,7 +108,7 @@ owner-only JSON Lines 파일로 보존하는 개발 검증 기능이다. `diagno
 다음 명령은 공개 합성 환경에서 `lidar-processing` 형식의 처리 설정을 만든다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config \
+uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \

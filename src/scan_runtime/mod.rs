@@ -8,8 +8,8 @@ mod status;
 pub use buffer::{LatestTwo, RingDelivery, RingError};
 pub use clock::{ClockReading, RuntimeClock, SystemRuntimeClock};
 pub use server::{
-    GrpcScanRuntime, RuntimeIdSource, ScanRuntimeConfig, ScanRuntimeStats, SensorRuntimeStats,
-    SystemRuntimeIdSource,
+    GrpcScanRuntime, RuntimeIdSource, ScanPublishReceipt, ScanRuntimeConfig, ScanRuntimeStats,
+    SensorRuntimeStats, SystemRuntimeIdSource,
 };
 pub use status::{DriverStatus, StatusIdentity, write_atomic_status};
 

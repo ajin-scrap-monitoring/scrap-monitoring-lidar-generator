@@ -5,7 +5,7 @@ import random
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import (
+from scrap_monitoring_lidar_simulator.geometry import (
     Polygon2,
     Ray,
     RayBatch,
@@ -14,7 +14,7 @@ from scrap_monitoring_lidar_generator.geometry import (
     Vec3,
     intersect_triangle,
 )
-from scrap_monitoring_lidar_generator.geometry.batch_intersections import (
+from scrap_monitoring_lidar_simulator.geometry.batch_intersections import (
     contains_xy,
     intersect_floor_batch,
     intersect_triangle_batch,

@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import HitKind
-from scrap_monitoring_lidar_generator.measurement import (
+from scrap_monitoring_lidar_simulator.geometry import HitKind
+from scrap_monitoring_lidar_simulator.measurement import (
     MeasuredScan,
     MeasurementResult,
     ReferencePoint,

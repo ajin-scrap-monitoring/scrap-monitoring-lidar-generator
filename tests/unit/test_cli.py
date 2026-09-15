@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-import scrap_monitoring_lidar_generator.cli as cli
-from scrap_monitoring_lidar_generator._cli_settings import RuntimeSettings
-from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.observation import ObservationPublisherStats
-from scrap_monitoring_lidar_generator.runtime import GeneratorRunSummary
-from scrap_monitoring_lidar_generator.scan_stream import ScanServerStats
+import scrap_monitoring_lidar_simulator.cli as cli
+from scrap_monitoring_lidar_simulator._cli_settings import RuntimeSettings
+from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_simulator.observation import ObservationPublisherStats
+from scrap_monitoring_lidar_simulator.runtime import GeneratorRunSummary
+from scrap_monitoring_lidar_simulator.scan_stream import ScanServerStats
 
 _ROOT = Path(__file__).parents[2]
 _CONFIG = _ROOT / "examples" / "generator.v2.json"

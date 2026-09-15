@@ -1,4 +1,4 @@
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     randomness::{ModelRng, RandomSource, StreamScope},
     rate_profile::{
         MAX_RATE_SEGMENTS, RateProfileError, SmoothRateProfile, SmoothRateSegment,
