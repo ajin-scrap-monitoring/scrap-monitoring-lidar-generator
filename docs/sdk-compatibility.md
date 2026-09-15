@@ -111,7 +111,8 @@ process의 두 gRPC stream과 exporter 출력을 고정한 `lidar-processing`의
 
 ```bash
 cargo build --release --locked --bin scrap-monitoring-lidar-simulator
-uv run --locked python -m tools.verify_rust_runtime_contract \
+uv run --locked --group integration \
+  python -m tools.verify_rust_runtime_contract \
   --runtime-binary target/release/scrap-monitoring-lidar-simulator \
   --edge-platform-root /path/to/ajin-edge-platform
 ```

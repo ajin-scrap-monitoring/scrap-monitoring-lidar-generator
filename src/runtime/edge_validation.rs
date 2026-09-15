@@ -1481,7 +1481,7 @@ mod tests {
             )
             .unwrap();
         let expected: serde_json::Value = serde_json::from_str(include_str!(
-            "../../tests/edge/long_validation/data/scenario-telemetry.v1.json"
+            "../../tests/fixtures/edge-validation/scenario-telemetry.v1.json"
         ))
         .unwrap();
         let actual = serde_json::to_value(report.scenario).unwrap();

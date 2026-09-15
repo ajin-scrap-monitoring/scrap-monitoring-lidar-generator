@@ -82,7 +82,7 @@ jobs:
           uv run --locked rumdl check .
           uv run --locked ruff format --check .
           uv run --locked ruff check .
-          uv run --locked mypy
+          uv run --locked --group docs mypy
           uv run --locked pytest
           uv run --locked --group docs \
             python docs/synthetic-environment-specification/generate.py --check
@@ -114,7 +114,8 @@ jobs:
         run: |
           cargo build --release --locked \
             --bin scrap-monitoring-lidar-simulator
-          uv run --locked python -m tools.verify_rust_runtime_contract \
+          uv run --locked --group integration \
+            python -m tools.verify_rust_runtime_contract \
             --runtime-binary target/release/scrap-monitoring-lidar-simulator \
             --edge-platform-root .contract/ajin-edge-platform
 
@@ -142,15 +143,6 @@ jobs:
             --output=dist/edge-platform-integration-v1.tar.gz \
             "$GITHUB_SHA" \
             edge-platform-integration
-
-      - name: Package edge validation source
-        run: |
-          git archive \
-            --format=tar.gz \
-            --output=dist/edge-validation-source.tar.gz \
-            "$GITHUB_SHA"
-          sha256sum dist/edge-validation-source.tar.gz \
-            | awk '{print $1}' > dist/edge-validation-source.sha256
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -343,8 +335,6 @@ jobs:
           assets = {asset["name"] for asset in json.loads(sys.argv[1])["assets"]}
           expected = {
               "edge-platform-integration-v1.tar.gz",
-              "edge-validation-source.tar.gz",
-              "edge-validation-source.sha256",
               "oci-image.txt",
           }
           if assets != expected:
@@ -354,19 +344,11 @@ jobs:
             mkdir "$existing_dir"
             gh release download "$GITHUB_REF_NAME" \
               --pattern edge-platform-integration-v1.tar.gz \
-              --pattern edge-validation-source.tar.gz \
-              --pattern edge-validation-source.sha256 \
               --pattern oci-image.txt \
               --dir "$existing_dir"
             cmp --silent \
               dist/edge-platform-integration-v1.tar.gz \
               "$existing_dir/edge-platform-integration-v1.tar.gz"
-            cmp --silent \
-              dist/edge-validation-source.tar.gz \
-              "$existing_dir/edge-validation-source.tar.gz"
-            cmp --silent \
-              dist/edge-validation-source.sha256 \
-              "$existing_dir/edge-validation-source.sha256"
             cmp --silent dist/oci-image.txt "$existing_dir/oci-image.txt"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           elif grep -Eqi 'release not found|HTTP 404' "$release_stderr"; then
@@ -383,8 +365,6 @@ jobs:
         with:
           files: |
             dist/edge-platform-integration-v1.tar.gz
-            dist/edge-validation-source.tar.gz
-            dist/edge-validation-source.sha256
             dist/oci-image.txt
           fail_on_unmatched_files: true
           generate_release_notes: true

@@ -223,7 +223,7 @@ Rust `run` 명령은 입력을 검증한 뒤 공통 적재 모델, 두 센서 �
 관찰 publisher와 선택적 진단 writer를 조립한다. SIGINT와 SIGTERM은 생성을 중단하고 publisher와
 server를 닫은 뒤 집계를 기록한다. gRPC 구독자가 없어도 생성과 최신 frame 갱신은 계속된다.
 
-자동 검증은 5개 계층이다.
+자동 검증은 4개 계층이다.
 
 | 경로 | 검증 범위 |
 | --- | --- |
@@ -231,11 +231,11 @@ server를 닫은 뒤 집계를 기록한다. gRPC 구독자가 없어도 생성�
 | `tests/contract/` | JSON schema, Proto 출처와 인계 fixture |
 | `tests/fixtures/model-v1/` | 결정론적 수치 및 wire 기준값 |
 | `tests/edge/` | ARM64 image의 두 UDS, 관찰과 상태 출력 |
-| `tests/edge/long_validation/` | 공유 장비 장기 부하 수집과 판정 |
 
 단위 및 통합 검증은 외부 네트워크에 의존하지 않는다. Rust live runtime의 외부 구현 직접 호환
-검증은 별도 고정 checkout과 미리 만든 release binary를 입력으로 사용한다. pixel 전체를 고정하는
-시각 snapshot 검증은 이 Repository의 범위가 아니다.
+검증은 별도 고정 checkout과 미리 만든 release binary를 입력으로 사용한다. 지속 부하와 처리
+높이는 실제 Raspberry Pi 5 실행 구성에서 판정한다. pixel 전체를 고정하는 시각 snapshot 검증은
+이 Repository의 범위가 아니다.
 
 ## Repository 구조
 

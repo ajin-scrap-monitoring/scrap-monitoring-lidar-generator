@@ -26,7 +26,7 @@ Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로�
 
 새 작업 세션은 `docs/development-plan.md`의 현재 상태와 다음 작업을 확인한 뒤 범위를 정한다. 실제 수신 프로그램과 대상 장비의 공유 부하 검증이 필요한 작업은 문서에 남은 선행 조건을 먼저 충족한다.
 
-시뮬레이터 구현은 Rust `src/`, 자동 검증은 `tests/`, 공개 가능한 합성 입력 예시는 `examples/`에 둔다. Python은 계약 검사, 장기 부하 검증과 문서 생성 자동화에만 사용하며 시뮬레이터 구현이나 OCI image에 포함하지 않는다. 새로운 최상위 경계가 필요하면 코드와 함께 아키텍처 문서를 갱신한다.
+시뮬레이터 구현은 Rust `src/`, 자동 검증은 `tests/`, 공개 가능한 합성 입력 예시는 `examples/`에 둔다. Python은 계약 검사와 문서 생성 자동화에만 사용하며 시뮬레이터 구현이나 OCI image에 포함하지 않는다. 지속 부하와 처리 높이는 Raspberry Pi 5에서 Release image와 `lidar-processing`을 함께 실행해 검증한다. 새로운 최상위 경계가 필요하면 코드와 함께 아키텍처 문서를 갱신한다.
 
 Rust 외부 출력이나 생명주기를 변경하면 release profile binary를 만들고 `tools/verify_rust_runtime_contract.py`로 고정한 `lidar-processing` 계약을 직접 검증한다. 필요한 checkout, client 연결 전제와 판정 기준은 `edge-platform-integration/README.md`를 따른다.
 
