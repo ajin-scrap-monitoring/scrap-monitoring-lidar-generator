@@ -1,4 +1,4 @@
-//! Rust configuration and protocol boundaries alongside the Python runtime.
+//! Deterministic synthetic LiDAR simulator and protocol boundaries.
 
 pub mod cli;
 pub mod configuration;

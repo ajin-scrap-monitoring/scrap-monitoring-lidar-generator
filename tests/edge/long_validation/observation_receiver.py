@@ -10,27 +10,13 @@ import signal
 import sys
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
-
-from scrap_monitoring_lidar_simulator.configuration import (
-    ConfigurationError,
-    load_generator_inputs,
-)
-from scrap_monitoring_lidar_simulator.observation import (
-    ObservationFormatError,
-    ObservationRecord,
-    ObservationScene,
-    ObservationStreamHeader,
-)
-from scrap_monitoring_lidar_simulator.runtime import (
-    generator_input_fingerprint,
-)
-from scrap_monitoring_lidar_simulator.scenario import ScenarioSnapshot
 
 from .run_case import RunnerError, verify_repository_checkout
 
@@ -147,27 +133,28 @@ def load_observation_expectation(
     """Derive exact receiver expectations from one verified public checkout."""
     try:
         verify_repository_checkout(repository, generator_source_commit)
-        inputs = load_generator_inputs(repository / "examples" / "generator.v2.json")
-        inputs = replace(
-            inputs,
-            generator=replace(
-                inputs.generator,
-                scenario=replace(
-                    inputs.generator.scenario,
-                    mean_fill_duration_s=float(mean_fill_duration_s),
-                ),
-            ),
+        generator = _load_json_object(
+            repository / "examples" / "generator.v2.json", "generator configuration"
         )
-        header = ObservationStreamHeader(
-            environment_id=inputs.environment.environment_id,
-            run_id="expected-runtime-run",
-            input_fingerprint_sha256=generator_input_fingerprint(inputs),
-            seed=inputs.generator.seed,
-            scene=ObservationScene.from_inputs(inputs),
-        ).to_document()
-    except (ConfigurationError, OSError, RunnerError, ValueError) as error:
+        environment = _load_json_object(
+            repository / "examples" / "environment.v1.json", "environment configuration"
+        )
+        quality = _load_json_object(
+            repository / "examples" / "quality-profile.v1.json", "quality configuration"
+        )
+        header = _expected_header(generator, environment, quality, mean_fill_duration_s)
+        measurement = _mapping(generator.get("measurement"), "generator.measurement")
+        scenario = _mapping(generator.get("scenario"), "generator.scenario")
+        rotation_rate_hz = _finite_number(
+            measurement.get("rotation_rate_hz"), "measurement.rotation_rate_hz"
+        )
+        cell_size_m = _finite_number(
+            _mapping(scenario.get("surface"), "scenario.surface").get("cell_size_m"),
+            "scenario.surface.cell_size_m",
+        )
+    except (KeyError, OSError, RunnerError, TypeError, ValueError) as error:
         raise ReceiverError("cannot derive observation expectations from public input") from error
-    first_elapsed_s = 1.0 / inputs.generator.measurement.rotation_rate_hz
+    first_elapsed_s = 1.0 / rotation_rate_hz
     return ObservationExpectation.from_header(
         header,
         generator_source_commit=generator_source_commit,
@@ -175,7 +162,7 @@ def load_observation_expectation(
         first_elapsed_s=first_elapsed_s,
         last_elapsed_s=_EXPECTED_TOTAL_DURATION_S,
         interval_s=_EXPECTED_OBSERVATION_INTERVAL_S,
-        cell_size_m=inputs.generator.scenario.surface.cell_size_m,
+        cell_size_m=cell_size_m,
     )
 
 
@@ -194,6 +181,12 @@ def _nonempty_string(value: object, path: str) -> str:
 def _positive_integer(value: object, path: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ReceiverError(f"{path} must be a positive integer")
+    return value
+
+
+def _nonnegative_integer(value: object, path: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ReceiverError(f"{path} must be a non-negative integer")
     return value
 
 
@@ -222,6 +215,34 @@ def _coordinate_pairs(value: object, path: str) -> tuple[tuple[float, float], ..
     return tuple(result)
 
 
+def _number_array(value: object, path: str) -> list[float]:
+    if not isinstance(value, list) or len(value) < 2:
+        raise ReceiverError(f"{path} must contain at least two numbers")
+    result = [_finite_number(item, f"{path}[]") for item in value]
+    if any(right <= left for left, right in pairwise(result)):
+        raise ReceiverError(f"{path} must be strictly increasing")
+    return result
+
+
+def _validate_height_rows(
+    value: object,
+    *,
+    x_count: int,
+    y_count: int,
+    floor_z_m: float,
+    top_z_m: float,
+) -> None:
+    if not isinstance(value, list) or len(value) != y_count:
+        raise ReceiverError("surface.heights_m row count differs from the y grid")
+    for row_index, raw_row in enumerate(value):
+        if not isinstance(raw_row, list) or len(raw_row) != x_count:
+            raise ReceiverError("surface.heights_m column count differs from the x grid")
+        for column_index, raw_height in enumerate(raw_row):
+            height = _finite_number(raw_height, f"surface.heights_m[{row_index}][{column_index}]")
+            if not floor_z_m - _FLOAT_TOLERANCE <= height <= top_z_m + _FLOAT_TOLERANCE:
+                raise ReceiverError("observation surface height is outside the scene bounds")
+
+
 def _polygon_area(vertices: Sequence[tuple[float, float]]) -> float:
     area_twice = sum(
         first[0] * second[1] - second[0] * first[1]
@@ -246,6 +267,159 @@ def _canonical_sha256(value: object) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _load_json_object(path: Path, label: str) -> Mapping[str, object]:
+    try:
+        return _mapping(json.loads(path.read_text(encoding="utf-8")), label)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ReceiverError(f"cannot load {label}") from error
+
+
+def _float_tree(value: object, path: str) -> object:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return _finite_number(value, path)
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return [_float_tree(item, f"{path}[]") for item in value]
+    if isinstance(value, dict):
+        return {str(key): _float_tree(item, f"{path}.{key}") for key, item in value.items()}
+    raise ReceiverError(f"{path} contains an unsupported value")
+
+
+def _quality_frequency_array(value: object, path: str) -> list[int]:
+    frequencies = [0] * 256
+    source = _mapping(value, path)
+    for raw_quality, raw_frequency in source.items():
+        try:
+            quality = int(raw_quality)
+        except (TypeError, ValueError) as error:
+            raise ReceiverError(f"{path} contains an invalid quality key") from error
+        if str(quality) != raw_quality or not 0 <= quality <= 255:
+            raise ReceiverError(f"{path} contains an invalid quality key")
+        if isinstance(raw_frequency, bool) or not isinstance(raw_frequency, int):
+            raise ReceiverError(f"{path}.{raw_quality} must be an integer")
+        if raw_frequency <= 0:
+            raise ReceiverError(f"{path}.{raw_quality} must be positive")
+        frequencies[quality] = raw_frequency
+    return frequencies
+
+
+def _normalized_environment(document: Mapping[str, object]) -> dict[str, object]:
+    boundary = _coordinate_pairs(document.get("boundary_xy_m"), "environment.boundary_xy_m")
+    sensors_value = document.get("sensors")
+    if not isinstance(sensors_value, list) or not sensors_value:
+        raise ReceiverError("environment.sensors must be a non-empty array")
+    sensors: list[dict[str, object]] = []
+    for index, raw_sensor in enumerate(sensors_value):
+        sensor = _mapping(raw_sensor, f"environment.sensors[{index}]")
+        sensors.append(
+            {
+                "sensor_id": _nonempty_string(
+                    sensor.get("sensor_id"), f"environment.sensors[{index}].sensor_id"
+                ),
+                "p0_m": list(
+                    _number_vector(sensor.get("p0_m"), 3, f"environment.sensors[{index}].p0_m")
+                ),
+                "u0": list(_number_vector(sensor.get("u0"), 3, f"environment.sensors[{index}].u0")),
+                "u90": list(
+                    _number_vector(sensor.get("u90"), 3, f"environment.sensors[{index}].u90")
+                ),
+            }
+        )
+    return {
+        "environment_id": _nonempty_string(
+            document.get("environment_id"), "environment.environment_id"
+        ),
+        "boundary_xy_m": [list(point) for point in boundary],
+        "floor_z_m": _finite_number(document.get("floor_z_m"), "environment.floor_z_m"),
+        "top_z_m": _finite_number(document.get("top_z_m"), "environment.top_z_m"),
+        "sensors": sensors,
+    }
+
+
+def _normalized_quality(document: Mapping[str, object]) -> dict[str, object]:
+    sensors_value = document.get("sensors")
+    if not isinstance(sensors_value, list) or not sensors_value:
+        raise ReceiverError("quality.sensors must be a non-empty array")
+    sensors: list[dict[str, object]] = []
+    for index, raw_sensor in enumerate(sensors_value):
+        sensor = _mapping(raw_sensor, f"quality.sensors[{index}]")
+        sensors.append(
+            {
+                "sensor_id": _nonempty_string(
+                    sensor.get("sensor_id"), f"quality.sensors[{index}].sensor_id"
+                ),
+                "valid_distance_frequencies": _quality_frequency_array(
+                    sensor.get("valid_distance_frequencies"),
+                    f"quality.sensors[{index}].valid_distance_frequencies",
+                ),
+                "invalid_distance_frequencies": _quality_frequency_array(
+                    sensor.get("invalid_distance_frequencies"),
+                    f"quality.sensors[{index}].invalid_distance_frequencies",
+                ),
+            }
+        )
+    return {"sensors": sensors}
+
+
+def _number_vector(value: object, length: int, path: str) -> tuple[float, ...]:
+    if not isinstance(value, list) or len(value) != length:
+        raise ReceiverError(f"{path} must contain {length} numbers")
+    return tuple(_finite_number(item, f"{path}[]") for item in value)
+
+
+def _expected_header(
+    generator: Mapping[str, object],
+    environment_document: Mapping[str, object],
+    quality_document: Mapping[str, object],
+    mean_fill_duration_s: int,
+) -> dict[str, object]:
+    if mean_fill_duration_s not in (600, 86_400):
+        raise ReceiverError("mean fill duration must be 600 or 86400")
+    environment = _normalized_environment(environment_document)
+    scenario = _mapping(generator.get("scenario"), "generator.scenario")
+    normalized_scenario = _mapping(_float_tree(dict(scenario), "generator.scenario"), "scenario")
+    normalized_scenario = dict(normalized_scenario)
+    normalized_scenario["mean_fill_duration_s"] = float(mean_fill_duration_s)
+    measurement = _mapping(generator.get("measurement"), "generator.measurement")
+    seed = generator.get("seed")
+    if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 2**64 - 1:
+        raise ReceiverError("generator.seed must be an unsigned 64-bit integer")
+    fingerprint = _canonical_sha256(
+        {
+            "seed": seed,
+            "scenario": normalized_scenario,
+            "measurement": _float_tree(dict(measurement), "generator.measurement"),
+            "environment": environment,
+            "quality_profile": _normalized_quality(quality_document),
+        }
+    )
+    inlets = _coordinate_pairs(
+        scenario.get("inlet_positions_xy_m"), "generator.scenario.inlet_positions_xy_m"
+    )
+    scene = {
+        "coordinate_system": "right-handed-z-up",
+        "length_unit": "m",
+        "angle_unit": "deg",
+        "boundary_xy_m": environment["boundary_xy_m"],
+        "floor_z_m": environment["floor_z_m"],
+        "top_z_m": environment["top_z_m"],
+        "inlet_positions_xy_m": [list(point) for point in inlets],
+        "sensors": environment["sensors"],
+    }
+    return {
+        "observation_version": 1,
+        "type": "load_model_stream_header",
+        "environment_id": environment["environment_id"],
+        "run_id": "expected-runtime-run",
+        "input_fingerprint_sha256": fingerprint,
+        "seed": seed,
+        "scene": scene,
+    }
 
 
 def _atomic_write_json(path: Path, document: Mapping[str, object], *, mode: int) -> None:
@@ -418,10 +592,6 @@ class ObservationReceiver:
 
     def _accept_observation(self, document: Mapping[str, object]) -> None:
         _validate_contract(_OBSERVATION_VALIDATOR, document, "observation record")
-        try:
-            parsed = ObservationRecord.from_document(cast(Mapping[str, Any], document))
-        except (ObservationFormatError, ValueError) as error:
-            raise ReceiverError("observation record violates semantic constraints") from error
         if _nonempty_string(document["run_id"], "observation.run_id") != self.run_id:
             raise ReceiverError("observation run_id differs from its header")
         sequence = _positive_integer(document["sequence"], "observation.sequence")
@@ -439,7 +609,7 @@ class ObservationReceiver:
             separators=(",", ":"),
         ).encode("utf-8")
         surface_sha256 = hashlib.sha256(surface_payload).digest()
-        elapsed_s = self._validate_observation_semantics(parsed, sequence, surface_sha256)
+        elapsed_s = self._validate_observation_semantics(document, sequence, surface_sha256)
         self.surface_stream_hasher.update(sequence.to_bytes(8, byteorder="big"))
         self.surface_stream_hasher.update(len(surface_payload).to_bytes(8, byteorder="big"))
         self.surface_stream_hasher.update(surface_payload)
@@ -451,83 +621,120 @@ class ObservationReceiver:
 
     def _validate_observation_semantics(
         self,
-        record: ObservationRecord,
+        document: Mapping[str, object],
         sequence: int,
         surface_sha256: bytes,
     ) -> float:
-        state = record.snapshot.state
-        surface = record.snapshot.surface
+        state = _mapping(document.get("scenario"), "observation.scenario")
+        surface = _mapping(document.get("surface"), "observation.surface")
+        elapsed_s = _finite_number(state.get("elapsed_s"), "scenario.elapsed_s")
+        surface_updated_at_s = _finite_number(
+            state.get("surface_updated_at_s"), "scenario.surface_updated_at_s"
+        )
+        phase_started_at_s = _finite_number(
+            state.get("phase_started_at_s"), "scenario.phase_started_at_s"
+        )
+        phase_ends_at_s = _finite_number(state.get("phase_ends_at_s"), "scenario.phase_ends_at_s")
+        phase_duration_s = _finite_number(
+            state.get("phase_duration_s"), "scenario.phase_duration_s"
+        )
         expected_elapsed_s = (
             self.expectation.first_elapsed_s
             if sequence == 1
             else (sequence - 1) * self.expectation.interval_s
         )
         if not math.isclose(
-            state.elapsed_s,
+            elapsed_s,
             expected_elapsed_s,
             rel_tol=1e-12,
             abs_tol=_FLOAT_TOLERANCE,
         ):
             raise ReceiverError("observation simulation time differs from the one-second cadence")
-        if state.elapsed_s > self.expectation.last_elapsed_s + _FLOAT_TOLERANCE:
+        if elapsed_s > self.expectation.last_elapsed_s + _FLOAT_TOLERANCE:
             raise ReceiverError("observation simulation time exceeds the validation duration")
         if not (
-            state.surface_updated_at_s <= state.elapsed_s + _FLOAT_TOLERANCE
-            and state.phase_started_at_s <= state.elapsed_s + _FLOAT_TOLERANCE
-            and state.elapsed_s <= state.phase_ends_at_s + _FLOAT_TOLERANCE
+            surface_updated_at_s <= elapsed_s + _FLOAT_TOLERANCE
+            and phase_started_at_s <= elapsed_s + _FLOAT_TOLERANCE
+            and elapsed_s <= phase_ends_at_s + _FLOAT_TOLERANCE
             and math.isclose(
-                state.phase_ends_at_s - state.phase_started_at_s,
-                state.phase_duration_s,
+                phase_ends_at_s - phase_started_at_s,
+                phase_duration_s,
                 rel_tol=1e-12,
                 abs_tol=_FLOAT_TOLERANCE,
             )
         ):
             raise ReceiverError("observation scenario time fields are inconsistent")
-        phase = state.phase.value
+        phase = _nonempty_string(state.get("phase"), "scenario.phase")
+        if phase not in ("filling", "collecting"):
+            raise ReceiverError("observation phase is invalid")
+        cycle_index = _nonnegative_integer(state.get("cycle_index"), "scenario.cycle_index")
+        current_inlet_index = state.get("current_inlet_index")
         if phase == "filling":
-            if state.current_inlet_index is None or not (
-                0 <= state.current_inlet_index < self.expectation.inlet_count
+            if (
+                isinstance(current_inlet_index, bool)
+                or not isinstance(current_inlet_index, int)
+                or not 0 <= current_inlet_index < self.expectation.inlet_count
             ):
                 raise ReceiverError("filling observation has an invalid inlet index")
-        elif state.current_inlet_index is not None:
+        elif current_inlet_index is not None:
             raise ReceiverError("collecting observation must not have an inlet index")
-        self._validate_phase_progression(state.cycle_index, phase)
+        self._validate_phase_progression(cycle_index, phase)
+        cell_size_m = _finite_number(surface.get("cell_size_m"), "surface.cell_size_m")
         if not math.isclose(
-            surface.cell_size_m,
+            cell_size_m,
             self.expectation.cell_size_m,
             rel_tol=1e-12,
             abs_tol=_FLOAT_TOLERANCE,
         ):
             raise ReceiverError("observation surface cell size differs from public input")
+        x_coordinates = _number_array(surface.get("x_coordinates_m"), "surface.x_coordinates_m")
+        y_coordinates = _number_array(surface.get("y_coordinates_m"), "surface.y_coordinates_m")
         self._validate_axis(
-            surface.x_coordinates_m.tolist(),
+            x_coordinates,
             self.expectation.x_coordinates_m,
             "x",
         )
         self._validate_axis(
-            surface.y_coordinates_m.tolist(),
+            y_coordinates,
             self.expectation.y_coordinates_m,
             "y",
         )
-        if bool(
-            (surface.heights_m < self.expectation.floor_z_m - _FLOAT_TOLERANCE).any()
-            or (surface.heights_m > self.expectation.top_z_m + _FLOAT_TOLERANCE).any()
-        ):
-            raise ReceiverError("observation surface height is outside the scene bounds")
-        self._validate_surface_progression(state, surface_sha256)
-        self.last_cycle_index = state.cycle_index
+        _validate_height_rows(
+            surface.get("heights_m"),
+            x_count=len(x_coordinates),
+            y_count=len(y_coordinates),
+            floor_z_m=self.expectation.floor_z_m,
+            top_z_m=self.expectation.top_z_m,
+        )
+        self._validate_surface_progression(
+            phase=phase,
+            cycle_index=cycle_index,
+            surface_updated_at_s=surface_updated_at_s,
+            surface_volume_m3=_finite_number(
+                state.get("surface_volume_m3"), "scenario.surface_volume_m3"
+            ),
+            surface_fill_ratio=_finite_number(
+                state.get("surface_fill_ratio"), "scenario.surface_fill_ratio"
+            ),
+            surface_sha256=surface_sha256,
+        )
+        self.last_cycle_index = cycle_index
         self.last_phase = phase
-        return float(state.elapsed_s)
+        return elapsed_s
 
     def _validate_surface_progression(
         self,
-        state: ScenarioSnapshot,
+        *,
+        phase: str,
+        cycle_index: int,
+        surface_updated_at_s: float,
+        surface_volume_m3: float,
+        surface_fill_ratio: float,
         surface_sha256: bytes,
     ) -> None:
-        phase = state.phase.value
-        expected_fill_ratio = state.surface_volume_m3 / self.expectation.capacity_m3
+        expected_fill_ratio = surface_volume_m3 / self.expectation.capacity_m3
         if not math.isclose(
-            state.surface_fill_ratio,
+            surface_fill_ratio,
             expected_fill_ratio,
             rel_tol=1e-10,
             abs_tol=_FLOAT_TOLERANCE,
@@ -535,33 +742,33 @@ class ObservationReceiver:
             raise ReceiverError("observation surface volume and fill ratio are inconsistent")
         volume_tolerance_m3 = max(1.0, self.expectation.capacity_m3) * 1e-10
         if self.last_surface_updated_at_s is not None:
-            if state.surface_updated_at_s <= self.last_surface_updated_at_s + _FLOAT_TOLERANCE:
+            if surface_updated_at_s <= self.last_surface_updated_at_s + _FLOAT_TOLERANCE:
                 raise ReceiverError("observation surface update time did not advance")
             if surface_sha256 == self.last_surface_sha256:
                 raise ReceiverError("observation surface payload did not change")
             if self.last_surface_volume_m3 is None:
                 raise ReceiverError("observation surface volume history is incomplete")
-            if state.cycle_index == self.last_cycle_index and phase == self.last_phase:
+            if cycle_index == self.last_cycle_index and phase == self.last_phase:
                 self._validate_same_phase_volume_change(
-                    state.surface_volume_m3,
+                    surface_volume_m3,
                     phase,
                     volume_tolerance_m3,
                 )
             self.surface_change_count += 1
-        self.last_surface_updated_at_s = state.surface_updated_at_s
-        self.last_surface_volume_m3 = state.surface_volume_m3
+        self.last_surface_updated_at_s = surface_updated_at_s
+        self.last_surface_volume_m3 = surface_volume_m3
         self.last_surface_sha256 = surface_sha256
         self.minimum_surface_volume_m3 = min(
-            state.surface_volume_m3,
+            surface_volume_m3,
             self.minimum_surface_volume_m3
             if self.minimum_surface_volume_m3 is not None
-            else state.surface_volume_m3,
+            else surface_volume_m3,
         )
         self.maximum_surface_volume_m3 = max(
-            state.surface_volume_m3,
+            surface_volume_m3,
             self.maximum_surface_volume_m3
             if self.maximum_surface_volume_m3 is not None
-            else state.surface_volume_m3,
+            else surface_volume_m3,
         )
 
     def _validate_same_phase_volume_change(

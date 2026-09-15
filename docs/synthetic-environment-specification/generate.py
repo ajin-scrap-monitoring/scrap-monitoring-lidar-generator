@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -16,18 +16,13 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.document import Document as DocumentType
 from docx.enum.section import WD_SECTION
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt
 from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
-
-from scrap_monitoring_lidar_simulator.configuration import GeneratorInputs, load_generator_inputs
-from scrap_monitoring_lidar_simulator.scenario import (
-    DEFAULT_ANGLE_OF_REPOSE_DEG,
-    DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS,
-)
 
 type JsonObject = dict[str, Any]
 type Point2 = tuple[float, float]
@@ -47,6 +42,8 @@ _SOURCE_FILENAME = "SOURCE.json"
 _FONT_PATH = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
 _FIXED_DOCUMENT_TIME = datetime(2000, 1, 1, tzinfo=UTC)
 _DRAWING_SCALE = 2
+DEFAULT_ANGLE_OF_REPOSE_DEG = 35.0
+DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS = 32
 
 _INK = "#1f2937"
 _MUTED = "#64748b"
@@ -61,6 +58,35 @@ _SENSOR_TWO = "#009688"
 _WHITE = "#ffffff"
 
 
+class _ObjectView:
+    """Expose trusted, Rust-validated public JSON fields to the document renderer."""
+
+    def __init__(self, document: JsonObject) -> None:
+        self._document = document
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return _as_view(self._document[name])
+        except KeyError as error:
+            raise AttributeError(name) from error
+
+
+def _as_view(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _ObjectView(value)
+    if isinstance(value, list):
+        return tuple(_as_view(item) for item in value)
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class PublicInputs:
+    """Public JSON values needed by the document renderer."""
+
+    generator: _ObjectView
+    environment: _ObjectView
+
+
 @dataclass(frozen=True, slots=True)
 class SpecificationSources:
     """Validated public inputs for the synthetic environment specification."""
@@ -68,7 +94,7 @@ class SpecificationSources:
     generator_path: Path
     environment_path: Path
     quality_path: Path
-    inputs: GeneratorInputs
+    inputs: PublicInputs
     generator_document: JsonObject
     environment_document: JsonObject
     quality_document: JsonObject
@@ -247,11 +273,14 @@ def load_sources(generator_path: Path) -> SpecificationSources:
         referenced_path = (generator_path.parent / value).resolve()
         if expected_path.is_symlink() or referenced_path != expected_path.absolute():
             raise ValueError(f"specification requires {_relative_path(expected_path)}")
-    inputs = load_generator_inputs(generator_path)
-    environment_path = inputs.generator.environment_path.resolve()
-    quality_path = inputs.generator.quality_profile_path.resolve()
+    environment_path = expected_references[0][1].resolve()
+    quality_path = expected_references[1][1].resolve()
     paths = (environment_path, generator_path, quality_path)
     documents = (_load_json(environment_path), generator_document, _load_json(quality_path))
+    inputs = PublicInputs(
+        generator=_ObjectView(generator_document),
+        environment=_ObjectView(documents[0]),
+    )
     relative_names = tuple(_relative_path(path) for path in paths)
     hashes = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -296,7 +325,7 @@ def polygon_area(boundary: Sequence[Point2]) -> float:
     return abs(
         sum(
             first[0] * second[1] - second[0] * first[1]
-            for first, second in zip(boundary, boundary[1:] + boundary[:1], strict=True)
+            for first, second in _polygon_edges(boundary)
         )
         / 2.0
     )
@@ -341,7 +370,7 @@ def floor_measurement_segments(
         raise ValueError("sensor u90 must have a horizontal component")
 
     intersections: list[float] = []
-    for first, second in zip(boundary, boundary[1:] + boundary[:1], strict=True):
+    for first, second in _polygon_edges(boundary):
         edge = (second[0] - first[0], second[1] - first[1])
         delta = (first[0] - line_origin[0], first[1] - line_origin[1])
         denominator = _cross2(line_direction, edge)
@@ -400,7 +429,7 @@ def _unique_sorted(values: Iterable[float]) -> tuple[float, ...]:
 
 def _point_in_polygon(point: Point2, boundary: Sequence[Point2]) -> bool:
     inside = False
-    for first, second in zip(boundary, boundary[1:] + boundary[:1], strict=True):
+    for first, second in _polygon_edges(boundary):
         if (first[1] > point[1]) == (second[1] > point[1]):
             continue
         intersection_x = (second[0] - first[0]) * (point[1] - first[1]) / (
@@ -409,6 +438,12 @@ def _point_in_polygon(point: Point2, boundary: Sequence[Point2]) -> bool:
         if point[0] < intersection_x:
             inside = not inside
     return inside
+
+
+def _polygon_edges(boundary: Sequence[Point2]) -> Iterator[tuple[Point2, Point2]]:
+    if not boundary:
+        return iter(())
+    return pairwise((*boundary, boundary[0]))
 
 
 def generate_drawings(sources: SpecificationSources, output_dir: Path) -> DrawingPaths:
@@ -443,7 +478,7 @@ def generate_docx(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="synthetic-environment-docx-") as temporary:
         raw_path = Path(temporary) / output_path.name
-        document.save(raw_path)
+        document.save(str(raw_path))
         _normalize_docx(raw_path, output_path)
 
 
@@ -903,7 +938,7 @@ def _draw_isometric_walls(
     top_z: float,
     project: Any,
 ) -> None:
-    for first, second in zip(boundary, boundary[1:] + boundary[:1], strict=True):
+    for first, second in _polygon_edges(boundary):
         wall = (
             project((first[0], first[1], floor_z)),
             project((second[0], second[1], floor_z)),
@@ -1068,7 +1103,7 @@ def _translucent_polygon(
     image.paste(overlay, (0, 0), overlay)
 
 
-def _write_title_page(document: Document, sources: SpecificationSources) -> None:
+def _write_title_page(document: DocumentType, sources: SpecificationSources) -> None:
     paragraph = document.add_paragraph()
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.paragraph_format.space_before = Cm(4.2)
@@ -1093,10 +1128,10 @@ def _write_title_page(document: Document, sources: SpecificationSources) -> None
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.paragraph_format.space_before = Cm(2.0)
     paragraph.add_run(f"Artifact fingerprint SHA-256\n{sources.fingerprint}").font.size = Pt(9)
-    document.add_page_break()
+    _page_break(document)
 
 
-def _write_source_section(document: Document, sources: SpecificationSources) -> None:
+def _write_source_section(document: DocumentType, sources: SpecificationSources) -> None:
     _heading(document, "1. 정본과 적용 범위", 1)
     _paragraph(
         document,
@@ -1122,7 +1157,7 @@ def _write_source_section(document: Document, sources: SpecificationSources) -> 
     )
 
 
-def _write_coordinate_section(document: Document, sources: SpecificationSources) -> None:
+def _write_coordinate_section(document: DocumentType, sources: SpecificationSources) -> None:
     _heading(document, "2. 좌표계와 단위", 1)
     _paragraph(
         document,
@@ -1157,7 +1192,7 @@ def _write_coordinate_section(document: Document, sources: SpecificationSources)
 
 
 def _write_space_section(
-    document: Document,
+    document: DocumentType,
     sources: SpecificationSources,
     drawings: DrawingPaths,
 ) -> None:
@@ -1199,7 +1234,7 @@ def _write_space_section(
 
 
 def _write_sensor_section(
-    document: Document,
+    document: DocumentType,
     sources: SpecificationSources,
     drawings: DrawingPaths,
 ) -> None:
@@ -1274,7 +1309,7 @@ def _write_sensor_section(
     )
 
 
-def _write_simulation_section(document: Document, sources: SpecificationSources) -> None:
+def _write_simulation_section(document: DocumentType, sources: SpecificationSources) -> None:
     _heading(document, "5. 적재 표면과 시나리오", 1)
     scenario = sources.inputs.generator.scenario
     surface = scenario.surface
@@ -1343,7 +1378,7 @@ def _write_simulation_section(document: Document, sources: SpecificationSources)
     )
 
 
-def _write_measurement_section(document: Document, sources: SpecificationSources) -> None:
+def _write_measurement_section(document: DocumentType, sources: SpecificationSources) -> None:
     _heading(document, "6. LiDAR 측정 모델", 1)
     measurement = sources.inputs.generator.measurement
     nominal_points = measurement.sample_rate_hz / measurement.rotation_rate_hz
@@ -1434,7 +1469,7 @@ def _write_measurement_section(document: Document, sources: SpecificationSources
     )
 
 
-def _write_interpretation_section(document: Document, sources: SpecificationSources) -> None:
+def _write_interpretation_section(document: DocumentType, sources: SpecificationSources) -> None:
     _heading(document, "7. 환경 해석 규칙", 1)
     _add_table(
         document,
@@ -1453,7 +1488,7 @@ def _write_interpretation_section(document: Document, sources: SpecificationSour
     )
 
 
-def _configure_document(document: Document, sources: SpecificationSources) -> None:
+def _configure_document(document: DocumentType, sources: SpecificationSources) -> None:
     section = document.sections[0]
     section.page_width = Cm(21.0)
     section.page_height = Cm(29.7)
@@ -1483,7 +1518,7 @@ def _configure_document(document: Document, sources: SpecificationSources) -> No
 
 
 def _add_table(
-    document: Document,
+    document: DocumentType,
     headers: Sequence[str],
     rows: Sequence[Sequence[str]],
 ) -> None:
@@ -1521,17 +1556,17 @@ def _shade_cell(cell: Any, color: str) -> None:
     properties.append(shading)
 
 
-def _heading(document: Document, text: str, level: int) -> None:
+def _heading(document: DocumentType, text: str, level: int) -> None:
     paragraph = document.add_heading(text, level=level)
     paragraph.paragraph_format.keep_with_next = True
 
 
-def _paragraph(document: Document, text: str) -> None:
+def _paragraph(document: DocumentType, text: str) -> None:
     paragraph = document.add_paragraph(text)
     paragraph.paragraph_format.space_after = Pt(6)
 
 
-def _formula(document: Document, text: str) -> None:
+def _formula(document: DocumentType, text: str) -> None:
     paragraph = document.add_paragraph()
     paragraph.paragraph_format.left_indent = Cm(0.8)
     paragraph.paragraph_format.space_after = Pt(4)
@@ -1540,21 +1575,25 @@ def _formula(document: Document, text: str) -> None:
     run.font.size = Pt(8.5)
 
 
-def _add_notice(document: Document, text: str) -> None:
+def _add_notice(document: DocumentType, text: str) -> None:
     table = document.add_table(rows=1, cols=1)
     table.style = "Table Grid"
     _set_cell_text(table.cell(0, 0), text)
     _shade_cell(table.cell(0, 0), "EEF4FA")
 
 
-def _figure(document: Document, path: Path, caption: str) -> None:
-    document.add_page_break()
+def _figure(document: DocumentType, path: Path, caption: str) -> None:
+    _page_break(document)
     paragraph = document.add_paragraph()
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.add_run().add_picture(str(path), width=Inches(6.75))
     caption_paragraph = document.add_paragraph(caption, style="Caption")
     caption_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    document.add_page_break()
+    _page_break(document)
+
+
+def _page_break(document: DocumentType) -> None:
+    document.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
 
 def _drawing_title(draw: _ScaledDraw, title: str, subtitle: str) -> None:
@@ -1754,10 +1793,12 @@ def _source_responsibility(name: str) -> str:
 
 
 def _boundary(sources: SpecificationSources) -> tuple[Point2, ...]:
-    return tuple(
-        tuple(float(value) for value in point)
-        for point in sources.environment_document["boundary_xy_m"]
-    )  # type: ignore[return-value]
+    result: list[Point2] = []
+    for raw_point in sources.environment_document["boundary_xy_m"]:
+        if not isinstance(raw_point, list) or len(raw_point) != 2:
+            raise ValueError("boundary point must contain exactly two numbers")
+        result.append((float(raw_point[0]), float(raw_point[1])))
+    return tuple(result)
 
 
 def _bounds(boundary: Sequence[Point2]) -> tuple[float, float, float, float]:

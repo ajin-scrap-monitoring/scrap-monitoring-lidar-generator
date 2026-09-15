@@ -1,29 +1,19 @@
 [project]
 name = "scrap-monitoring-lidar-simulator"
-version = "0.10.0"
-description = "Deterministic synthetic LiDAR simulator for scrap monitoring development."
+version = "0.10.1"
+description = "Development and validation tooling for the Rust LiDAR simulator."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
-dependencies = [
-    "grpcio>=1.83.1,<1.84",
-    "numpy>=2.5.3,<2.6",
-    "protobuf>=7.36.1,<8",
-]
+dependencies = []
 classifiers = ["Private :: Do Not Upload"]
-
-[project.scripts]
-scrap-monitoring-lidar-simulator = "scrap_monitoring_lidar_simulator.cli:main"
-scrap-monitoring-lidar-simulator-export-synthetic-processing-config = "scrap_monitoring_lidar_simulator.edge_integration.cli:main"
-
-[build-system]
-requires = ["uv_build==0.12.15"]
-build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "grpcio-tools>=1.83.1,<1.84",
+    "grpcio>=1.83.1,<1.84",
     "jsonschema>=4.26.0,<5",
     "mypy>=2.3.1,<3",
+    "numpy>=2.5.3,<2.6",
+    "protobuf>=7.36.1,<8",
     "pytest>=9.1.1,<10",
     "ruff>=0.16.6,<0.17",
     "rumdl>=0.2.70,<0.3",
@@ -35,16 +25,11 @@ docs = [
     "python-docx==1.2.0",
 ]
 [tool.uv]
+package = false
 required-version = "==0.12.15"
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests"]
-extend-exclude = [
-    "src/scrap_monitoring_lidar_simulator/wire/lidar_pb2.py",
-    "src/scrap_monitoring_lidar_simulator/wire/lidar_pb2.pyi",
-    "src/scrap_monitoring_lidar_simulator/wire/lidar_pb2_grpc.py",
-]
 
 [tool.ruff.lint]
 select = ["B", "C90", "E4", "E7", "E9", "F", "I", "RUF", "SIM", "UP"]
@@ -60,16 +45,9 @@ respect-gitignore = true
 [tool.mypy]
 python_version = "3.14"
 strict = true
-files = ["src", "tests"]
+files = ["tests", "tools", "docs/synthetic-environment-specification/generate.py"]
 pretty = true
 show_error_codes = true
-
-[[tool.mypy.overrides]]
-module = [
-    "scrap_monitoring_lidar_simulator.wire.lidar_pb2",
-    "scrap_monitoring_lidar_simulator.wire.lidar_pb2_grpc",
-]
-ignore_errors = true
 
 [tool.pytest.ini_options]
 addopts = ["--strict-config", "--strict-markers", "-ra"]

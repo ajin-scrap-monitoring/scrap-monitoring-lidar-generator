@@ -6,9 +6,9 @@ use std::{
 use serde_json::Value;
 
 use super::{
-    load_environment, load_quality_profile,
+    compensated_sum, load_environment, load_quality_profile,
     models::*,
-    polygon, python_float_sum,
+    polygon,
     strict_json::{self as json, Object},
 };
 use crate::{
@@ -188,7 +188,7 @@ fn scenario(value: &Value) -> Result<ScenarioConfig> {
         }
     }
     let fill_duration_factor_range = config.range("fill_duration_factor_range", json::positive)?;
-    if (python_float_sum(fill_duration_factor_range) - 2.0).abs() > 1e-12 {
+    if (compensated_sum(fill_duration_factor_range) - 2.0).abs() > 1e-12 {
         return Err(ConfigurationError::new(
             ErrorKind::Range,
             config.at("fill_duration_factor_range"),

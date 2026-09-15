@@ -34,7 +34,7 @@ impl RandomSource for CountingWords {
 }
 
 #[test]
-fn segment_and_profile_math_match_scripted_python_values() {
+fn segment_and_profile_math_match_model_v1_values() {
     let profile = SmoothRateProfile::new(
         11.0,
         vec![

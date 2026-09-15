@@ -12,9 +12,9 @@ use scrap_monitoring_lidar_simulator::{
 };
 use serde_json::Value;
 
-const COORDINATES: &str = include_str!("fixtures/rust-parity/coordinates.json");
-const DISTORTIONS: &str = include_str!("fixtures/rust-parity/distortion-events.json");
-const HEIGHT_FIELD: &str = include_str!("fixtures/rust-parity/height-field-operations.json");
+const COORDINATES: &str = include_str!("fixtures/model-v1/coordinates.json");
+const DISTORTIONS: &str = include_str!("fixtures/model-v1/distortion-events.json");
+const HEIGHT_FIELD: &str = include_str!("fixtures/model-v1/height-field-operations.json");
 const TOLERANCE: f64 = 1e-10;
 
 fn inputs() -> GeneratorInputs {

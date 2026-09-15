@@ -1,20 +1,7 @@
 # 성능 측정
 
-## Python 기준선 측정 범위
-
-현재 Python benchmark는 4개 구간을 측정한다.
-
-| 구간 | 측정 범위 |
-| --- | --- |
-| `scene_update` | 적재 표면과 시나리오 상태 갱신 |
-| `scan_generation` | 광선 교차, 측정 왜곡과 quality 생성 |
-| `serialization` | 외부 Proto ScanFrame 생성과 직렬화 |
-| `transport_wait` | local gRPC UDS 게시와 구독 완료 |
-
-benchmark는 생성 pacing을 제거하고 설정된 scan 수를 가능한 빠르게 처리한다. 생성기 process
-안에서 두 sensor server와 두 구독자를 함께 실행하므로 process CPU 시간에는 local gRPC 처리도
-포함된다. 진단 파일, 관찰 TCP, 연결 실패, 실제 `lidar-processing` 계산과 다른 edge process는
-포함하지 않는다.
+이 문서는 Raspberry Pi 5에서 시뮬레이터와 `lidar-processing`을 함께 실행할 때의 입력 부하,
+단기 기능 검증과 장기 판정 방법을 정의한다.
 
 ## 부하 입력
 
@@ -30,75 +17,26 @@ benchmark는 생성 pacing을 제거하고 설정된 scan 수를 가능한 빠�
 실제 scan 배열 길이는 회전 scheduler가 나눈 측정점 수다. Proto byte 수는 distance, angle과
 quality 값의 varint 길이에 따라 달라진다.
 
-## 실행
+## 단기 image 검증
+
+다음 명령은 현재 commit으로 만든 ARM64 image의 공개 설정, 두 sensor의 측정 의미, UDS 2개,
+상태 진행과 정상 종료를 검사한다.
 
 ```bash
-uv run --locked python -m tests.performance.generation \
-  --config examples/generator.v2.json \
-  --scans-per-sensor 100
+tests/edge/verify-rust-image.sh \
+  "$IMAGE_REF" \
+  examples \
+  "$(git rev-parse HEAD)"
 ```
 
-결과는 JSON(JavaScript Object Notation) 한 개다.
+이 검증은 기능 smoke test이며 `lidar-processing`과 공유하는 장기 자원 상한을 판정하지 않는다.
 
-| 결과 | 의미 |
-| --- | --- |
-| `generated_points_per_simulated_second` | 설정이 요구하는 초당 합성 point |
-| `scan_wire_bytes_per_simulated_second` | 직렬화한 frame의 초당 명목 byte |
-| `estimated_single_core_utilization_percent` | process CPU 시간과 simulation 시간의 비율 |
-| `maximum_rss_bytes` | 실행 process의 최대 RSS(Resident Set Size) |
-| stage `mean_ms`, `maximum_ms` | 계측 경계의 평균 및 최대 처리 시간 |
-
-단일 core 환산값 100은 CPU core 하나를 지속 점유하는 계산량이다. 전체 장비 CPU 사용률이나
-Docker CPU 제한 사용률이 아니다. `scan_generation` stage 호출 수는 장면 갱신 경계로 나눈
-부분 생성도 포함하므로 게시 frame 수와 다를 수 있다.
-
-이 benchmark는 실행 중 표본의 P95와 P99를 계산하지 않는다. 평균 및 최대 stage 시간과 process의
-최대 RSS는 Rust 공유 부하 합격에 사용하는 CPU 및 RSS P95와 완료 지연 P99를 대신하지 않는다.
-
-## Image 기능 검증
-
-다음 명령은 digest image를 CPU 2 core 상한에서 30초 실행한다.
-
-```bash
-VALIDATION_DIR="$(mktemp -d)"
-tests/edge/run.sh \
-  --image "$IMAGE_REF" \
-  --config-dir examples \
-  --duration-s 30 \
-  --cpus 2 \
-  --output-dir "$VALIDATION_DIR"
-```
-
-검증은 두 sensor의 gRPC UDS frame, sequence, observation과 상태 파일을 확인한다. 생성기와
-test double의 `docker stats`는 결과 directory에 남는다. CPU 2 core는 자동 검증을 안정적으로
-완료하기 위한 시작값이고 자원 상한이 아니다.
-
-## Python edge 기준선
-
-0.9.0 image와 실제 `lidar-processing`을 Raspberry Pi 5에서 함께 실행한 짧은 제어 검증 결과는
-다음과 같다. 이 값은 장기 상한이 아니라 Rust 전환 전 기준선이다.
-
-| 항목 | 관측값 |
-| --- | --- |
-| 기본 24시간 적재 주기 계산 | 100 ms scan 주기당 약 87.6 ms |
-| 600초 가속 적재 주기 계산 | 100 ms scan 주기당 약 97.1 ms |
-| 생성기 container CPU | 논리 core 하나 기준 약 98-99 percent |
-| `lidar-processing` container CPU | 약 4-16 percent |
-| 생성기 RSS | 약 72 MiB |
-| `lidar-processing` RSS | 약 60 MiB |
-| 짧은 데이터 변환 검증 | 두 sensor `GOOD`, 유효 coverage 확인 |
-| 지속 실행 결과 | 약 53초 이후 생성 sequence와 상태 갱신 정지 관측 |
-
-현재 Python 생성 경로는 scan deadline을 넘긴 뒤 다음 deadline 대기에서 event loop에 실행권을
-명시적으로 양보하지 않을 수 있다. 계산 시간이 100 ms 주기에 근접하면 gRPC와 상태 갱신 task가
-지연되므로 짧은 데이터 정합성 통과만으로 지속 실행을 판정할 수 없다.
-
-## Rust ARM64 단기 통합 검증
+## ARM64 단기 통합 검증
 
 Rust source revision `65730a13697162dc42741effd0241ac3aa942e2d`의 로컬 ARM64 image ID
 `sha256:458a01ac36990ba36f9d15b145d44faeeeb2d7f83ac3b158a476c1021306a53f`를 Raspberry Pi 5
-8 GB에서 검증했다. `lidar-processing`은 고정한 외부 source에 UDS authority와 frame 손실 집계를
-보완한 revision `55b2e9d9401682c237a42945d9f548a4c912951f`의 로컬 ARM64 image ID
+8 GB에서 검증했다. `lidar-processing`은 고정한 외부 source의 검증 호환 revision
+`55b2e9d9401682c237a42945d9f548a4c912951f`과 로컬 ARM64 image ID
 `sha256:c737833bc97958e2a6c0807276cce3e0f9b46fa6f020a8b890bb279092deb042`를 사용했다. 재현
 source와 patch는 `edge-platform-integration/`에 고정되어 있고 두 image는 registry에 게시하지
 않았다.
@@ -129,11 +67,35 @@ cgroup의 process별 `/proc/<pid>/smaps_rollup`을 합산했고 `memory.current`
 기록했다. 기존 상주 생성기와 처리기는 검증 전후 같은 container로 복구했으며 restart count와
 `vcgencmd get_throttled` 결과는 각각 0과 `0x0`이었다.
 
-## Rust 공유 부하 측정 규칙
+## ARM64 약식 지속 검증
 
-Rust 장기 공유 부하 결과는 아직 없다. 아래 규칙은 Release 후 지속 안정성 측정에 적용하며 수치
+Release 0.10.0 source revision `896696667a9f186042bf3deaf6b71ecb5deb7b3a`와 ARM64 image digest
+`sha256:d235e4d3492d8327c5483b87754770313fd2f2b1e06efca969b6b8eba02aeeb9`를 Raspberry Pi 5
+8 GB에서 30분 동안 실행했다. 평균 적재 주기는 600초이고 실제 관찰 stream은 별도 장비의
+시각화 프로그램이 계속 수신했다.
+
+| 항목 | 관측값 |
+| --- | --- |
+| 생성기 CPU | 257개 표본, 평균 26.36 percent, P95 31.80 percent, 최대 35.73 percent |
+| 생성기 메모리 | 실행 파일 process `VmHWM` 6.47 MiB |
+| 두 sensor 진행 | 완료 후 직접 상태에서 각각 sequence 22,266, lifetime 평균 10.00 scan/s |
+| 생성 상태 | 두 sensor 모두 `HEALTHY`, `sdk_errors` 0 |
+| 관찰 수신 | sequence 217부터 2,016까지 1,799개 증가, 누락과 거부 0 |
+| 관찰 연결 | 같은 run과 connection 유지, render 오류 0 |
+| 장비 온도 | 257개 표본, 평균 57.27 C, 최대 62.25 C |
+| 장비 상태 | Container restart 0회, OOM 0회, thermal throttling 0회 |
+
+누적 `frame_loss`는 구독자의 소비 속도에 따라 latest-two에서 덮어쓴 frame을 집계하므로 현재
+교체 예정인 처리 구성 요소의 값은 simulator 생성 실패 판정에서 제외했다. 약식 수집기의 상태
+파일 표본은 host 권한 문제로 유효하지 않아 완료 후 파일을 직접 확인했다. 이 검증은 simulator의
+지속 생성과 관찰 전송에 이상이 없음을 확인하지만 frame 완료 지연, RSS P95와 처리 결과를 포함한
+공식 장기 matrix를 대신하지 않는다.
+
+## 공유 부하 측정 규칙
+
+장기 공유 부하 결과는 아직 없다. 아래 규칙은 Release 후 지속 안정성 측정에 적용하며 수치
 기준은 [`development-plan.md`](development-plan.md#release-전-단기-합격)가 정본이다. 단기 통합
-검증과 Python 기준선의 관측값은 장기 matrix 결과를 대신하지 않는다.
+검증의 관측값은 장기 matrix 결과를 대신하지 않는다.
 
 고정된 실행 명령, 증거 인계와 aggregate 결과 schema는
 [`../tests/edge/long_validation/README.md`](../tests/edge/long_validation/README.md)를 따른다.

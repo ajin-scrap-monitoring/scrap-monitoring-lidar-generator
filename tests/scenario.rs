@@ -43,9 +43,9 @@ fn close(actual: f64, expected: f64, absolute: f64) {
 }
 
 #[test]
-fn scripted_scenario_matches_every_python_state_and_surface() {
+fn scripted_scenario_matches_every_model_v1_state_and_surface() {
     let fixture: Value =
-        serde_json::from_str(include_str!("fixtures/rust-parity/scenario-scripted.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/model-v1/scenario-scripted.json")).unwrap();
     assert_eq!(fixture["comparison_class"], "rng-independent");
     let mut simulator = build_scenario_simulator(&scripted_inputs()).unwrap();
     let shape = simulator.surface().shape();

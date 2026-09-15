@@ -14,7 +14,7 @@ pub use generator::{
 pub use models::*;
 pub use quality::{load_quality_profile, parse_quality_profile};
 
-pub(crate) fn python_float_sum(values: impl IntoIterator<Item = f64>) -> f64 {
+pub(crate) fn compensated_sum(values: impl IntoIterator<Item = f64>) -> f64 {
     let mut values = values.into_iter();
     let mut high = values.next().unwrap_or(0.0);
     let mut low = 0.0;

@@ -29,7 +29,7 @@ pub fn quantize_hq_angle_ticks(angle_deg: f64) -> Result<u16, SdkCompatibilityEr
         return Err(SdkCompatibilityError::InvalidAngle);
     }
 
-    // Preserve the Python/NumPy operation order, including its half-up boundary behavior.
+    // Preserve the model-v1 operation order, including its half-up boundary behavior.
     let rounded = (angle_deg / HQ_ANGLE_STEP_DEG + 0.5).floor();
     Ok((rounded as u32 % HQ_ANGLE_STEPS_PER_ROTATION) as u16)
 }

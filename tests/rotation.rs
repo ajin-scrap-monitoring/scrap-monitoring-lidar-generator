@@ -14,7 +14,7 @@ use sdk::{
 };
 use serde_json::Value;
 
-const FIXTURE: &str = include_str!("fixtures/rust-parity/rotation-and-hq.json");
+const FIXTURE: &str = include_str!("fixtures/model-v1/rotation-and-hq.json");
 
 fn floats(value: &Value) -> Vec<f64> {
     value
@@ -134,7 +134,7 @@ fn large_decimal_rate_keeps_fraction_rounding_without_a_float_fallback() {
 }
 
 #[test]
-fn seeded_angles_match_python_and_are_sensor_specific() {
+fn seeded_angles_match_model_v1_and_are_sensor_specific() {
     let fixture: Value = serde_json::from_str(FIXTURE).unwrap();
     let expected = &fixture["seeded_initial_angles_deg"];
     for sensor_id in ["lidar_1", "lidar_2"] {

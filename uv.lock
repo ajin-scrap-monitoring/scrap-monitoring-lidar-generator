@@ -105,29 +105,6 @@ wheels = [
 ]
 
 [[package]]
-name = "grpcio-tools"
-version = "1.83.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "grpcio" },
-    { name = "protobuf" },
-    { name = "setuptools" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8b/79/8b4131bcb94f09c2cac4919e627f20c09ba9b22320a307697d72b1f881d4/grpcio_tools-1.83.1.tar.gz", hash = "sha256:a8148eece396f8a349097958bc00f14882003331f3b7c2ae8079c1c632d17d6f", size = 6399877, upload-time = "2026-08-28T07:10:56.19Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/34/2b/4e8f3bff52b933c52c853e3a51db8d5e87c71fc0ec3903ef9e432b25e4c5/grpcio_tools-1.83.1-cp314-cp314-linux_armv7l.whl", hash = "sha256:f54955b95b17e83f8075303a31fa8f1aa64ad22d6f046e0070e9973918327202", size = 2652838, upload-time = "2026-08-28T07:10:35.035Z" },
-    { url = "https://files.pythonhosted.org/packages/91/01/f5b3648285126a741a1a60108971c25acb0532af8fd2ffb29990747ff8d8/grpcio_tools-1.83.1-cp314-cp314-macosx_11_0_universal2.whl", hash = "sha256:0f4c3d39546b0e6add25affd096170347c10437d78189fe2d0a026f7cbc5cb57", size = 5963473, upload-time = "2026-08-28T07:10:37.213Z" },
-    { url = "https://files.pythonhosted.org/packages/65/1d/95fc82961423365edc3ac6f98bc12ac96429bfbc5c43ede9ff40354aa273/grpcio_tools-1.83.1-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:34c8bbfe6e1ed19524010351a27c0d43e185b3d542cf4ab83ad9774d4c9000e1", size = 2705302, upload-time = "2026-08-28T07:10:39.166Z" },
-    { url = "https://files.pythonhosted.org/packages/e4/c5/82e29f48fcb5cf77b78c427ccaf5808b1b276cadd42955ceec960ec8daff/grpcio_tools-1.83.1-cp314-cp314-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:004bef39f47db3ed93caf58175ad3d3800f53d16a04b493166be945a0b575df3", size = 3033047, upload-time = "2026-08-28T07:10:41.492Z" },
-    { url = "https://files.pythonhosted.org/packages/89/38/f17b2902166320912fff7ecb4227a69ddf8edb544702045c3aba3076de0a/grpcio_tools-1.83.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:41a4ce8c2cddb38b50d5befe4f40b124f77d68021e2e47f80142f6138d802d8f", size = 2773829, upload-time = "2026-08-28T07:10:43.367Z" },
-    { url = "https://files.pythonhosted.org/packages/df/c5/974b54afc6ea3d7d8b51671d0c64effd9a92691a887e9bbf62c8b6213f03/grpcio_tools-1.83.1-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:b52cc836922456d56f25ff63b277410a6d9ad682863f064c1f735a19328432a3", size = 3229905, upload-time = "2026-08-28T07:10:45.758Z" },
-    { url = "https://files.pythonhosted.org/packages/8a/87/e9d5ff123ff80d0a7d502e9d2452305812d904e17afb88b3b23d892f3334/grpcio_tools-1.83.1-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:b73afd4303f2b026f8d8f3d7f07f5f22a2f2c3ecb05758af30205db0b16539b9", size = 3802600, upload-time = "2026-08-28T07:10:47.977Z" },
-    { url = "https://files.pythonhosted.org/packages/4f/2f/66d8cdc5a81f9723f2b7b2f32d29a757b3bd2eac2116746014626feb83d6/grpcio_tools-1.83.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:df9a2b346b98ec28d5666b43d2c00bb533976faa13f3fab2897890b3703a968a", size = 3461303, upload-time = "2026-08-28T07:10:50.178Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/f3/3989a42f1dcc1a1c59f06f5e4fbf48bc50a53a6cc5083c0b6a7aef4c1929/grpcio_tools-1.83.1-cp314-cp314-win32.whl", hash = "sha256:a8cafccbe4b83bcc297920796ae5a784c700c9fbef01705397007bcb4652e070", size = 1045048, upload-time = "2026-08-28T07:10:52.123Z" },
-    { url = "https://files.pythonhosted.org/packages/11/bf/be8370e2c3f0108aaae33bd609c359d593648959cc9efe69e6b59ec88a41/grpcio_tools-1.83.1-cp314-cp314-win_amd64.whl", hash = "sha256:9a40b779ec4bbd042279957cd1d0f42d4cbe333878d3d59ceeebe1cf3148528a", size = 1224200, upload-time = "2026-08-28T07:10:54.085Z" },
-]
-
-[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -514,19 +491,16 @@ wheels = [
 
 [[package]]
 name = "scrap-monitoring-lidar-simulator"
-version = "0.10.0"
-source = { editable = "." }
-dependencies = [
-    { name = "grpcio" },
-    { name = "numpy" },
-    { name = "protobuf" },
-]
+version = "0.10.1"
+source = { virtual = "." }
 
 [package.dev-dependencies]
 dev = [
-    { name = "grpcio-tools" },
+    { name = "grpcio" },
     { name = "jsonschema" },
     { name = "mypy" },
+    { name = "numpy" },
+    { name = "protobuf" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "rumdl" },
@@ -539,17 +513,14 @@ docs = [
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "grpcio", specifier = ">=1.83.1,<1.84" },
-    { name = "numpy", specifier = ">=2.5.3,<2.6" },
-    { name = "protobuf", specifier = ">=7.36.1,<8" },
-]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "grpcio-tools", specifier = ">=1.83.1,<1.84" },
+    { name = "grpcio", specifier = ">=1.83.1,<1.84" },
     { name = "jsonschema", specifier = ">=4.26.0,<5" },
     { name = "mypy", specifier = ">=2.3.1,<3" },
+    { name = "numpy", specifier = ">=2.5.3,<2.6" },
+    { name = "protobuf", specifier = ">=7.36.1,<8" },
     { name = "pytest", specifier = ">=9.1.1,<10" },
     { name = "ruff", specifier = ">=0.16.6,<0.17" },
     { name = "rumdl", specifier = ">=0.2.70,<0.3" },
@@ -559,15 +530,6 @@ dev = [
 docs = [
     { name = "pillow", specifier = "==12.3.0" },
     { name = "python-docx", specifier = "==1.2.0" },
-]
-
-[[package]]
-name = "setuptools"
-version = "84.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/6d/44/f5da03a8ef95d369145c5bb53050e7877c9f3d312e128605fd9504829143/setuptools-84.0.0.tar.gz", hash = "sha256:f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73", size = 1168449, upload-time = "2026-08-08T18:27:58.365Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/9c/c510029fc6ef33a6275cd2c5d3cecd6613dfd6aa401d57c54f1c18852ccf/setuptools-84.0.0-py3-none-any.whl", hash = "sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670", size = 818216, upload-time = "2026-08-08T18:27:56.719Z" },
 ]
 
 [[package]]

@@ -75,7 +75,7 @@ port가 필요하지 않다.
 ## 합성 검증용 처리 설정 준비
 
 `lidar-processing`은 생성기의 합성 환경 JSON을 직접 읽지 않는다. 검증 제어 장비에서 Release
-source의 Python 기준 exporter를 실행해 공개 합성 환경에 대응하는 처리 JSON을 만든다. 먼저 환경
+source의 Rust exporter를 실행해 공개 합성 환경에 대응하는 처리 JSON을 만든다. 먼저 환경
 파일의 `<...>` placeholder와 `visualizer.example`을 검증 환경의 값으로 바꾼다.
 
 ```bash
@@ -87,9 +87,8 @@ set -a
 . "$RUN_ENV"
 set +a
 
-uv sync --directory "$RELEASE_SOURCE" --locked --no-dev
-uv run --directory "$RELEASE_SOURCE" --locked --no-dev \
-  scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
+cargo run --manifest-path "$RELEASE_SOURCE/Cargo.toml" --locked --release -- \
+  export-synthetic-processing-config \
   --generator-config "$RELEASE_SOURCE/examples/generator.v2.json" \
   --socket-dir /sockets \
   --site-id "$SITE_ID" \
@@ -220,28 +219,29 @@ sudo find "$SOCKET_DIR" "$STATUS_DIR" -maxdepth 2 \( -type f -o -type s \)
 
 ## 반복 가능한 image 검증
 
-검증 도구는 digest image, 공개 설정, sensor별 gRPC 구독, 관찰 TCP 수신과 상태 파일을 하나의
-격리 실행에서 확인한다.
+검증 도구는 digest image, 공개 설정, sensor별 gRPC 구독, 관찰 TCP 수신과 상태 파일을 격리된
+container에서 확인한다.
 
 ```bash
-VALIDATION_DIR="$(mktemp -d)"
-tests/edge/run.sh \
-  --image "$IMAGE_REF" \
-  --config-dir examples \
-  --duration-s 30 \
-  --cpus 2 \
-  --output-dir "$VALIDATION_DIR"
+EXPECTED_REVISION="$(gh api \
+  "repos/ajin-scrap-monitoring/scrap-monitoring-lidar-simulator/commits/$RELEASE_TAG" \
+  --jq .sha)"
+"$RELEASE_SOURCE/tests/edge/verify-rust-image.sh" \
+  "$IMAGE_REF" \
+  "$RELEASE_SOURCE/examples" \
+  "$EXPECTED_REVISION"
 ```
 
-성공 출력은 `edge_validation=passed sensors=2`로 시작한다. 검증기는 두 구독의 frame 수신,
-sequence, Proto 정규화 범위, 관찰 header와 snapshot, 두 상태 파일을 검사한다. 결과 directory는
-로그, Docker 통계, inspect와 상태 snapshot을 포함할 수 있으므로 Git에 추가하지 않는다. CPU
-2 core는 test double 검증 시작값이며 자원 상한이 아니다.
+성공 출력은 `edge_validation=passed sensors=2`를 포함한다. 검증기는 두 sensor의 기준 교차와 최종
+측정점 의미, ARM64 runtime의 UDS 2개, sensor별 `HEALTHY` 상태와 sequence 진행 및 정상 종료를
+검사한다. 실제 gRPC 구독과 관찰 wire 계약은 Rust 통합 테스트와 고정 외부 구현 직접 호환 검사가
+담당한다. `lidar-processing`을 포함한 공유 부하 검증은 [`performance.md`](performance.md)의 장기
+검증 절차를 따른다.
 
 ## Release workflow
 
 Release workflow는 원격 `main` 이력에 포함된 `vMAJOR.MINOR.PATCH` tag만 처리한다. Tag version은
-`Cargo.toml` 및 `pyproject.toml` version과 같아야 한다. Workflow는 전체 검증, 외부 source 직접
+`Cargo.toml`과 개발 도구용 `pyproject.toml` version과 같아야 한다. Workflow는 전체 검증, 외부 source 직접
 검증, integration bundle, 검증 source archive와 ARM64 image build를 수행한다. Image에는
 SBOM(Software Bill of Materials)과 provenance attestation을 포함한다.
 

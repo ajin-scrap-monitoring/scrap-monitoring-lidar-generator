@@ -135,4 +135,4 @@ docker container rm "$validation_container" >/dev/null
 validation_container=""
 
 "$(dirname "$0")/verify-runtime-image.sh" \
-  "$image" "$config_dir" "$expected_revision" rust
+  "$image" "$config_dir" "$expected_revision"

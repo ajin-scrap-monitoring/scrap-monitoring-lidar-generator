@@ -6,12 +6,12 @@
 외부 계약을 변경한 뒤에만 다음 파일을 함께 갱신한다.
 
 - `lidar.proto`와 `upstream.json`.
-- `src/scrap_monitoring_lidar_simulator/wire/`의 생성 binding.
 - `edge-platform-integration/v1/lidar.proto`.
 - scan 변환, gRPC server와 외부 구현 직접 호환 테스트.
 
-생성 binding 검증 명령은 다음과 같다.
+`build.rs`는 vendored `protoc`로 Rust binding을 build output에 생성한다. 별도 생성 파일은 Git에서
+추적하지 않는다. 계약 사본과 Rust wire 변환은 다음 명령으로 검증한다.
 
 ```bash
-uv run --locked python -m tools.generate_lidar_wire --check
+cargo test --locked --test wire
 ```

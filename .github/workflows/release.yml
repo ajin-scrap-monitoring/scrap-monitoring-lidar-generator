@@ -39,18 +39,18 @@ jobs:
             echo "invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
           fi
-          package_version="$(
-            python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
-          )"
           cargo_version="$(
             python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])'
           )"
-          if [[ "$cargo_version" != "$package_version" ]]; then
-            echo "Cargo and Python package versions differ" >&2
+          tooling_version="$(
+            python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
+          )"
+          if [[ "$cargo_version" != "$tooling_version" ]]; then
+            echo "Cargo and development-tool project versions differ" >&2
             exit 1
           fi
-          if [[ "v$package_version" != "$GITHUB_REF_NAME" ]]; then
-            echo "release tag $GITHUB_REF_NAME does not match package version $package_version" >&2
+          if [[ "v$cargo_version" != "$GITHUB_REF_NAME" ]]; then
+            echo "release tag $GITHUB_REF_NAME does not match Cargo version $cargo_version" >&2
             exit 1
           fi
           git fetch --no-tags origin main
@@ -58,8 +58,8 @@ jobs:
           image_name="ghcr.io/${GITHUB_REPOSITORY,,}"
           {
             echo "image_name=$image_name"
-            echo "version=$package_version"
-            echo "version_ref=$image_name:$package_version"
+            echo "version=$cargo_version"
+            echo "version_ref=$image_name:$cargo_version"
             echo "revision_ref=$image_name:sha-$GITHUB_SHA"
           } >> "$GITHUB_OUTPUT"
 
@@ -86,25 +86,6 @@ jobs:
           uv run --locked pytest
           uv run --locked --group docs \
             python docs/synthetic-environment-specification/generate.py --check
-          uv run --locked python -m tools.generate_lidar_wire --check
-
-      - name: Build and verify Python package
-        shell: bash
-        run: |
-          uv build --no-sources
-          uv pip uninstall --python .venv/bin/python scrap-monitoring-lidar-simulator
-          uv pip install --python .venv/bin/python --no-deps dist/*.whl
-          .venv/bin/scrap-monitoring-lidar-simulator --help
-          .venv/bin/scrap-monitoring-lidar-simulator-export-synthetic-processing-config --help
-          test ! -e .venv/bin/scrap-monitoring-lidar-generator
-          .venv/bin/python - <<'PY'
-          import importlib.util
-
-          if importlib.util.find_spec("scrap_monitoring_lidar_generator") is not None:
-              raise SystemExit("legacy Python package remains installed")
-          if importlib.util.find_spec("scrap_monitoring_lidar_simulator") is None:
-              raise SystemExit("simulator Python package is not installed")
-          PY
 
       - name: Check third-party notices
         run: |
@@ -128,21 +109,6 @@ jobs:
           ref: ${{ steps.edge-contract.outputs.commit }}
           path: .contract/ajin-edge-platform
           persist-credentials: false
-
-      - name: Verify edge platform processing compatibility
-        run: |
-          cargo run --locked --quiet \
-            --bin scrap-monitoring-lidar-simulator -- \
-            export-synthetic-processing-config \
-            --generator-config examples/generator.v2.json \
-            --socket-dir /sockets \
-            --site-id synthetic-site \
-            --edge-id synthetic-edge \
-            --config-revision synthetic-r1 \
-            --output target/processing.synthetic.json
-          uv run --locked python -m tools.verify_edge_platform_contract \
-            --edge-platform-root .contract/ajin-edge-platform \
-            --processing-config target/processing.synthetic.json
 
       - name: Verify Rust runtime processing compatibility
         run: |

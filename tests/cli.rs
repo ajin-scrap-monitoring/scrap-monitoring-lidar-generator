@@ -59,7 +59,7 @@ fn cli_overrides_invalid_environment_before_parsing() {
 }
 
 #[test]
-fn model_override_precedence_and_relative_diagnostics_match_python() {
+fn model_override_precedence_and_relative_diagnostics_match_the_contract() {
     let mut environment = environment();
     let baseline = cli::load_overridden_inputs(
         &resolve_model_overrides(&environment, &RuntimeSettingOverrides::default()).unwrap(),
@@ -129,7 +129,7 @@ fn deployment_values_enforce_existing_bounds() {
 }
 
 #[test]
-fn numeric_overrides_accept_python_digit_separators() {
+fn numeric_overrides_accept_digit_separators() {
     let mut environment = environment();
     environment.insert(cli::OBSERVATION_PORT_ENV.into(), " +17_000 ".into());
     environment.insert(

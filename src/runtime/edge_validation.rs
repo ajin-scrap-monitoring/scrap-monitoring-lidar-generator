@@ -1422,7 +1422,7 @@ mod tests {
     }
 
     #[test]
-    fn scenario_telemetry_serialization_matches_the_python_ingestion_fixture() {
+    fn scenario_telemetry_serialization_matches_the_ingestion_fixture() {
         let directory = tempdir().unwrap();
         let settings = EdgeValidationSettings::new(
             EdgeValidationObservationMode::NoOp,
