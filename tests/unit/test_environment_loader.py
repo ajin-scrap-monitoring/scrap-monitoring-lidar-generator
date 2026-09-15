@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from scrap_monitoring_lidar_generator._limits import MAX_POLYGON_VERTICES
-from scrap_monitoring_lidar_generator.configuration import (
+from scrap_monitoring_lidar_simulator._limits import MAX_POLYGON_VERTICES
+from scrap_monitoring_lidar_simulator.configuration import (
     ConfigurationError,
     load_environment,
     parse_environment,

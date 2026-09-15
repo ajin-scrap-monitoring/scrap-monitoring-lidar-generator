@@ -32,6 +32,11 @@ Rust 전환은 단계 4까지 완료했다. Rust binary는 공개 JSON 3개와 �
 검증한다. 고정한 `ajin-edge-platform` checkout을 사용하는 live 계약 검증은 Rust release binary의
 `run` 명령을 실제로 시작하고 exporter 출력, sensor별 UDS 구독, 상태 파일, 관찰 연결, 종료 정리와
 `lidar-processing` `ProcessingEngine`의 두 sensor 및 융합 `GOOD` 결과를 확인한다.
+
+단계 5 장기 검증 도구는 두 구성 요소의 의미 판정을 분리한다. Rust simulator는 초당 1개 기준
+scan의 허공, 정적 구조와 적재면 교차 및 최종 측정점 구성을 집계한다. `lidar-processing` 결과는
+높이 범위, sensor별 및 융합 적재율 관계와 filling 및 collecting 추세를 집계한다. 결과는 원시
+scan이나 높이 배열 없이 실패 영역을 simulator, `lidar-processing` 또는 판정 불가로 구분한다.
 `tests/edge/run.sh`의 image 기반 UDS, 관찰과 상태 수락 검증은 별도 실행 절차다.
 
 Live 계약 검증의 Python 구독 client는 tonic UDS server에 필요한 channel 조건을 명시한다. 실제
@@ -88,7 +93,7 @@ ID에 포함된 기존 Repository 이름도 version 1에서는 바꾸지 않는�
 | 2 | 완료 | 적재 시뮬레이션 이식 | World 자료형, 표면, 적재 및 수거 상태 전이 | 고정 시각 snapshot과 부피 불변식 통과 |
 | 3 | 완료 | LiDAR 측정 이식 | 회전, 광선 교차, 합성 왜곡, quality와 SDK 정수 변환 | 무잡음 geometry 및 ScanFrame golden 통과 |
 | 4 | 완료 | 외부 출력 이식 | UDS gRPC server 2개, 상태 및 진단 writer, 관찰 publisher, exporter CLI | Live UDS frame과 고정 engine의 계약 수락 |
-| 5 | 예정 | ARM64 병행 검증 | digest image, 장기 공유 부하 보고서 | 기능 및 성능 합격선 통과 |
+| 5 | 예정 | ARM64 병행 검증 | digest image, 의미 판정과 장기 공유 부하 보고서 | 기능 및 성능 합격선 통과 |
 | 6 | 예정 | 기본 구현 전환 | Python runtime 제거, 배포 및 사용자 문서 갱신 | 새 checkout 배포와 rollback 절차 검증 |
 
 단계 0은 무잡음 scan의 교차 좌표를 명시한 tolerance로 비교하고 SDK 이후 wire 정수는 정확히
@@ -169,6 +174,8 @@ serialization은 canonical 형식이 아니므로 Rust 동등성은 decode한 fi
 - 상태 파일의 `STARTING`, `HEALTHY`, service 경로와 원자 교체 동작 일치.
 - observation header, snapshot, 1초 주기와 latest-one 장애 격리 동작 일치.
 - `lidar-processing` 실제 loader, `ProcessingEngine`과 두 sensor `GOOD` 결과.
+- 기준 scan의 허공, 정적 구조와 적재면 교차 및 시간 변화 확인.
+- 처리 높이 범위, sensor별 및 융합 적재율 관계와 phase별 방향 확인.
 - 같은 model version, 설정과 seed의 반복 실행 결과 일치.
 - 큰 음수 거리 noise 결과의 거리 0 무효화와 process 지속.
 
@@ -212,15 +219,16 @@ Rust 기본 전환 전에 `generator.v3.json`은 다음 2개 값을 명시하는
 경사 이완 반복 상한과 수치 tolerance는 물리 환경값이 아니라 engine 정책으로 유지한다. Version 3을
 채택하면 version 2 입력 변환기와 명확한 오류를 제공하고 같은 사실을 환경변수에 중복하지 않는다.
 
-## Repository 이름 결정
+## 프로젝트 식별자
 
-현재 이름은 `scrap-monitoring-lidar-generator`이며 Rust 기본 전환 Release에서
-`scrap-monitoring-lidar-simulator`로 변경한다. 이 프로그램은 시간에 따라 변하는 적재 환경과 LiDAR
-측정을 함께 모사하며 실제 S2E network 장비 자체를 구현하지 않는다.
+프로젝트 이름은 `scrap-monitoring-lidar-simulator`다. Python distribution과 import package,
+Rust crate와 binary, CLI(Command-Line Interface), OCI image title은 이 이름을 사용한다. 이
+프로그램은 시간에 따라 변하는 적재 환경과 LiDAR 측정을 함께 모사하며 실제 S2E network 장비
+자체를 구현하지 않는다.
 
-Repository, GHCR(GitHub Container Registry) image, package 및 CLI 이름과 문서 링크는 기본 전환
-Pull Request 병합 뒤 같은 Release 경계에서 변경한다. Version 1 외부 계약의 schema ID와 하위 호환
-식별자는 그대로 보존한다.
+GitHub Repository와 GHCR(GitHub Container Registry) package의 원격 이름은 단계 6 기본 전환의
+병합 및 Release 경계에서 같은 이름으로 바꾼다. 이미 공개된 schema ID와 외부 version 1 하위
+호환 식별자는 그대로 보존한다.
 
 ## 환경 규격 문서 인계
 

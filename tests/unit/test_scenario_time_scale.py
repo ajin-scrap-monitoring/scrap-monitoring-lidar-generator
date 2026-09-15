@@ -2,7 +2,7 @@
 
 import pytest
 
-from scrap_monitoring_lidar_generator.scenario import (
+from scrap_monitoring_lidar_simulator.scenario import (
     REFERENCE_MEAN_FILL_DURATION_S,
     scale_duration_range,
     scale_event_rate_per_s,

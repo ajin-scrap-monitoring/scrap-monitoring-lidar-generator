@@ -99,6 +99,9 @@ Rust 공유 부하 측정 결과는 아직 없다. 아래 규칙은 Rust 전환�
 합격선은 [`development-plan.md`](development-plan.md#성능-합격)가 정본이다. Python 기준선의
 관측값으로 Rust 합격 여부를 판정하지 않는다.
 
+고정된 실행 명령, 증거 인계와 aggregate 결과 schema는
+[`../tests/edge/long_validation/README.md`](../tests/edge/long_validation/README.md)를 따른다.
+
 검증 구성 요소는 4개다.
 
 | 구성 요소 | 위치와 역할 |
@@ -129,6 +132,8 @@ cgroup(Control Group)에 둔다. image digest, 공개 입력 fingerprint, seed, 
 
 기본 설정의 60분 측정으로 전체 적재 및 수거 cycle 완료를 판정하지 않는다. 가속 설정은 측정
 구간의 cycle 수, 전이 시각과 전이 전후 지연을 함께 기록한다. 두 설정의 통계는 합치지 않는다.
+공개 설정의 phase duration 상한을 적용하면 3,900초 전체 실행에서 기본 설정은 phase 전이가 없어야
+하고, 가속 설정은 적재와 수거를 합친 완전한 cycle이 최소 5회 완료되어야 한다.
 
 ### CPU와 RSS
 
@@ -183,16 +188,18 @@ publisher 실행은 기본 1초 cadence의 snapshot 생성, JSON Lines 직렬화
 두 실행은 같은 모델 시작 상태, 5분 준비 구간, 60분 측정 구간과 나머지 실행 조건을 사용한다.
 관찰 추가 CPU는 `실제 publisher 실행 CPU P95 - no-op 실행 CPU P95`로 계산한다. 합격선은
 `docs/development-plan.md`를 따른다. 연결 실패와 폐기가 있는 실제 publisher 실행은 정상 전송
-비교 결과로 사용하지 않는다. 음수 차이도 그대로 기록하며 두 실행의 장비 온도와 다른 process
-부하를 함께 보고한다.
+비교 결과로 사용하지 않는다. 같은 평균 적재 주기의 두 실행은 phase, cycle과 전환 시각으로 만든
+시나리오 schedule digest도 같아야 한다. 음수 CPU 차이도 그대로 기록하며 두 실행의 장비 온도와
+다른 process 부하를 함께 보고한다.
 
 ### 상태와 결과 기록
 
-추가 확인 항목은 6개다.
+추가 확인 항목은 7개다.
 
 | 항목 | 기록 내용 |
 | --- | --- |
-| 처리 결과 | 두 sensor와 융합 결과의 `GOOD` 유지, frame age 및 처리 지연 |
+| 처리 결과 | 두 sensor와 융합 결과의 `GOOD` 유지, sensor sequence 연속성 및 측정 전달 지연 |
+| 결과 의미 | Simulator 기준 광선 구성과 변화, 처리 높이 및 적재율 정합성, phase별 방향과 실패 영역 |
 | 장비 상태 | load average, 온도와 thermal throttling |
 | CPU 제한 | cgroup `nr_throttled`, `throttled_usec`의 증가량 |
 | 연결 상태 | sensor별 재연결과 instance 변경 횟수 |
@@ -202,3 +209,17 @@ publisher 실행은 기본 1초 cadence의 snapshot 생성, JSON Lines 직렬화
 준비 구간과 측정 구간의 오류 및 재시작을 함께 보존한다. 결과에는 실행별 표본 수, 누락 수,
 백분위수와 불합격 원인을 기록한다. 원시 로그, 사설 주소와 실제 sensor 자료는 Git에 추가하지
 않는다.
+
+Helper는 각 처리 measurement의 `measured_at`과 수신 UTC 시각 차이를 전달 지연으로 기록한다. 측정
+구간의 모든 fused measurement에 지연 표본이 하나씩 있어야 하며 최대값은 2,000 ms 이하여야 한다.
+Sensor별 처리 sequence가 이전 값보다 작거나 같으면 반복 또는 역행으로 판정한다.
+
+Simulator 의미 검증은 측정 구간에 sensor별 기준 scan을 초당 1개 집계한다. 허공, 바닥 및 외벽,
+현재 적재면 교차와 최종 유효 및 무효 sample이 모두 있어야 하며 기준 교차가 없는 위치에 유효
+sample을 만들면 실패다. 기준 scan은 측정 구간에서 한 번 이상 변해야 한다.
+
+Processing 의미 검증은 `GOOD` measurement마다 sensor별 단면 적재율, 중앙 높이와 P90 높이가 모두
+있는지 확인한다. 높이는 공개 합성 환경의 0-10,000 mm 범위여야 하고 P90은 중앙값 이상이어야 한다.
+융합 적재율은 identity fusion map을 사용하는 두 sensor 단면 적재율 사이에 있어야 한다. Phase별
+추세는 전환 경계 1초를 제외한 구간의 처음과 마지막 3개 적재율 중앙값으로 판정한다. Simulator와
+processing 판정을 독립적으로 남기며 한쪽만 실패하면 해당 구성 요소를 실패 영역으로 기록한다.

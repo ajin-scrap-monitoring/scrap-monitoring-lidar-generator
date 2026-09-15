@@ -1,5 +1,5 @@
 use prost::Message;
-use scrap_monitoring_lidar_generator::wire::{ScanFrame, ScanSample, SubscribeRequest};
+use scrap_monitoring_lidar_simulator::wire::{ScanFrame, ScanSample, SubscribeRequest};
 use sha2::{Digest, Sha256};
 
 fn decode_hex(value: &str) -> Vec<u8> {

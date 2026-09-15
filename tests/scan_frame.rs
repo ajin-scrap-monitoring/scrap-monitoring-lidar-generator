@@ -6,7 +6,7 @@ use std::{
 };
 
 use prost::Message;
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     configuration::load_generator_inputs,
     measurement::{
         HitKind, MeasuredScan, MeasurementResult, ReferencePoint, ReferenceScan, ScanFrameFactory,
@@ -261,7 +261,7 @@ fn normalization_finishes_before_clocks_are_read() {
     .unwrap();
     let measured = MeasuredScan::from_hq_samples(
         "lidar_1",
-        vec![scrap_monitoring_lidar_generator::measurement::HqSample {
+        vec![scrap_monitoring_lidar_simulator::measurement::HqSample {
             angle_z_q14: 0,
             dist_mm_q2: u64::MAX,
             quality: 0,

@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.runtime import build_measurement_generation_runtime
-from scrap_monitoring_lidar_generator.scan_stream import ScanFrameFactory
+from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_simulator.runtime import build_measurement_generation_runtime
+from scrap_monitoring_lidar_simulator.scan_stream import ScanFrameFactory
 
 _ROOT = Path(__file__).parents[2]
 

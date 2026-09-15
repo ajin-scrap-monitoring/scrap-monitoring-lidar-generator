@@ -12,14 +12,14 @@ from pathlib import Path
 
 import grpc
 
-from scrap_monitoring_lidar_generator.configuration import load_environment
-from scrap_monitoring_lidar_generator.observation import (
+from scrap_monitoring_lidar_simulator.configuration import load_environment
+from scrap_monitoring_lidar_simulator.observation import (
     MAX_OBSERVATION_LINE_BYTES,
     ObservationStreamHeader,
     decode_observation_header_line,
     decode_observation_line,
 )
-from scrap_monitoring_lidar_generator.wire import lidar_pb2, lidar_pb2_grpc
+from scrap_monitoring_lidar_simulator.wire import lidar_pb2, lidar_pb2_grpc
 
 _MAX_ERRORS = 20
 

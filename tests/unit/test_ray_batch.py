@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import Ray, RayBatch, Vec3
+from scrap_monitoring_lidar_simulator.geometry import Ray, RayBatch, Vec3
 
 
 def test_builds_read_only_batch_in_ray_order() -> None:

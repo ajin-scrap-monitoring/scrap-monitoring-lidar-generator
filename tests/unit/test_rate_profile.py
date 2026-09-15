@@ -5,7 +5,7 @@ from itertools import pairwise
 
 import pytest
 
-from scrap_monitoring_lidar_generator.scenario import (
+from scrap_monitoring_lidar_simulator.scenario import (
     SmoothRateProfile,
     SmoothRateSegment,
     create_smooth_rate_profile,

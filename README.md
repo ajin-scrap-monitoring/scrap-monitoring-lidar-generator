@@ -1,6 +1,6 @@
-# Scrap Monitoring LiDAR Generator
+# Scrap Monitoring LiDAR Simulator
 
-스크랩 적재 모니터링 개발을 위한 합성 LiDAR(Light Detection and Ranging) 생성기다. Raspberry
+스크랩 적재 모니터링 개발을 위한 합성 LiDAR(Light Detection and Ranging) 시뮬레이터다. Raspberry
 Pi 5 ARM64 엣지 장비에서 센서 2대의 scan을 만들고, 같은 장비의 `lidar-processing`이 구독할
 수 있는 gRPC(Google Remote Procedure Call) over UDS(Unix Domain Socket) endpoint를 제공한다.
 
@@ -35,7 +35,7 @@ Registry에 게시된 `linux/arm64` 이미지를 digest로 받아 실행한다.
 
 ```bash
 uv sync --locked --all-groups
-uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config \
+uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -114,7 +114,7 @@ JSON Lines 파일로 남기는 개발 검증 기능이다. 일반 scan 전송과
 값만 넣는다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config \
+uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
   --generator-config examples/generator.v2.json \
   --socket-dir /sockets \
   --site-id synthetic-site \
@@ -145,7 +145,9 @@ CONFIG_SHA256="$(sha256sum processing.synthetic.json | awk '{print $1}')"
 ```bash
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-targets
+cargo test --locked --all-targets --all-features
 uv run --locked rumdl check .
 uv run --locked ruff format --check .
 uv run --locked ruff check .
@@ -180,9 +182,9 @@ ingest, 단면 coverage와 최종 `GOOD` 측정을 확인한다. 단계 4의 Rus
 
 | Host 입력 | Container 경로 | 역할 |
 |---|---|---|
-| `/opt/ajin/config/lidar-generator/` | `/config/` | 공개 합성 JSON 3개 |
-| `/etc/scrap-monitoring-lidar-generator.env` | `--env-file` | 실행 경로와 검증 식별자 |
-| `/opt/ajin/runtime/sockets/lidar-generator/` | `/run/lidar/` | sensor별 gRPC UDS |
+| `/opt/ajin/config/lidar-simulator/` | `/config/` | 공개 합성 JSON 3개 |
+| `/etc/scrap-monitoring-lidar-simulator.env` | `--env-file` | 실행 경로와 검증 식별자 |
+| `/opt/ajin/runtime/sockets/lidar-simulator/` | `/run/lidar/` | sensor별 gRPC UDS |
 | `/opt/ajin/runtime/status/` | `/status/` | driver 호환 상태 파일 |
 
 `.env`의 `SCRAP_LIDAR_GENERATOR_CONFIG=/config/generator.v2.json`은 container 경로다. Host의

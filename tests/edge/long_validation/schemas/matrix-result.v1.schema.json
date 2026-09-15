@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ajin-scrap-monitoring.github.io/schemas/lidar-simulator/edge-long-validation/matrix-result.v1.schema.json",
+  "title": "Edge long-validation matrix result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "runs", "observation_cpu_comparisons", "evaluation"],
+  "properties": {
+    "schema_version": { "const": "matrix-result.v1" },
+    "runs": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/run600Actual" },
+        { "$ref": "#/$defs/run600Noop" },
+        { "$ref": "#/$defs/run86400Actual" },
+        { "$ref": "#/$defs/run86400Noop" }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "observation_cpu_comparisons": {
+      "type": "array",
+      "prefixItems": [
+        { "allOf": [{ "$ref": "#/$defs/comparison" }, { "properties": { "mean_fill_duration_s": { "const": 600 } } }] },
+        { "allOf": [{ "$ref": "#/$defs/comparison" }, { "properties": { "mean_fill_duration_s": { "const": 86400 } } }] }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "evaluation": { "$ref": "#/$defs/evaluation" }
+  },
+  "$defs": {
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mean_fill_duration_s", "observation_mode", "passed", "failure_codes"],
+      "properties": {
+        "mean_fill_duration_s": { "enum": [600, 86400] },
+        "observation_mode": { "enum": ["actual", "noop"] },
+        "passed": { "type": "boolean" },
+        "failure_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "run600Actual": {
+      "allOf": [{ "$ref": "#/$defs/run" }, { "properties": { "mean_fill_duration_s": { "const": 600 }, "observation_mode": { "const": "actual" } } }]
+    },
+    "run600Noop": {
+      "allOf": [{ "$ref": "#/$defs/run" }, { "properties": { "mean_fill_duration_s": { "const": 600 }, "observation_mode": { "const": "noop" } } }]
+    },
+    "run86400Actual": {
+      "allOf": [{ "$ref": "#/$defs/run" }, { "properties": { "mean_fill_duration_s": { "const": 86400 }, "observation_mode": { "const": "actual" } } }]
+    },
+    "run86400Noop": {
+      "allOf": [{ "$ref": "#/$defs/run" }, { "properties": { "mean_fill_duration_s": { "const": 86400 }, "observation_mode": { "const": "noop" } } }]
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mean_fill_duration_s",
+        "actual_cpu_p95_percent",
+        "noop_cpu_p95_percent",
+        "delta_percentage_points",
+        "scenario_schedule_matches",
+        "passed"
+      ],
+      "properties": {
+        "mean_fill_duration_s": { "enum": [600, 86400] },
+        "actual_cpu_p95_percent": { "type": ["number", "null"], "minimum": 0 },
+        "noop_cpu_p95_percent": { "type": ["number", "null"], "minimum": 0 },
+        "delta_percentage_points": { "type": ["number", "null"] },
+        "scenario_schedule_matches": { "type": "boolean" },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failure_codes"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "failure_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "comparison_identity_mismatch",
+              "observation_cpu_delta",
+              "observation_cpu_delta_unavailable",
+              "run_failed",
+              "scenario_schedule_mismatch"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

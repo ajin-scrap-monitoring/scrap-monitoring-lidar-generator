@@ -8,15 +8,15 @@ from typing import ClassVar, TypedDict
 
 import pytest
 
-from scrap_monitoring_lidar_generator.configuration import GeneratorInputs, load_generator_inputs
-from scrap_monitoring_lidar_generator.observation import ObservationPublisherStats
-from scrap_monitoring_lidar_generator.runtime import (
+from scrap_monitoring_lidar_simulator.configuration import GeneratorInputs, load_generator_inputs
+from scrap_monitoring_lidar_simulator.observation import ObservationPublisherStats
+from scrap_monitoring_lidar_simulator.runtime import (
     build_measurement_generation_runtime,
     run_generator_application,
     run_scan_generation,
 )
-from scrap_monitoring_lidar_generator.scan_stream import ScanFrameFactory, ScanServerStats
-from scrap_monitoring_lidar_generator.wire import lidar_pb2
+from scrap_monitoring_lidar_simulator.scan_stream import ScanFrameFactory, ScanServerStats
+from scrap_monitoring_lidar_simulator.wire import lidar_pb2
 
 _ROOT = Path(__file__).parents[2]
 

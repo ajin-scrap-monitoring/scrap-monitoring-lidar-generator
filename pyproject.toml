@@ -1,7 +1,7 @@
 [project]
-name = "scrap-monitoring-lidar-generator"
+name = "scrap-monitoring-lidar-simulator"
 version = "0.9.0"
-description = "Synthetic LiDAR scan data generator for scrap monitoring development."
+description = "Deterministic synthetic LiDAR simulator for scrap monitoring development."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [
@@ -12,8 +12,8 @@ dependencies = [
 classifiers = ["Private :: Do Not Upload"]
 
 [project.scripts]
-scrap-monitoring-lidar-generator = "scrap_monitoring_lidar_generator.cli:main"
-scrap-monitoring-lidar-generator-export-synthetic-processing-config = "scrap_monitoring_lidar_generator.edge_integration.cli:main"
+scrap-monitoring-lidar-simulator = "scrap_monitoring_lidar_simulator.cli:main"
+scrap-monitoring-lidar-simulator-export-synthetic-processing-config = "scrap_monitoring_lidar_simulator.edge_integration.cli:main"
 
 [build-system]
 requires = ["uv_build==0.12.12"]
@@ -41,9 +41,9 @@ required-version = "==0.12.12"
 line-length = 100
 src = ["src", "tests"]
 extend-exclude = [
-    "src/scrap_monitoring_lidar_generator/wire/lidar_pb2.py",
-    "src/scrap_monitoring_lidar_generator/wire/lidar_pb2.pyi",
-    "src/scrap_monitoring_lidar_generator/wire/lidar_pb2_grpc.py",
+    "src/scrap_monitoring_lidar_simulator/wire/lidar_pb2.py",
+    "src/scrap_monitoring_lidar_simulator/wire/lidar_pb2.pyi",
+    "src/scrap_monitoring_lidar_simulator/wire/lidar_pb2_grpc.py",
 ]
 
 [tool.ruff.lint]
@@ -66,8 +66,8 @@ show_error_codes = true
 
 [[tool.mypy.overrides]]
 module = [
-    "scrap_monitoring_lidar_generator.wire.lidar_pb2",
-    "scrap_monitoring_lidar_generator.wire.lidar_pb2_grpc",
+    "scrap_monitoring_lidar_simulator.wire.lidar_pb2",
+    "scrap_monitoring_lidar_simulator.wire.lidar_pb2_grpc",
 ]
 ignore_errors = true
 

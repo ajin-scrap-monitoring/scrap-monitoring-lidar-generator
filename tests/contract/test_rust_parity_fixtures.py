@@ -20,8 +20,8 @@ from tools.generate_rust_parity_fixtures import (
     check_fixtures,
 )
 
-from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.wire import lidar_pb2
+from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_simulator.wire import lidar_pb2
 
 _ROOT = Path(__file__).parents[2]
 

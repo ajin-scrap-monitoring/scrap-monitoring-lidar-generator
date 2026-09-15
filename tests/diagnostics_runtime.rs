@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     MAX_DIAGNOSTIC_SCANS_PER_SENSOR,
     configuration::{GeneratorInputs, load_generator_inputs},
     diagnostics::{

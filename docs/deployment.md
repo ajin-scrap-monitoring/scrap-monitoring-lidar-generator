@@ -1,7 +1,7 @@
 # 배포와 실행
 
-이 문서의 배포 대상은 합성 LiDAR 생성기를 사용하는 개발 및 검증 환경이다. 실제 LiDAR를
-사용하는 운영 환경에는 이 생성기 image와 합성 처리 설정을 배포하지 않는다.
+이 문서의 배포 대상은 합성 LiDAR 시뮬레이터를 사용하는 개발 및 검증 환경이다. 실제 LiDAR를
+사용하는 운영 환경에는 이 시뮬레이터 image와 합성 처리 설정을 배포하지 않는다.
 
 ## 배포 산출물
 
@@ -49,7 +49,7 @@ pull credential은 필요하지 않다.
 
 | 입력 | 제공 방식 |
 | --- | --- |
-| 생성기 image | Release digest |
+| 시뮬레이터 image | Release digest |
 | 공개 합성 JSON 3개 | read-only bind mount |
 | 생성기 실행 설정 | 장비별 `.env` |
 | scan UDS directory | 생성기와 `lidar-processing`의 공용 bind mount |
@@ -66,10 +66,10 @@ port가 필요하지 않다.
 있도록 10001:10001과 mode 0770으로 준비한다.
 
 ```bash
-CONFIG_DIR=/opt/ajin/config/lidar-generator
-SOCKET_DIR=/opt/ajin/runtime/sockets/lidar-generator
+CONFIG_DIR=/opt/ajin/config/lidar-simulator
+SOCKET_DIR=/opt/ajin/runtime/sockets/lidar-simulator
 STATUS_DIR=/opt/ajin/runtime/status
-DIAGNOSTICS_DIR=/opt/ajin/runtime/diagnostics/lidar-generator
+DIAGNOSTICS_DIR=/opt/ajin/runtime/diagnostics/lidar-simulator
 
 sudo install -d -m 0755 "$CONFIG_DIR"
 sudo install -m 0644 \
@@ -84,8 +84,8 @@ sudo install -d -o 10001 -g 10001 -m 0770 \
   "$STATUS_DIR/lidar-driver-b" \
   "$DIAGNOSTICS_DIR"
 sudo install -o root -g root -m 0600 \
-  .env.example /etc/scrap-monitoring-lidar-generator.env
-sudoedit /etc/scrap-monitoring-lidar-generator.env
+  .env.example /etc/scrap-monitoring-lidar-simulator.env
+sudoedit /etc/scrap-monitoring-lidar-simulator.env
 ```
 
 장비별 `.env`의 `<...>` placeholder와 `visualizer.example`을 실제 배포값으로 바꾼다. 다음
@@ -107,7 +107,7 @@ SCRAP_LIDAR_GENERATOR_DIAGNOSTICS_OUTPUT_PATH=/data/diagnostics
 exporter를 실행해 공개 합성 환경에 대응하는 `lidar-processing` JSON을 만든다.
 
 ```bash
-uv run --locked scrap-monitoring-lidar-generator-export-synthetic-processing-config \
+uv run --locked scrap-monitoring-lidar-simulator-export-synthetic-processing-config \
   --generator-config "$CONFIG_DIR/generator.v2.json" \
   --socket-dir /sockets \
   --site-id "$SITE_ID" \
@@ -130,7 +130,7 @@ CONFIG_SHA256="$(sha256sum /path/to/processing.synthetic.json | awk '{print $1}'
 
 ```bash
 sudo docker run --detach \
-  --name scrap-monitoring-lidar-generator \
+  --name scrap-monitoring-lidar-simulator \
   --restart unless-stopped \
   --read-only \
   --cap-drop ALL \
@@ -138,7 +138,7 @@ sudo docker run --detach \
   --init \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  --env-file /etc/scrap-monitoring-lidar-generator.env \
+  --env-file /etc/scrap-monitoring-lidar-simulator.env \
   --mount type=bind,src="$CONFIG_DIR",dst=/config,readonly \
   --mount type=bind,src="$SOCKET_DIR",dst=/run/lidar \
   --mount type=bind,src="$STATUS_DIR/lidar-driver-a",dst=/status/lidar-driver-a \
@@ -167,9 +167,9 @@ UDS 파일을 제거한다. 비정상 종료로 남은 socket은 다음 시작 �
 제거한다. 일반 파일과 directory는 덮어쓰지 않는다.
 
 ```bash
-sudo docker container inspect scrap-monitoring-lidar-generator \
+sudo docker container inspect scrap-monitoring-lidar-simulator \
   --format '{{.State.Status}} {{.State.ExitCode}} {{.Image}}'
-sudo docker logs --tail 20 scrap-monitoring-lidar-generator
+sudo docker logs --tail 20 scrap-monitoring-lidar-simulator
 sudo docker image inspect "$IMAGE_REF" --format '{{index .RepoDigests 0}}'
 sudo find "$SOCKET_DIR" "$STATUS_DIR" -maxdepth 2 \( -type f -o -type s \)
 ```

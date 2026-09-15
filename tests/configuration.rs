@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     MAX_INLET_POSITIONS,
     configuration::{
         EnvironmentConfig, GeneratorConfig, QualityProfileConfig, load_environment,

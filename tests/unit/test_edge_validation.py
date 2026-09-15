@@ -8,12 +8,12 @@ import pytest
 from tests.edge.check_result import validate_result
 from tests.edge.receiver import ReceiverState
 
-from scrap_monitoring_lidar_generator.wire import lidar_pb2
+from scrap_monitoring_lidar_simulator.wire import lidar_pb2
 
 _ROOT = Path(__file__).parents[2]
 _ENVIRONMENT = _ROOT / "examples" / "environment.v1.json"
 _RUNNER = _ROOT / "tests" / "edge" / "run.sh"
-_FAKE_DIGEST = "example.invalid/lidar-generator@sha256:" + "0" * 64
+_FAKE_DIGEST = "example.invalid/lidar-simulator@sha256:" + "0" * 64
 
 
 def _frame(sensor_id: str, sequence: int = 1) -> lidar_pb2.ScanFrame:
@@ -164,7 +164,7 @@ def test_receiver_state_requires_exactly_two_sensors() -> None:
     [
         [],
         ["--image"],
-        ["--image", "lidar-generator:latest", "--config-dir", "examples"],
+        ["--image", "lidar-simulator:latest", "--config-dir", "examples"],
         ["--image", _FAKE_DIGEST, "--config-dir", "examples", "--cpus", "0.0"],
     ],
 )

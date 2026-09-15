@@ -2,7 +2,7 @@
 
 import pytest
 
-from scrap_monitoring_lidar_generator.observation.backoff import ReconnectBackoff
+from scrap_monitoring_lidar_simulator.observation.backoff import ReconnectBackoff
 
 
 def test_failure_doubles_cap_until_maximum() -> None:

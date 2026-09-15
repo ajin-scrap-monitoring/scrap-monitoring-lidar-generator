@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import Ray, Triangle, Vec2, Vec3
+from scrap_monitoring_lidar_simulator.geometry import Ray, Triangle, Vec2, Vec3
 
 
 def test_vec3_operations() -> None:

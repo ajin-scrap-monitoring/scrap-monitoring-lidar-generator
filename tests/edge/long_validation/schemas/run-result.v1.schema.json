@@ -1,0 +1,563 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ajin-scrap-monitoring.github.io/schemas/lidar-simulator/edge-long-validation/run-result.v1.schema.json",
+  "title": "Edge long-validation aggregate run result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "identity",
+    "device",
+    "workload",
+    "metrics",
+    "events",
+    "observation",
+    "scenario",
+    "semantics",
+    "evaluation"
+  ],
+  "properties": {
+    "schema_version": { "const": "run-result.v1" },
+    "identity": { "$ref": "#/$defs/identity" },
+    "device": { "$ref": "#/$defs/device" },
+    "workload": { "$ref": "#/$defs/workload" },
+    "metrics": { "$ref": "#/$defs/metrics" },
+    "events": { "$ref": "#/$defs/events" },
+    "observation": { "$ref": "#/$defs/observation" },
+    "scenario": { "$ref": "#/$defs/scenario" },
+    "semantics": { "$ref": "#/$defs/semantics" },
+    "evaluation": { "$ref": "#/$defs/evaluation" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "imageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator_source_commit",
+        "generator_image_digest",
+        "processing_source_commit",
+        "processing_image_digest",
+        "config_fingerprint_sha256",
+        "processing_config_sha256",
+        "seed"
+      ],
+      "properties": {
+        "generator_source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "generator_image_digest": { "$ref": "#/$defs/imageDigest" },
+        "processing_source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "processing_image_digest": { "$ref": "#/$defs/imageDigest" },
+        "config_fingerprint_sha256": { "$ref": "#/$defs/sha256" },
+        "processing_config_sha256": { "$ref": "#/$defs/sha256" },
+        "seed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "architecture",
+        "os_release",
+        "kernel",
+        "docker_version",
+        "logical_cpu_count",
+        "effective_cpu_count",
+        "memory_bytes",
+        "cpu_governor",
+        "cooling",
+        "runtime_constraints"
+      ],
+      "properties": {
+        "model": { "type": "string", "minLength": 1 },
+        "architecture": { "const": "aarch64" },
+        "os_release": { "type": "string", "minLength": 1 },
+        "kernel": { "type": "string", "minLength": 1 },
+        "docker_version": { "type": "string", "minLength": 1 },
+        "logical_cpu_count": { "const": 4 },
+        "effective_cpu_count": { "const": 4 },
+        "memory_bytes": {
+          "type": "integer",
+          "minimum": 7516192768,
+          "exclusiveMaximum": 9663676416
+        },
+        "cpu_governor": { "type": "string", "minLength": 1 },
+        "cooling": { "type": "string", "minLength": 1 },
+        "runtime_constraints": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "allOf": [
+                { "$ref": "#/$defs/runtimeConstraint" },
+                { "properties": { "component": { "const": "generator" } } }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "#/$defs/runtimeConstraint" },
+                { "properties": { "component": { "const": "processing" } } }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "#/$defs/runtimeConstraint" },
+                { "properties": { "component": { "const": "helper" } } }
+              ]
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "runtimeConstraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "effective_cpu_count",
+        "cpu_quota_cores",
+        "memory_limit_bytes"
+      ],
+      "properties": {
+        "component": { "enum": ["generator", "processing", "helper"] },
+        "effective_cpu_count": { "const": 4 },
+        "cpu_quota_cores": {
+          "type": ["number", "null"],
+          "minimum": 4
+        },
+        "memory_limit_bytes": {
+          "type": ["integer", "null"],
+          "minimum": 7516192768
+        }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mean_fill_duration_s",
+        "observation_mode",
+        "warmup_duration_s",
+        "measurement_duration_s",
+        "sensor_ids"
+      ],
+      "properties": {
+        "mean_fill_duration_s": { "enum": [600, 86400] },
+        "observation_mode": { "enum": ["actual", "noop"] },
+        "warmup_duration_s": { "const": 300 },
+        "measurement_duration_s": { "const": 3600 },
+        "sensor_ids": {
+          "type": "array",
+          "prefixItems": [{ "const": "lidar_1" }, { "const": "lidar_2" }],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "p95Metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_count", "missing_count", "p95"],
+      "properties": {
+        "sample_count": { "type": "integer", "minimum": 0, "maximum": 3600 },
+        "missing_count": { "type": "integer", "minimum": 0, "maximum": 3600 },
+        "p95": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "maximumMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_count", "missing_count", "maximum"],
+      "properties": {
+        "sample_count": { "type": "integer", "minimum": 0, "maximum": 3600 },
+        "missing_count": { "type": "integer", "minimum": 0, "maximum": 3600 },
+        "maximum": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "p99Metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_count", "missing_count", "p99"],
+      "properties": {
+        "sample_count": { "type": "integer", "minimum": 0, "maximum": 36000 },
+        "missing_count": { "type": "integer", "minimum": 0, "maximum": 36000 },
+        "p99": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "sensorLatency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sensor_id", "sample_count", "missing_count", "p99"],
+      "properties": {
+        "sensor_id": { "enum": ["lidar_1", "lidar_2"] },
+        "sample_count": { "type": "integer", "minimum": 0, "maximum": 36000 },
+        "missing_count": { "type": "integer", "minimum": 0, "maximum": 36000 },
+        "p99": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "processingStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_id", "sample_count", "good_count"],
+      "properties": {
+        "result_id": { "enum": ["lidar_1", "lidar_2", "fused"] },
+        "sample_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+        "good_count": { "type": "integer", "minimum": 0, "maximum": 7200 }
+      }
+    },
+    "serviceStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "sample_count", "healthy_count"],
+      "properties": {
+        "component": { "enum": ["generator", "processing"] },
+        "sample_count": { "type": "integer", "minimum": 0, "maximum": 3600 },
+        "healthy_count": { "type": "integer", "minimum": 0, "maximum": 3600 }
+      }
+    },
+    "processingFreshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measurement_count", "gap_count", "maximum_gap_s"],
+      "properties": {
+        "measurement_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+        "gap_count": { "type": "integer", "minimum": 0, "maximum": 7201 },
+        "maximum_gap_s": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "processingAge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_count", "missing_count", "maximum"],
+      "properties": {
+        "sample_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+        "missing_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+        "maximum": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "cgroupThrottling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "nr_throttled_delta", "throttled_usec_delta"],
+      "properties": {
+        "component": { "enum": ["generator", "processing"] },
+        "nr_throttled_delta": { "type": "integer", "minimum": 0 },
+        "throttled_usec_delta": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator_cpu_percent",
+        "generator_rss_bytes",
+        "processing_cpu_percent",
+        "processing_rss_bytes",
+        "generator_cgroup_memory_current_bytes",
+        "processing_cgroup_memory_current_bytes",
+        "system_load_1m",
+        "device_temperature_c",
+        "helper_cpu_percent",
+        "helper_rss_bytes",
+        "cgroup_throttling",
+        "joint_frame_completion_latency_ms",
+        "sensor_frame_completion_latency_ms",
+        "processing_status",
+        "processing_measurement_freshness_s",
+        "processing_delivery_age_ms",
+        "service_status"
+      ],
+      "properties": {
+        "generator_cpu_percent": { "$ref": "#/$defs/p95Metric" },
+        "generator_rss_bytes": { "$ref": "#/$defs/p95Metric" },
+        "processing_cpu_percent": { "$ref": "#/$defs/p95Metric" },
+        "processing_rss_bytes": { "$ref": "#/$defs/p95Metric" },
+        "generator_cgroup_memory_current_bytes": { "$ref": "#/$defs/p95Metric" },
+        "processing_cgroup_memory_current_bytes": { "$ref": "#/$defs/p95Metric" },
+        "system_load_1m": { "$ref": "#/$defs/p95Metric" },
+        "device_temperature_c": { "$ref": "#/$defs/maximumMetric" },
+        "helper_cpu_percent": { "$ref": "#/$defs/p95Metric" },
+        "helper_rss_bytes": { "$ref": "#/$defs/p95Metric" },
+        "cgroup_throttling": {
+          "type": "array",
+          "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/cgroupThrottling" }, { "properties": { "component": { "const": "generator" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/cgroupThrottling" }, { "properties": { "component": { "const": "processing" } } }] }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "joint_frame_completion_latency_ms": { "$ref": "#/$defs/p99Metric" },
+        "sensor_frame_completion_latency_ms": {
+          "type": "array",
+          "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/sensorLatency" }, { "properties": { "sensor_id": { "const": "lidar_1" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/sensorLatency" }, { "properties": { "sensor_id": { "const": "lidar_2" } } }] }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "processing_status": {
+          "type": "array",
+          "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/processingStatus" }, { "properties": { "result_id": { "const": "lidar_1" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/processingStatus" }, { "properties": { "result_id": { "const": "lidar_2" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/processingStatus" }, { "properties": { "result_id": { "const": "fused" } } }] }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "processing_measurement_freshness_s": { "$ref": "#/$defs/processingFreshness" },
+        "processing_delivery_age_ms": { "$ref": "#/$defs/processingAge" },
+        "service_status": {
+          "type": "array",
+          "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/serviceStatus" }, { "properties": { "component": { "const": "generator" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/serviceStatus" }, { "properties": { "component": { "const": "processing" } } }] }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer_sequence_gaps",
+        "processing_frame_loss",
+        "processing_local_loss",
+        "processing_sequence_regressions",
+        "scan_server_frame_loss",
+        "scan_subscriber_missing_lanes",
+        "sequence_duplicates_or_regressions",
+        "unclassified_loss_windows",
+        "container_restarts",
+        "oom_events",
+        "thermal_throttling_events",
+        "evidence_complete"
+      ],
+      "properties": {
+        "producer_sequence_gaps": { "type": "integer", "minimum": 0 },
+        "processing_frame_loss": { "type": "integer", "minimum": 0 },
+        "processing_local_loss": { "type": "integer", "minimum": 0 },
+        "processing_sequence_regressions": { "type": "integer", "minimum": 0 },
+        "scan_server_frame_loss": { "type": "integer", "minimum": 0 },
+        "scan_subscriber_missing_lanes": { "type": "integer", "minimum": 0 },
+        "sequence_duplicates_or_regressions": { "type": "integer", "minimum": 0 },
+        "unclassified_loss_windows": { "type": "integer", "minimum": 0 },
+        "container_restarts": { "type": "integer", "minimum": 0 },
+        "oom_events": { "type": "integer", "minimum": 0 },
+        "thermal_throttling_events": { "type": "integer", "minimum": 0 },
+        "evidence_complete": { "type": "boolean" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sent_records", "received_records", "dropped_records", "connection_failures", "evidence_complete"],
+      "properties": {
+        "sent_records": { "type": "integer", "minimum": 0 },
+        "received_records": { "type": "integer", "minimum": 0 },
+        "dropped_records": { "type": "integer", "minimum": 0 },
+        "connection_failures": { "type": "integer", "minimum": 0 },
+        "evidence_complete": { "type": "boolean" }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initial_phase",
+        "initial_cycle_index",
+        "final_phase",
+        "final_cycle_index",
+        "transition_count",
+        "filling_to_collecting_count",
+        "collecting_to_filling_count",
+        "transition_latency_sample_count",
+        "maximum_transition_latency_ms",
+        "schedule_sha256",
+        "evidence_complete"
+      ],
+      "properties": {
+        "initial_phase": { "const": "filling" },
+        "initial_cycle_index": { "const": 0 },
+        "final_phase": { "enum": ["filling", "collecting"] },
+        "final_cycle_index": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "transition_count": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "filling_to_collecting_count": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "collecting_to_filling_count": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "transition_latency_sample_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "maximum_transition_latency_ms": { "type": ["number", "null"], "minimum": 0 },
+        "schedule_sha256": { "$ref": "#/$defs/sha256" },
+        "evidence_complete": { "type": "boolean" }
+      }
+    },
+    "simulatorScanEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sensor_id",
+        "sampled_scan_count",
+        "reference_sample_count",
+        "no_hit_count",
+        "floor_hit_count",
+        "wall_hit_count",
+        "surface_hit_count",
+        "measured_valid_count",
+        "measured_invalid_count",
+        "measured_without_reference_count",
+        "reference_hit_without_measurement_count",
+        "reference_change_count"
+      ],
+      "properties": {
+        "sensor_id": { "enum": ["lidar_1", "lidar_2"] },
+        "sampled_scan_count": { "type": "integer", "minimum": 0, "maximum": 3600 },
+        "reference_sample_count": { "type": "integer", "minimum": 0 },
+        "no_hit_count": { "type": "integer", "minimum": 0 },
+        "floor_hit_count": { "type": "integer", "minimum": 0 },
+        "wall_hit_count": { "type": "integer", "minimum": 0 },
+        "surface_hit_count": { "type": "integer", "minimum": 0 },
+        "measured_valid_count": { "type": "integer", "minimum": 0 },
+        "measured_invalid_count": { "type": "integer", "minimum": 0 },
+        "measured_without_reference_count": { "type": "integer", "minimum": 0 },
+        "reference_hit_without_measurement_count": { "type": "integer", "minimum": 0 },
+        "reference_change_count": { "type": "integer", "minimum": 0, "maximum": 3599 }
+      }
+    },
+    "semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["simulator", "lidar_processing", "failure_domain"],
+      "properties": {
+        "simulator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sensor_scan_evidence", "evidence_complete", "passed"],
+          "properties": {
+            "sensor_scan_evidence": {
+              "type": "array",
+              "prefixItems": [
+                { "allOf": [{ "$ref": "#/$defs/simulatorScanEvidence" }, { "properties": { "sensor_id": { "const": "lidar_1" } } }] },
+                { "allOf": [{ "$ref": "#/$defs/simulatorScanEvidence" }, { "properties": { "sensor_id": { "const": "lidar_2" } } }] }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "evidence_complete": { "type": "boolean" },
+            "passed": { "type": "boolean" }
+          }
+        },
+        "lidar_processing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "measurement_count",
+            "complete_measurement_count",
+            "missing_value_count",
+            "height_range_violation_count",
+            "height_order_violation_count",
+            "fusion_range_violation_count",
+            "quality_ratio_violation_count",
+            "filling_segment_count",
+            "filling_direction_match_count",
+            "collecting_segment_count",
+            "collecting_direction_match_count",
+            "evidence_complete",
+            "passed"
+          ],
+          "properties": {
+            "measurement_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+            "complete_measurement_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+            "missing_value_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+            "height_range_violation_count": { "type": "integer", "minimum": 0, "maximum": 14400 },
+            "height_order_violation_count": { "type": "integer", "minimum": 0, "maximum": 14400 },
+            "fusion_range_violation_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+            "quality_ratio_violation_count": { "type": "integer", "minimum": 0, "maximum": 7200 },
+            "filling_segment_count": { "type": "integer", "minimum": 0, "maximum": 33 },
+            "filling_direction_match_count": { "type": "integer", "minimum": 0, "maximum": 33 },
+            "collecting_segment_count": { "type": "integer", "minimum": 0, "maximum": 32 },
+            "collecting_direction_match_count": { "type": "integer", "minimum": 0, "maximum": 32 },
+            "evidence_complete": { "type": "boolean" },
+            "passed": { "type": "boolean" }
+          }
+        },
+        "failure_domain": {
+          "enum": ["none", "simulator", "lidar-processing", "indeterminate"]
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failure_codes"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "failure_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "auxiliary_resource_sample_count",
+              "container_restart",
+              "cpu_sample_count",
+              "event_evidence_missing",
+              "generator_cpu_p95",
+              "generator_rss_p95",
+              "producer_sequence_gap",
+              "processing_frame_loss",
+              "processing_local_loss",
+              "processing_sequence_regression",
+              "scan_server_frame_loss",
+              "scan_subscriber_missing",
+              "scenario_cycle_transition_missing",
+              "scenario_unexpected_transition",
+              "scenario_evidence_missing",
+              "scenario_transition_latency",
+              "scenario_transition_latency_sample_count",
+              "joint_latency_p99",
+              "joint_latency_sample_count",
+              "lidar_processing_semantics",
+              "observation_delivery",
+              "observation_evidence_missing",
+              "observation_noop_activity",
+              "oom_event",
+              "processing_not_good",
+              "processing_measurement_missing",
+              "processing_measurement_age",
+              "processing_freshness",
+              "service_status_sample_count",
+              "service_status_not_healthy",
+              "rss_sample_count",
+              "sensor_latency_sample_count",
+              "simulator_semantics",
+              "sequence_duplicate_or_regression",
+              "thermal_throttling_event",
+              "unclassified_loss_window"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

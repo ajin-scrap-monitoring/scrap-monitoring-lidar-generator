@@ -78,7 +78,7 @@ CLI는 live와 replay의 2개 mode를 제공한다.
 
 기본 camera는 전체 공간이 보이는 고정 사선 시점이고 `top`을 추가로 제공한다. MP4 출력은
 명시한 경로만 사용한다. frame, 관찰 기록과 영상 파일은 기본 `.gitignore` 대상이다.
-rendering 및 FFmpeg 의존성은 시각화 Repository에만 두며 엣지 생성기 image에 추가하지
+rendering 및 FFmpeg 의존성은 시각화 Repository에만 두며 엣지 시뮬레이터 image에 추가하지
 않는다.
 
 ## 자원과 오류 처리

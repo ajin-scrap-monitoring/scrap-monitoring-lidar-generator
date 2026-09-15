@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from scrap_monitoring_lidar_generator.geometry import HitKind, SensorFrame, Vec3
-from scrap_monitoring_lidar_generator.measurement import (
+from scrap_monitoring_lidar_simulator.geometry import HitKind, SensorFrame, Vec3
+from scrap_monitoring_lidar_simulator.measurement import (
     MeasurementGenerator,
     ReferencePoint,
     ReferenceScan,
@@ -16,7 +16,7 @@ from scrap_monitoring_lidar_generator.measurement import (
     SpatialDistanceResolver,
     TimedReferenceScan,
 )
-from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import HQ_DISTANCE_STEP_M
+from scrap_monitoring_lidar_simulator.measurement.sdk_compatibility import HQ_DISTANCE_STEP_M
 
 
 def _frequencies(*entries: tuple[int, int]) -> tuple[int, ...]:
@@ -163,7 +163,7 @@ def test_negative_noisy_distance_becomes_invalid_without_aborting_scan(
 ) -> None:
     reference = _reference((1.0, 1.0, 1.0, 0.0, 2.0, 10.0))
     monkeypatch.setattr(
-        "scrap_monitoring_lidar_generator.measurement.generation._sample_truncated_normal",
+        "scrap_monitoring_lidar_simulator.measurement.generation._sample_truncated_normal",
         lambda *args, **kwargs: np.array((-2.0, -1.0, -0.25, 5.0, 0.25, 5.0)),
     )
     generator = _generator(noise_enabled=True, standard_deviation_m=10.0, limit_m=20.0)

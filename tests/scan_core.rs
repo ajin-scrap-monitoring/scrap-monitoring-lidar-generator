@@ -1,4 +1,4 @@
-use scrap_monitoring_lidar_generator::{
+use scrap_monitoring_lidar_simulator::{
     configuration::{GeneratorInputs, SensorConfig, load_generator_inputs},
     geometry::{Polygon2, Triangle, Vec2, Vec3},
     measurement::{
@@ -718,7 +718,7 @@ fn reference_cache_is_keyed_by_the_actual_hq_angle_not_point_position() {
         .measure(
             &scene,
             None,
-            scrap_monitoring_lidar_generator::measurement::sdk::HQ_ANGLE_STEP_DEG * 0.25,
+            scrap_monitoring_lidar_simulator::measurement::sdk::HQ_ANGLE_STEP_DEG * 0.25,
         )
         .unwrap();
     assert_eq!(scanner.cached_angle_count(), 1);

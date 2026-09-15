@@ -1,10 +1,10 @@
 use std::path::Path;
 
-use scrap_monitoring_lidar_generator::{
-    configuration::load_generator_inputs, runtime::GenerationRuntime,
+use scrap_monitoring_lidar_simulator::{
+    configuration::load_generator_inputs, runtime::GenerationRuntime, scenario::ScenarioPhase,
 };
 
-fn inputs() -> scrap_monitoring_lidar_generator::configuration::GeneratorInputs {
+fn inputs() -> scrap_monitoring_lidar_simulator::configuration::GeneratorInputs {
     load_generator_inputs(Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/generator.v2.json"))
         .unwrap()
 }
@@ -65,4 +65,50 @@ fn worker_scheduling_is_deterministic_across_independent_runtimes() {
             second.model_snapshot().unwrap().surface.heights_m()
         );
     }
+}
+
+#[test]
+fn generation_batches_expose_every_phase_and_cycle_transition_without_a_surface() {
+    let mut inputs = inputs();
+    inputs.generator.scenario.mean_fill_duration_s = 3.0;
+    inputs.generator.measurement.sample_rate_hz = 100.0;
+    inputs.generator.measurement.rotation_rate_hz = 10.0;
+    inputs
+        .generator
+        .measurement
+        .distortions
+        .falling_material
+        .enabled = false;
+    inputs.generator.measurement.distortions.voids.enabled = false;
+    inputs
+        .generator
+        .measurement
+        .distortions
+        .collection_occlusion
+        .enabled = false;
+    inputs
+        .generator
+        .measurement
+        .distortions
+        .reflection_error
+        .enabled = false;
+    inputs.generator.measurement.distortions.dropout.enabled = false;
+    let mut runtime = GenerationRuntime::from_inputs(&inputs).unwrap();
+    let mut transitions = Vec::new();
+
+    for _ in 0..50 {
+        transitions.extend(runtime.next_completed_scans().unwrap().scenario_transitions);
+        if transitions.last().is_some_and(|transition| {
+            transition.phase == ScenarioPhase::Filling && transition.cycle_index == 1
+        }) {
+            break;
+        }
+    }
+
+    assert!(transitions.len() >= 2);
+    assert_eq!(transitions[0].phase, ScenarioPhase::Collecting);
+    assert_eq!(transitions[0].cycle_index, 0);
+    assert_eq!(transitions[1].phase, ScenarioPhase::Filling);
+    assert_eq!(transitions[1].cycle_index, 1);
+    assert!(transitions[0].elapsed_s < transitions[1].elapsed_s);
 }

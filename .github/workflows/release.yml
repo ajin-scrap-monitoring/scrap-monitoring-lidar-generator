@@ -9,20 +9,25 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Release
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14.4"
 
@@ -37,6 +42,13 @@ jobs:
           package_version="$(
             python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
           )"
+          cargo_version="$(
+            python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])'
+          )"
+          if [[ "$cargo_version" != "$package_version" ]]; then
+            echo "Cargo and Python package versions differ" >&2
+            exit 1
+          fi
           if [[ "v$package_version" != "$GITHUB_REF_NAME" ]]; then
             echo "release tag $GITHUB_REF_NAME does not match package version $package_version" >&2
             exit 1
@@ -52,7 +64,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.12"
           enable-cache: true
@@ -64,7 +76,9 @@ jobs:
         run: |
           cargo fmt --check
           cargo clippy --locked --all-targets -- -D warnings
-          cargo test --locked
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo test --locked --all-targets
+          cargo test --locked --all-targets --all-features
           uv run --locked rumdl check .
           uv run --locked ruff format --check .
           uv run --locked ruff check .
@@ -74,18 +88,51 @@ jobs:
             python docs/synthetic-environment-specification/generate.py --check
           uv run --locked python -m tools.generate_lidar_wire --check
 
+      - name: Build and verify Python package
+        shell: bash
+        run: |
+          uv build --no-sources
+          uv pip uninstall --python .venv/bin/python scrap-monitoring-lidar-simulator
+          uv pip install --python .venv/bin/python --no-deps dist/*.whl
+          .venv/bin/scrap-monitoring-lidar-simulator --help
+          .venv/bin/scrap-monitoring-lidar-simulator-export-synthetic-processing-config --help
+          test ! -e .venv/bin/scrap-monitoring-lidar-generator
+          .venv/bin/python - <<'PY'
+          import importlib.util
+
+          if importlib.util.find_spec("scrap_monitoring_lidar_generator") is not None:
+              raise SystemExit("legacy Python package remains installed")
+          if importlib.util.find_spec("scrap_monitoring_lidar_simulator") is None:
+              raise SystemExit("simulator Python package is not installed")
+          PY
+
+      - name: Check third-party notices
+        run: |
+          cargo install --locked --version 0.9.2 --features cli cargo-about
+          python3 tools/generate_third_party_notices.py --check
+
+      - name: Resolve pinned edge platform contract
+        id: edge-contract
+        run: |
+          commit="$(python3 -c 'import json; print(json.load(open("edge-platform-integration/SOURCE.json"))["commit"])')"
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "edge platform source commit is invalid" >&2
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
       - name: Check out pinned edge platform contract
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ajin-scrap-monitoring/ajin-edge-platform
-          ref: 666ca6067a3bb86833b74140cb659049025d0dae
+          ref: ${{ steps.edge-contract.outputs.commit }}
           path: .contract/ajin-edge-platform
           persist-credentials: false
 
       - name: Verify edge platform processing compatibility
         run: |
           cargo run --locked --quiet \
-            --bin scrap-monitoring-lidar-generator-rust -- \
+            --bin scrap-monitoring-lidar-simulator -- \
             export-synthetic-processing-config \
             --generator-config examples/generator.v2.json \
             --socket-dir /sockets \
@@ -100,25 +147,32 @@ jobs:
       - name: Verify Rust runtime processing compatibility
         run: |
           cargo build --release --locked \
-            --bin scrap-monitoring-lidar-generator-rust
+            --bin scrap-monitoring-lidar-simulator
           uv run --locked python -m tools.verify_rust_runtime_contract \
-            --runtime-binary target/release/scrap-monitoring-lidar-generator-rust \
+            --runtime-binary target/release/scrap-monitoring-lidar-simulator \
             --edge-platform-root .contract/ajin-edge-platform
 
       - name: Package edge platform integration contract
         run: |
           mkdir -p dist
-          tar \
-            --create \
-            --gzip \
-            --file dist/edge-platform-integration-v1.tar.gz \
+          git archive \
+            --format=tar.gz \
+            --output=dist/edge-platform-integration-v1.tar.gz \
+            "$GITHUB_SHA" \
             edge-platform-integration
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3-68@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          version: v0.37.1
+          driver-opts: |
+            image=docker.io/moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -127,8 +181,52 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve existing image tags
+        id: existing-image
+        shell: bash
+        env:
+          VERSION_REF: ${{ steps.release.outputs.version_ref }}
+          REVISION_REF: ${{ steps.release.outputs.revision_ref }}
+        run: |
+          inspect_digest() {
+            local reference="$1"
+            local label="$2"
+            local stdout="$RUNNER_TEMP/$label-image-inspect.out"
+            local stderr="$RUNNER_TEMP/$label-image-inspect.err"
+            if docker buildx imagetools inspect "$reference" \
+              --format '{{.Manifest.Digest}}' >"$stdout" 2>"$stderr"; then
+              cat "$stdout"
+              return
+            fi
+            if grep -Eqi 'not found|manifest unknown' "$stderr"; then
+              return
+            fi
+            cat "$stderr" >&2
+            return 1
+          }
+
+          version_digest="$(inspect_digest "$VERSION_REF" version)"
+          revision_digest="$(inspect_digest "$REVISION_REF" revision)"
+          if [[ -z "$version_digest" && -z "$revision_digest" ]]; then
+            publish="true"
+            existing_digest=""
+          elif [[ "$version_digest" =~ ^sha256:[0-9a-f]{64}$ \
+            && "$version_digest" == "$revision_digest" ]]; then
+            publish="false"
+            existing_digest="$version_digest"
+          else
+            echo "release image tags are incomplete or resolve to different digests" >&2
+            exit 1
+          fi
+          {
+            echo "publish=$publish"
+            echo "digest=$existing_digest"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and publish OCI image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        if: steps.existing-image.outputs.publish == 'true'
+        id: image-build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/arm64
@@ -142,6 +240,23 @@ jobs:
           provenance: mode=max
           sbom: true
 
+      - name: Resolve release image digest
+        id: image-digest
+        shell: bash
+        env:
+          BUILT_DIGEST: ${{ steps.image-build.outputs.digest }}
+          EXISTING_DIGEST: ${{ steps.existing-image.outputs.digest }}
+        run: |
+          digest="$BUILT_DIGEST"
+          if [[ -z "$digest" ]]; then
+            digest="$EXISTING_DIGEST"
+          fi
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "invalid release image digest: $digest" >&2
+            exit 1
+          fi
+          echo "value=$digest" >> "$GITHUB_OUTPUT"
+
       - name: Verify published OCI image
         shell: bash
         env:
@@ -149,6 +264,7 @@ jobs:
           IMAGE_NAME: ${{ steps.release.outputs.image_name }}
           VERSION_REF: ${{ steps.release.outputs.version_ref }}
           REVISION_REF: ${{ steps.release.outputs.revision_ref }}
+          IMAGE_DIGEST: ${{ steps.image-digest.outputs.value }}
         run: |
           version_digest="$(
             docker buildx imagetools inspect "$VERSION_REF" \
@@ -164,6 +280,10 @@ jobs:
           fi
           if [[ "$version_digest" != "$revision_digest" ]]; then
             echo "version and revision tags resolve to different manifests" >&2
+            exit 1
+          fi
+          if [[ "$version_digest" != "$IMAGE_DIGEST" ]]; then
+            echo "release tags differ from the selected image digest" >&2
             exit 1
           fi
 
@@ -193,7 +313,7 @@ jobs:
 
           package_name="${IMAGE_NAME##*/}"
           visibility=""
-          for attempt in 1 2 3 4 5; do
+          for _ in 1 2 3 4 5; do
             visibility="$(
               gh api "/orgs/$GITHUB_REPOSITORY_OWNER/packages/container/$package_name" \
                 --jq .visibility 2>/dev/null || true
@@ -207,9 +327,55 @@ jobs:
             echo "GHCR package visibility is not public: ${visibility:-unavailable}" >&2
             exit 1
           fi
+          docker pull --platform linux/arm64 "$IMAGE_NAME@$IMAGE_DIGEST"
+          tests/edge/verify-runtime-image.sh \
+            "$IMAGE_NAME@$IMAGE_DIGEST" \
+            examples \
+            "$GITHUB_SHA" \
+            python
           printf '%s@%s\n' "$IMAGE_NAME" "$version_digest" > dist/oci-image.txt
 
+      - name: Resolve existing GitHub Release
+        id: existing-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_stdout="$RUNNER_TEMP/release-view.out"
+          release_stderr="$RUNNER_TEMP/release-view.err"
+          if gh release view "$GITHUB_REF_NAME" --json assets \
+            >"$release_stdout" 2>"$release_stderr"; then
+            release_json="$(<"$release_stdout")"
+            python - "$release_json" <<'PY'
+          import json
+          import sys
+
+          assets = {asset["name"] for asset in json.loads(sys.argv[1])["assets"]}
+          expected = {"edge-platform-integration-v1.tar.gz", "oci-image.txt"}
+          if assets != expected:
+              raise SystemExit("existing release assets differ from the required set")
+          PY
+            existing_dir="$RUNNER_TEMP/existing-release"
+            mkdir "$existing_dir"
+            gh release download "$GITHUB_REF_NAME" \
+              --pattern edge-platform-integration-v1.tar.gz \
+              --pattern oci-image.txt \
+              --dir "$existing_dir"
+            cmp --silent \
+              dist/edge-platform-integration-v1.tar.gz \
+              "$existing_dir/edge-platform-integration-v1.tar.gz"
+            cmp --silent dist/oci-image.txt "$existing_dir/oci-image.txt"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif grep -Eqi 'release not found|HTTP 404' "$release_stderr"; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            cat "$release_stderr" >&2
+            echo "GitHub Release lookup failed without an explicit not-found response" >&2
+            exit 1
+          fi
+
       - name: Publish GitHub Release
+        if: steps.existing-release.outputs.exists == 'false'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |

@@ -101,8 +101,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-environment_file="$(mktemp -t lidar-generator-validation.XXXXXX.env)"
-socket_directory="$(mktemp -d -t lidar-generator-sockets.XXXXXX)"
+environment_file="$(mktemp -t lidar-simulator-validation.XXXXXX.env)"
+socket_directory="$(mktemp -d -t lidar-simulator-sockets.XXXXXX)"
 chmod 600 "$environment_file"
 chmod 777 "$socket_directory"
 printf '%s\n' \

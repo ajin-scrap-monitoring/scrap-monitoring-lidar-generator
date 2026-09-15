@@ -7,8 +7,8 @@ from pathlib import Path
 import grpc
 import pytest
 
-from scrap_monitoring_lidar_generator.scan_stream import GrpcScanServer
-from scrap_monitoring_lidar_generator.wire import lidar_pb2, lidar_pb2_grpc
+from scrap_monitoring_lidar_simulator.scan_stream import GrpcScanServer
+from scrap_monitoring_lidar_simulator.wire import lidar_pb2, lidar_pb2_grpc
 
 
 def _frame(

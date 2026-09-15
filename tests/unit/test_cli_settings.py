@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scrap_monitoring_lidar_generator._cli_settings import (
+from scrap_monitoring_lidar_simulator._cli_settings import (
     COLLECTION_THRESHOLD_CENTER_ENVIRONMENT_VARIABLE,
     CONFIG_ENVIRONMENT_VARIABLE,
     CONFIG_REVISION_ENVIRONMENT_VARIABLE,

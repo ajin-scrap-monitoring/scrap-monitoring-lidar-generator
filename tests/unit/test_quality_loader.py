@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import pytest
 
-from scrap_monitoring_lidar_generator.configuration import (
+from scrap_monitoring_lidar_simulator.configuration import (
     ConfigurationError,
     load_quality_profile,
     parse_quality_profile,

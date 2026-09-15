@@ -2,7 +2,7 @@
 
 import pytest
 
-from scrap_monitoring_lidar_generator.geometry import (
+from scrap_monitoring_lidar_simulator.geometry import (
     EnvironmentScene,
     HitKind,
     Polygon2,

@@ -6,7 +6,7 @@
 외부 계약을 변경한 뒤에만 다음 파일을 함께 갱신한다.
 
 - `lidar.proto`와 `upstream.json`.
-- `src/scrap_monitoring_lidar_generator/wire/`의 생성 binding.
+- `src/scrap_monitoring_lidar_simulator/wire/`의 생성 binding.
 - `edge-platform-integration/v1/lidar.proto`.
 - scan 변환, gRPC server와 외부 구현 직접 호환 테스트.
 

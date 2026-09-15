@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from scrap_monitoring_lidar_generator.configuration import load_generator_inputs
-from scrap_monitoring_lidar_generator.geometry import Vec2
-from scrap_monitoring_lidar_generator.observation import (
+from scrap_monitoring_lidar_simulator.configuration import load_generator_inputs
+from scrap_monitoring_lidar_simulator.geometry import Vec2
+from scrap_monitoring_lidar_simulator.observation import (
     DEFAULT_OBSERVATION_PORT,
     ObservationFormatError,
     ObservationRecord,
@@ -22,8 +22,8 @@ from scrap_monitoring_lidar_generator.observation import (
     encode_observation_header_line,
     encode_observation_line,
 )
-from scrap_monitoring_lidar_generator.runtime import build_scenario_simulator
-from scrap_monitoring_lidar_generator.scenario import (
+from scrap_monitoring_lidar_simulator.runtime import build_scenario_simulator
+from scrap_monitoring_lidar_simulator.scenario import (
     ScenarioModelSnapshot,
     ScenarioPhase,
     ScenarioSnapshot,

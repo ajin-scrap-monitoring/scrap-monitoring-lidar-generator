@@ -23,8 +23,8 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt
 from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 
-from scrap_monitoring_lidar_generator.configuration import GeneratorInputs, load_generator_inputs
-from scrap_monitoring_lidar_generator.scenario import (
+from scrap_monitoring_lidar_simulator.configuration import GeneratorInputs, load_generator_inputs
+from scrap_monitoring_lidar_simulator.scenario import (
     DEFAULT_ANGLE_OF_REPOSE_DEG,
     DEFAULT_SLOPE_RELAXATION_MAX_ITERATIONS,
 )

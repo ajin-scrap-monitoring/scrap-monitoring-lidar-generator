@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from scrap_monitoring_lidar_generator.configuration import (
+from scrap_monitoring_lidar_simulator.configuration import (
     ConfigurationError,
     GeneratorInputs,
     build_environment_scene,
@@ -22,8 +22,8 @@ from scrap_monitoring_lidar_generator.configuration import (
     parse_generator_config,
     parse_quality_profile,
 )
-from scrap_monitoring_lidar_generator.geometry import HitKind, Vec2
-from scrap_monitoring_lidar_generator.measurement import (
+from scrap_monitoring_lidar_simulator.geometry import HitKind, Vec2
+from scrap_monitoring_lidar_simulator.measurement import (
     CollectionOcclusionEvent,
     FallingMaterialEvent,
     MeasuredScan,
@@ -42,21 +42,21 @@ from scrap_monitoring_lidar_generator.measurement import (
     resolve_falling_material_distances,
     resolve_void_distances,
 )
-from scrap_monitoring_lidar_generator.measurement.sdk_compatibility import (
+from scrap_monitoring_lidar_simulator.measurement.sdk_compatibility import (
     HQ_ANGLE_STEP_DEG,
     quantize_hq_angles_deg,
     quantize_hq_distances_m,
 )
-from scrap_monitoring_lidar_generator.runtime import (
+from scrap_monitoring_lidar_simulator.runtime import (
     ReferenceGenerationRuntime,
     build_measurement_generation_runtime,
     build_reference_generation_runtime,
     build_scenario_simulator,
     build_spatial_distortion_timeline,
 )
-from scrap_monitoring_lidar_generator.scan_stream import ScanFrameFactory
-from scrap_monitoring_lidar_generator.scenario import HeightField
-from scrap_monitoring_lidar_generator.wire import lidar_pb2
+from scrap_monitoring_lidar_simulator.scan_stream import ScanFrameFactory
+from scrap_monitoring_lidar_simulator.scenario import HeightField
+from scrap_monitoring_lidar_simulator.wire import lidar_pb2
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIRECTORY = ROOT / "tests" / "fixtures" / "rust-parity"
@@ -966,7 +966,7 @@ def _stable_sort_frame(sensor_id: str) -> dict[str, Any]:
 
 
 def _source_fingerprints() -> dict[str, str]:
-    package = ROOT / "src" / "scrap_monitoring_lidar_generator"
+    package = ROOT / "src" / "scrap_monitoring_lidar_simulator"
     sources = [ROOT / "examples" / name for name in _EXAMPLE_NAMES]
     sources.extend(
         (

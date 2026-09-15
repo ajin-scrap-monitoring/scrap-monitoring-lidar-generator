@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use scrap_monitoring_lidar_generator::scan_runtime::{LatestTwo, RingError};
+use scrap_monitoring_lidar_simulator::scan_runtime::{LatestTwo, RingError};
 
 #[tokio::test]
 async fn late_subscriber_receives_retained_frames_and_exact_loss() {
