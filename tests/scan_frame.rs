@@ -1,11 +1,16 @@
-use std::{cell::Cell, collections::BTreeMap, rc::Rc};
+use std::{
+    cell::Cell,
+    collections::BTreeMap,
+    rc::Rc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use prost::Message;
 use scrap_monitoring_lidar_generator::{
     configuration::load_generator_inputs,
     measurement::{
         HitKind, MeasuredScan, MeasurementResult, ReferencePoint, ReferenceScan, ScanFrameFactory,
-        ScheduledScan, TimedReferenceScan, sdk,
+        ScheduledScan, SystemScanFrameFactory, TimedReferenceScan, sdk,
     },
     wire::ScanFrame,
 };
@@ -156,13 +161,13 @@ fn frame_factory_reproduces_all_fixture_records_and_protobuf_bytes() {
         "synthetic-edge",
         "parity-v1",
         instances,
-        move || monotonic.next().unwrap(),
-        || 1_800_000_000_000,
+        move || Ok(monotonic.next().unwrap()),
+        || Ok(1_800_000_000_000),
     )
     .unwrap();
     for record in fixture["records"].as_array().unwrap() {
         let result = fixed_result(timed_reference(&record["reference"]));
-        let actual = factory.build(&result).unwrap();
+        let actual = factory.build(result).unwrap();
         if record["frame"].is_null() {
             assert!(actual.is_none());
             continue;
@@ -228,13 +233,13 @@ fn normalized_samples_use_wide_integer_math_and_stable_angle_sort() {
         move || {
             let value = times_for_clock.get();
             times_for_clock.set(value + 100_000_000);
-            value
+            Ok(value)
         },
-        || 1_800_000_000_000,
+        || Ok(1_800_000_000_000),
     )
     .unwrap();
-    assert!(factory.build(&result).unwrap().is_none());
-    let actual = factory.build(&result).unwrap().unwrap();
+    assert!(factory.build(result.clone()).unwrap().is_none());
+    let actual = factory.build(result).unwrap().unwrap();
     assert_frame(&actual, &case["frame"]);
     assert_eq!(
         actual.encode_to_vec(),
@@ -254,7 +259,15 @@ fn normalization_finishes_before_clocks_are_read() {
         .unwrap(),
     )
     .unwrap();
-    let measured = MeasuredScan::new("lidar_1", vec![0.0], vec![f64::MAX], vec![0]).unwrap();
+    let measured = MeasuredScan::from_hq_samples(
+        "lidar_1",
+        vec![scrap_monitoring_lidar_generator::measurement::HqSample {
+            angle_z_q14: 0,
+            dist_mm_q2: u64::MAX,
+            quality: 0,
+        }],
+    )
+    .unwrap();
     let result = MeasurementResult::new(reference, measured).unwrap();
     let calls = Rc::new(Cell::new(0));
     let monotonic_calls = Rc::clone(&calls);
@@ -266,15 +279,15 @@ fn normalization_finishes_before_clocks_are_read() {
         BTreeMap::from([("lidar_1".to_owned(), "instance".to_owned())]),
         move || {
             monotonic_calls.set(monotonic_calls.get() + 1);
-            1
+            Ok(1)
         },
         move || {
             unix_calls.set(unix_calls.get() + 1);
-            1
+            Ok(1)
         },
     )
     .unwrap();
-    assert!(factory.build(&result).is_err());
+    assert!(factory.build(result).is_err());
     assert_eq!(calls.get(), 0);
 }
 
@@ -285,8 +298,8 @@ fn frame_factory_rejects_duplicate_sensor_identifiers() {
         "edge",
         "r1",
         BTreeMap::from([("lidar_1".to_owned(), "instance".to_owned())]),
-        || 1,
-        || 1,
+        || Ok(1),
+        || Ok(1),
     );
     assert!(result.is_err());
 }
@@ -301,13 +314,45 @@ fn a_clock_regression_does_not_poison_the_previous_completion() {
         "edge",
         "r1",
         BTreeMap::from([("lidar_1".to_owned(), "instance".to_owned())]),
-        move || times.next().unwrap(),
-        || 1,
+        move || Ok(times.next().unwrap()),
+        || Ok(1),
     )
     .unwrap();
-    assert!(factory.build(&result).unwrap().is_none());
-    assert!(factory.build(&result).is_err());
-    let frame = factory.build(&result).unwrap().unwrap();
+    assert!(factory.build(result.clone()).unwrap().is_none());
+    assert!(factory.build(result.clone()).is_err());
+    let frame = factory.build(result).unwrap().unwrap();
     assert_eq!(frame.sequence, 1);
     assert_eq!(frame.scan_hz, 100_000_000.0);
+}
+
+#[test]
+fn system_factory_uses_host_monotonic_epoch_and_system_wall_clock() {
+    fn monotonic_ns() -> u64 {
+        let value = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
+        u64::try_from(value.tv_sec).unwrap() * 1_000_000_000 + u64::try_from(value.tv_nsec).unwrap()
+    }
+
+    let fixture: Value = serde_json::from_str(FIXTURE).unwrap();
+    let result = fixed_result(timed_reference(&fixture["records"][0]["reference"]));
+    let mut factory = SystemScanFrameFactory::with_system_clocks(
+        ["lidar_1".to_owned()],
+        "edge",
+        "r1",
+        BTreeMap::from([("lidar_1".to_owned(), "instance".to_owned())]),
+    )
+    .unwrap();
+    let before_monotonic = monotonic_ns();
+    assert!(factory.build(result.clone()).unwrap().is_none());
+    std::thread::sleep(Duration::from_millis(1));
+    let frame = factory.build(result).unwrap().unwrap();
+    let after_monotonic = monotonic_ns();
+    let wall_ms = i64::try_from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis(),
+    )
+    .unwrap();
+    assert!((before_monotonic..=after_monotonic).contains(&frame.acquired_monotonic_ns));
+    assert!((wall_ms - 1_000..=wall_ms).contains(&frame.acquired_at_unix_ms));
 }

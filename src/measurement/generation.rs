@@ -3,8 +3,8 @@
 use crate::randomness::{ModelRng, RandomSource, StreamScope};
 
 use super::{
-    HitKind, MeasuredScan, MeasurementError, MeasurementResult, Result, SpatialDistortionResolver,
-    TimedReferenceScan, require_distance_bounds,
+    HitKind, HqSample, MeasuredScan, MeasurementError, MeasurementResult, Result,
+    SpatialDistortionResolver, TimedReferenceScan, require_distance_bounds,
 };
 
 const MAX_REJECTION_ATTEMPTS_PER_SAMPLE: usize = 1_000_000;
@@ -310,31 +310,31 @@ impl MeasurementGenerator {
                 }
             }
         }
-        for distance in &mut distances {
-            *distance = super::sdk::quantize_hq_distance_m(distance.max(0.0))?;
-            if *distance == 0.0
-                || *distance < self.settings.min_distance_m
-                || *distance > self.settings.max_distance_m
-            {
-                *distance = 0.0;
+        let mut hq_samples = Vec::new();
+        hq_samples
+            .try_reserve_exact(distances.len())
+            .map_err(|_| MeasurementError::Exhausted("HQ sample allocation failed"))?;
+        for (&angle_deg, distance) in reference.schedule().angles_deg().iter().zip(distances) {
+            let mut distance_tick = super::sdk::quantize_hq_distance_ticks(distance.max(0.0))?;
+            let distance_m = distance_tick as f64 / super::sdk::HQ_DISTANCE_STEPS_PER_METER as f64;
+            let valid = distance_tick != 0
+                && distance_m >= self.settings.min_distance_m
+                && distance_m <= self.settings.max_distance_m;
+            if !valid {
+                distance_tick = 0;
             }
+            let quality = if valid {
+                self.settings.valid_quality.sample(&mut self.quality_rng)
+            } else {
+                self.settings.invalid_quality.sample(&mut self.quality_rng)
+            };
+            hq_samples.push(HqSample {
+                angle_z_q14: super::sdk::quantize_hq_angle_ticks(angle_deg)?,
+                dist_mm_q2: distance_tick,
+                quality,
+            });
         }
-        let qualities = distances
-            .iter()
-            .map(|distance| {
-                if *distance > 0.0 {
-                    self.settings.valid_quality.sample(&mut self.quality_rng)
-                } else {
-                    self.settings.invalid_quality.sample(&mut self.quality_rng)
-                }
-            })
-            .collect();
-        let measured = MeasuredScan::new(
-            self.settings.sensor_id.clone(),
-            reference.schedule().angles_deg().to_vec(),
-            distances,
-            qualities,
-        )?;
+        let measured = MeasuredScan::from_hq_samples(self.settings.sensor_id.clone(), hq_samples)?;
         MeasurementResult::new(reference, measured)
     }
 

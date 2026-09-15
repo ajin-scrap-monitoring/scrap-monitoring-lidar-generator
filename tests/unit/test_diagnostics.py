@@ -219,6 +219,7 @@ def test_input_fingerprint_uses_generation_values_but_not_runtime_delivery_setti
         ({"sensor_ids": ()}, "identifiers"),
         ({"sensor_ids": ("sensor-a", "sensor-a")}, "unique"),
         ({"sample_scan_limit_per_sensor": -1}, "sample limit"),
+        ({"sample_scan_limit_per_sensor": 17}, "sample limit"),
     ],
 )
 def test_writer_rejects_invalid_settings(

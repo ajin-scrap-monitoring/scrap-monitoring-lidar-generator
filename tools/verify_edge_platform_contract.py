@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -22,11 +23,18 @@ _ROOT = Path(__file__).parents[1]
 _SOURCE = _ROOT / "contracts" / "lidar" / "v1" / "upstream.json"
 _PROTO = _ROOT / "contracts" / "lidar" / "v1" / "lidar.proto"
 _GENERATOR_CONFIG = _ROOT / "examples" / "generator.v2.json"
+_PROCESSING_FIXTURE = _ROOT / "edge-platform-integration" / "v1" / "processing.synthetic.json"
+_RUST_STATUS_FIXTURE = _ROOT / "tests" / "fixtures" / "rust-status" / "lidar-driver-a.json"
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edge-platform-root", required=True, type=Path)
+    parser.add_argument(
+        "--processing-config",
+        type=Path,
+        help="configuration produced by the Rust exporter; defaults to the Python builder",
+    )
     return parser
 
 
@@ -50,25 +58,48 @@ def _verify_source(edge_root: Path, source: dict[str, str]) -> None:
         raise RuntimeError("local LiDAR Proto digest differs from its source metadata")
 
 
-def _load_upstream_modules(edge_root: Path) -> tuple[Any, Any]:
+def _load_upstream_modules(edge_root: Path) -> tuple[Any, Any, Any]:
     sys.path.insert(0, str(edge_root / "packages" / "edge-common" / "src"))
     sys.path.insert(0, str(edge_root / "services" / "lidar-processing" / "src"))
     from ajin_edge.config import load_config  # type: ignore[import-not-found]
+    from ajin_edge.status import read_status  # type: ignore[import-not-found]
     from ajin_lidar_processing.engine import ProcessingEngine  # type: ignore[import-not-found]
 
-    return load_config, ProcessingEngine
+    return load_config, ProcessingEngine, read_status
 
 
-def _validate_with_upstream(edge_root: Path) -> dict[str, object]:
-    load_config, processing_engine = _load_upstream_modules(edge_root)
-    inputs = load_generator_inputs(_GENERATOR_CONFIG)
-    processing_config = build_synthetic_processing_config(
-        inputs,
-        socket_directory=PurePosixPath("/sockets"),
-        site_id="synthetic-site",
-        edge_id="synthetic-edge",
-        config_revision="synthetic-r1",
+def _processing_config(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        inputs = load_generator_inputs(_GENERATOR_CONFIG)
+        return build_synthetic_processing_config(
+            inputs,
+            socket_directory=PurePosixPath("/sockets"),
+            site_id="synthetic-site",
+            edge_id="synthetic-edge",
+            config_revision="synthetic-r1",
+        )
+    generated = json.loads(path.read_text(encoding="utf-8"))
+    fixture = json.loads(_PROCESSING_FIXTURE.read_text(encoding="utf-8"))
+    if generated != fixture:
+        raise RuntimeError("Rust processing configuration differs from the integration fixture")
+    if not isinstance(generated, dict):
+        raise RuntimeError("Rust processing configuration must be a JSON object")
+    return generated
+
+
+def _validate_with_upstream(
+    edge_root: Path,
+    processing_config_path: Path | None,
+) -> dict[str, object]:
+    load_config, processing_engine, read_status = _load_upstream_modules(edge_root)
+    status = read_status(
+        _RUST_STATUS_FIXTURE,
+        now=datetime(2027, 1, 15, 8, 0, 5, tzinfo=UTC),
     )
+    if status["state"] != "HEALTHY":
+        raise RuntimeError(f"upstream status reader rejected Rust status: {status}")
+    inputs = load_generator_inputs(_GENERATOR_CONFIG)
+    processing_config = _processing_config(processing_config_path)
     with tempfile.TemporaryDirectory(prefix="edge-contract-") as directory:
         path = Path(directory) / "processing.json"
         path.write_text(
@@ -148,6 +179,7 @@ def _validate_with_upstream(edge_root: Path) -> dict[str, object]:
         "frames": len(frames),
         "measurement_state": measurement["quality"]["state"],
         "sensor_ids": [sensor["sensor_id"] for sensor in measurement["sensors"]],
+        "status_state": status["state"],
     }
 
 
@@ -155,7 +187,7 @@ def main() -> int:
     args = _parser().parse_args()
     source = json.loads(_SOURCE.read_text(encoding="utf-8"))
     _verify_source(args.edge_platform_root, source)
-    result = _validate_with_upstream(args.edge_platform_root)
+    result = _validate_with_upstream(args.edge_platform_root, args.processing_config)
     print(json.dumps(result, sort_keys=True))
     return 0
 

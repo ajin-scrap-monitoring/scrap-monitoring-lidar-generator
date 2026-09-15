@@ -23,9 +23,9 @@
   "fixture_version": 1,
   "fixtures": {
     "configuration-cases.json": {
-      "bytes": 27658,
+      "bytes": 28338,
       "comparison_class": "rng-independent",
-      "sha256": "db29a6fefab17d1d18f24fffdb110980988c10674c3cdacf63f8c96edee769d2"
+      "sha256": "630b598a86afabdc11f28e0b3cb558d6142d90ca351caffec64dec3a9a549db1"
     },
     "coordinates.json": {
       "bytes": 13837,
@@ -70,10 +70,11 @@
     "examples/environment.v1.json": "9d1253e0ed80a3c2b67609c7397a499bf8e6061cbd7144ff273732e9aa32a33a",
     "examples/generator.v2.json": "33d21c149410f69e4ac1dcb2fc52caab2aaaffd61a8f4e986fb165ae740efd9f",
     "examples/quality-profile.v1.json": "a89f33e158c937e727d45523ad103a4b349298041dce1f12630fce6f2b6ee91c",
+    "src/scrap_monitoring_lidar_generator/_limits.py": "40ca31c45ee3f4ff883571c27ba2da3b74746eac07810f43accd2b60895e3398",
     "src/scrap_monitoring_lidar_generator/configuration/__init__.py": "4555f64ebdeb6b0896a08a71bcf42f9f419118a26bf6753b3c0da51d46c0af65",
     "src/scrap_monitoring_lidar_generator/configuration/_json.py": "60e7601c74e38214a7c8ff6f914808b743613dd5683051dcd39e28bf84e62eca",
     "src/scrap_monitoring_lidar_generator/configuration/errors.py": "d18c741c20908a496b03713a218c310c123a6006442a0ce028b2f11f5ec5736b",
-    "src/scrap_monitoring_lidar_generator/configuration/generator_loader.py": "99deeb6cdaf57c5ffb4d4d44a75ea48219605e69a9beeecd9ffab7c71e8a9606",
+    "src/scrap_monitoring_lidar_generator/configuration/generator_loader.py": "239f967ec7b6dd21737be30993ce4e43696be6631d116253d5c80c67e3d99f71",
     "src/scrap_monitoring_lidar_generator/configuration/generator_models.py": "6bf589819f465d0fd413778108115c3f4fbc7f1f5b79cc9dcb90d4a1bef4bc90",
     "src/scrap_monitoring_lidar_generator/configuration/geometry.py": "6dfee08da86d8144a74ef30c74763d8dd2a76b0ee9152c2f154978e6944ee66c",
     "src/scrap_monitoring_lidar_generator/configuration/loader.py": "aca7b1ea18e734a653de5490b5e93c725405c5b8566c0180a16f2264fedd9cd7",
@@ -110,7 +111,7 @@
     "src/scrap_monitoring_lidar_generator/scenario/simulator.py": "caaf73b49d69a140a2291398fcd681bfb30ae592ee5178ef188fb9d7ae339447",
     "src/scrap_monitoring_lidar_generator/scenario/snapshot.py": "8334598e19591f967d5b63ed5fe5d17f1dd0fdfe5f664056894d8d64259da137",
     "src/scrap_monitoring_lidar_generator/scenario/time_scale.py": "656c76856589416c000cbdaa6e92d595a568c2c1911da5a13de167942a3ecbd6",
-    "tools/generate_rust_parity_fixtures.py": "7bef509908a7a979ee787186327d1b74823cc2eb7d04ea617bf8e2ac5eb22374",
+    "tools/generate_rust_parity_fixtures.py": "b8b1916d119334402cd1e300a818881b54ebe66c7dc0382f33fe5e0edd423f09",
     "uv.lock": "34cb9e843c4f3939b0954d6842cc636b521b5790ae86ebd82f2493c6a4793c24"
   }
 }

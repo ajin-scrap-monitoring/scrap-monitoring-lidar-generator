@@ -3,7 +3,7 @@ name = "scrap-monitoring-lidar-generator"
 version = "0.9.0"
 edition = "2024"
 rust-version = "1.96"
-description = "Synthetic LiDAR configuration and wire contract foundation."
+description = "Deterministic synthetic LiDAR simulator for scan and observation streams."
 publish = false
 
 [lib]
@@ -17,12 +17,23 @@ path = "src/main.rs"
 clap = { version = "=4.6.6", features = ["derive"] }
 num-bigint = "=0.4.8"
 prost = "=0.14.4"
+rustix = { version = "=1.1.4", default-features = false, features = ["fs", "std", "time"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "raw_value"] }
 sha2 = "=0.11.0"
 thiserror = "=2.0.20"
-tonic = "=0.14.6"
+time = { version = "=0.3.55", default-features = false, features = ["formatting", "macros"] }
+tokio = { version = "=1.53.1", default-features = false, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-stream = { version = "=0.1.19", default-features = false, features = ["net"] }
+tonic = { version = "=0.14.6", default-features = false, features = ["codegen", "router", "server"] }
 tonic-prost = "=0.14.6"
+uuid = { version = "=1.26.1", default-features = false, features = ["v4"] }
+
+[dev-dependencies]
+hyper-util = { version = "=0.1.20", default-features = false, features = ["tokio"] }
+tempfile = "=3.27.0"
+tower = { version = "=0.5.3", default-features = false, features = ["util"] }
+tonic = { version = "=0.14.6", default-features = false, features = ["channel"] }
 
 [build-dependencies]
 prost-build = "=0.14.4"

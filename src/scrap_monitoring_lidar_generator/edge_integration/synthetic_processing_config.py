@@ -4,6 +4,7 @@ import json
 import math
 import re
 from collections.abc import Mapping, Sequence
+from itertools import pairwise
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -20,7 +21,9 @@ _BIN_WIDTH_MM = 50
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _DRIVER_IDENTITY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
 _PLANE_TOLERANCE = 1e-6
-_SECTION_HEIGHT_SAMPLES = 41
+_SEGMENT_PARAMETER_TOLERANCE = 1e-12
+_I64_MIN = -(1 << 63)
+_I64_EXCLUSIVE_MAX = 1 << 63
 
 
 class ProcessingConfigError(ValueError):
@@ -45,6 +48,8 @@ def build_synthetic_processing_config(
     result: JsonObject = dict(identities)
 
     environment = inputs.environment
+    if len(environment.environment_id) > 128:
+        raise ProcessingConfigError("calibration version must contain at most 128 characters")
     quality_by_sensor = {quality.sensor_id: quality for quality in inputs.quality_profile.sensors}
     sensor_count = len(environment.sensors)
     if sensor_count != 2:
@@ -173,6 +178,10 @@ def _select_section(
     ]
     first_edge = math.floor(min(projections_mm) / _BIN_WIDTH_MM) * _BIN_WIDTH_MM
     last_edge = math.ceil(max(projections_mm) / _BIN_WIDTH_MM) * _BIN_WIDTH_MM
+    if not _I64_MIN <= first_edge < _I64_EXCLUSIVE_MAX:
+        raise ProcessingConfigError("section edge exceeds i64")
+    if not _I64_MIN <= last_edge < _I64_EXCLUSIVE_MAX:
+        raise ProcessingConfigError("section edge exceeds i64")
     origin_mm = _millimetres(sensor.p0_m[0] * axis_x[0] + sensor.p0_m[1] * axis_x[1])
     valid_bins = {
         edge
@@ -235,12 +244,95 @@ def _section_column_is_inside(
     origin = np.asarray(sensor.p0_m, dtype=np.float64)
     origin_section_x_m = float(origin @ axis_x)
     b = origin_section_x_m - section_x_m
-    for height_m in np.linspace(floor_z_m, top_z_m, _SECTION_HEIGHT_SAMPLES):
+
+    def point_at_height(height_m: float) -> Vec2:
         a = (height_m - origin[2]) / u0[2]
         point = origin + a * u0 + b * u90
-        if not boundary.contains(Vec2(float(point[0]), float(point[1]))):
+        return Vec2(float(point[0]), float(point[1]))
+
+    return _segment_is_inside_boundary(
+        point_at_height(floor_z_m),
+        point_at_height(top_z_m),
+        boundary,
+    )
+
+
+def _segment_is_inside_boundary(start: Vec2, end: Vec2, boundary: Polygon2) -> bool:
+    if not boundary.contains(start) or not boundary.contains(end):
+        return False
+    direction = (end.x - start.x, end.y - start.y)
+    length_squared = _dot2(direction, direction)
+    if length_squared == 0.0:
+        return True
+
+    cuts = [0.0, 1.0]
+    vertices = boundary.vertices
+    for index, edge_start in enumerate(vertices):
+        edge_end = vertices[(index + 1) % len(vertices)]
+        cuts.extend(_edge_cut_parameters(start, direction, length_squared, edge_start, edge_end))
+
+    cuts.sort()
+    distinct = [cuts[0]]
+    for value in cuts[1:]:
+        if abs(value - distinct[-1]) > _SEGMENT_PARAMETER_TOLERANCE:
+            distinct.append(value)
+    for lower, upper in pairwise(distinct):
+        if upper - lower <= _SEGMENT_PARAMETER_TOLERANCE:
+            continue
+        parameter = (lower + upper) * 0.5
+        point = Vec2(
+            start.x + parameter * direction[0],
+            start.y + parameter * direction[1],
+        )
+        if not boundary.contains(point):
             return False
     return True
+
+
+def _edge_cut_parameters(
+    start: Vec2,
+    direction: tuple[float, float],
+    length_squared: float,
+    edge_start: Vec2,
+    edge_end: Vec2,
+) -> tuple[float, ...]:
+    edge = (edge_end.x - edge_start.x, edge_end.y - edge_start.y)
+    offset = (edge_start.x - start.x, edge_start.y - start.y)
+    denominator = _cross2(direction, edge)
+    scale = max(*(abs(value) for value in (*direction, *edge)), 1.0)
+    parallel_tolerance = math.ulp(1.0) * 64.0 * scale * scale
+    if abs(denominator) <= parallel_tolerance:
+        if abs(_cross2(offset, direction)) > parallel_tolerance:
+            return ()
+        parameters = (
+            _dot2((point.x - start.x, point.y - start.y), direction) / length_squared
+            for point in (edge_start, edge_end)
+        )
+        return tuple(
+            _bounded_segment_parameter(value) for value in parameters if _on_segment(value)
+        )
+
+    segment_parameter = _cross2(offset, edge) / denominator
+    edge_parameter = _cross2(offset, direction) / denominator
+    if _on_segment(segment_parameter) and _on_segment(edge_parameter):
+        return (_bounded_segment_parameter(segment_parameter),)
+    return ()
+
+
+def _on_segment(parameter: float) -> bool:
+    return -_SEGMENT_PARAMETER_TOLERANCE <= parameter <= 1.0 + _SEGMENT_PARAMETER_TOLERANCE
+
+
+def _bounded_segment_parameter(parameter: float) -> float:
+    return min(1.0, max(0.0, parameter))
+
+
+def _dot2(left: tuple[float, float], right: tuple[float, float]) -> float:
+    return left[0] * right[0] + left[1] * right[1]
+
+
+def _cross2(left: tuple[float, float], right: tuple[float, float]) -> float:
+    return left[0] * right[1] - left[1] * right[0]
 
 
 def _minimum_valid_quality(frequencies: Sequence[int]) -> int:
@@ -253,7 +345,10 @@ def _minimum_valid_quality(frequencies: Sequence[int]) -> int:
 def _millimetres(value_m: float) -> int:
     value_mm = value_m * 1_000.0
     rounded = round(value_mm)
-    if not math.isclose(value_mm, rounded, rel_tol=0.0, abs_tol=1e-6):
+    if (
+        not math.isclose(value_mm, rounded, rel_tol=0.0, abs_tol=1e-6)
+        or not _I64_MIN <= rounded < _I64_EXCLUSIVE_MAX
+    ):
         raise ProcessingConfigError(f"processing geometry requires integer millimetres: {value_m}")
     return rounded
 

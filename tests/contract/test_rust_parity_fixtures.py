@@ -74,6 +74,8 @@ def test_configuration_cases_capture_strict_integer_and_json_behavior() -> None:
     assert cases["maximum-quality-frequency"] == {"accepted": True}
     assert cases["numeric-version"] == {"accepted": True}
     assert cases["large-noise"] == {"accepted": True}
+    assert cases["maximum-diagnostics-limit"] == {"accepted": True}
+    assert not cases["diagnostics-limit-overflow"]["accepted"]
     for name in ("boolean-seed", "fractional-seed", "seed-overflow", "boolean-version"):
         assert not cases[name]["accepted"]
     assert cases["duplicate-field"]["error"] == "duplicate JSON field: seed"

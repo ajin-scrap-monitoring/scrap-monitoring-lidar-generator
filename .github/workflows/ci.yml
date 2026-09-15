@@ -15,7 +15,7 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -103,7 +103,25 @@ jobs:
 
       - name: Verify edge platform processing compatibility
         run: |
+          cargo run --locked --quiet \
+            --bin scrap-monitoring-lidar-generator-rust -- \
+            export-synthetic-processing-config \
+            --generator-config examples/generator.v2.json \
+            --socket-dir /sockets \
+            --site-id synthetic-site \
+            --edge-id synthetic-edge \
+            --config-revision synthetic-r1 \
+            --output target/processing.synthetic.json
           uv run --locked python -m tools.verify_edge_platform_contract \
+            --edge-platform-root .contract/ajin-edge-platform \
+            --processing-config target/processing.synthetic.json
+
+      - name: Verify Rust runtime processing compatibility
+        run: |
+          cargo build --release --locked \
+            --bin scrap-monitoring-lidar-generator-rust
+          uv run --locked python -m tools.verify_rust_runtime_contract \
+            --runtime-binary target/release/scrap-monitoring-lidar-generator-rust \
             --edge-platform-root .contract/ajin-edge-platform
 
       - name: Smoke test CLI

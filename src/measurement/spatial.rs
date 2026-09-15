@@ -1,5 +1,7 @@
 //! Half-open spatial distortion events shared by all sensor scans.
 
+use std::sync::Arc;
+
 use crate::{
     geometry::{Polygon2, Vec2},
     randomness::{ModelRng, RandomSource, StreamScope},
@@ -197,9 +199,9 @@ impl CollectionOcclusionEvent {
 #[derive(Clone, Debug)]
 pub struct SpatialDistortionResolver {
     static_scene: EnvironmentScene,
-    falling: Vec<FallingMaterialEvent>,
-    voids: Vec<VoidEvent>,
-    collection: Vec<CollectionOcclusionEvent>,
+    falling: Arc<Vec<FallingMaterialEvent>>,
+    voids: Arc<Vec<VoidEvent>>,
+    collection: Arc<Vec<CollectionOcclusionEvent>>,
     advanced_to_s: f64,
     retained_from_s: f64,
 }
@@ -208,9 +210,9 @@ impl SpatialDistortionResolver {
     pub fn new(static_scene: EnvironmentScene) -> Self {
         Self {
             static_scene,
-            falling: Vec::new(),
-            voids: Vec::new(),
-            collection: Vec::new(),
+            falling: Arc::new(Vec::new()),
+            voids: Arc::new(Vec::new()),
+            collection: Arc::new(Vec::new()),
             advanced_to_s: 0.0,
             retained_from_s: 0.0,
         }
@@ -225,13 +227,20 @@ impl SpatialDistortionResolver {
     }
 
     pub fn falling_events(&self) -> &[FallingMaterialEvent] {
-        &self.falling
+        self.falling.as_slice()
     }
     pub fn void_events(&self) -> &[VoidEvent] {
-        &self.voids
+        self.voids.as_slice()
     }
     pub fn collection_events(&self) -> &[CollectionOcclusionEvent] {
-        &self.collection
+        self.collection.as_slice()
+    }
+
+    pub(crate) fn retained_event_count(&self) -> usize {
+        self.falling
+            .len()
+            .saturating_add(self.voids.len())
+            .saturating_add(self.collection.len())
     }
 
     pub fn advance_with_events(
@@ -259,6 +268,8 @@ impl SpatialDistortionResolver {
                 "spatial distortion time must be finite and monotonic",
             ));
         }
+        let mut new_event_count = 0_usize;
+        let mut new_falling = Vec::new();
         for event in falling {
             let event = event.validate()?;
             if event.started_at_s + TIME_TOLERANCE_S < self.advanced_to_s
@@ -268,8 +279,10 @@ impl SpatialDistortionResolver {
                     "new falling events must start in the advanced interval",
                 ));
             }
-            self.falling.push(event);
+            reserve_spatial_event(&mut new_falling, &mut new_event_count)?;
+            new_falling.push(event);
         }
+        let mut new_voids = Vec::new();
         for event in voids {
             let event = event.validate()?;
             if event.started_at_s + TIME_TOLERANCE_S < self.advanced_to_s
@@ -279,8 +292,10 @@ impl SpatialDistortionResolver {
                     "new void events must start in the advanced interval",
                 ));
             }
-            self.voids.push(event);
+            reserve_spatial_event(&mut new_voids, &mut new_event_count)?;
+            new_voids.push(event);
         }
+        let mut new_collection = Vec::new();
         for event in collection {
             let event = event.validate()?;
             if event.started_at_s + TIME_TOLERANCE_S < self.advanced_to_s
@@ -290,14 +305,33 @@ impl SpatialDistortionResolver {
                     "new collection events must start in the advanced interval",
                 ));
             }
-            self.collection.push(event);
+            reserve_spatial_event(&mut new_collection, &mut new_event_count)?;
+            new_collection.push(event);
         }
-        self.falling
-            .sort_by(|left, right| left.started_at_s.total_cmp(&right.started_at_s));
-        self.voids
-            .sort_by(|left, right| left.started_at_s.total_cmp(&right.started_at_s));
-        self.collection
-            .sort_by(|left, right| left.started_at_s.total_cmp(&right.started_at_s));
+        if !new_falling.is_empty() {
+            let falling = Arc::make_mut(&mut self.falling);
+            falling
+                .try_reserve(new_falling.len())
+                .map_err(|_| MeasurementError::Exhausted("spatial event allocation failed"))?;
+            falling.extend(new_falling);
+            falling.sort_by(|left, right| left.started_at_s.total_cmp(&right.started_at_s));
+        }
+        if !new_voids.is_empty() {
+            let voids = Arc::make_mut(&mut self.voids);
+            voids
+                .try_reserve(new_voids.len())
+                .map_err(|_| MeasurementError::Exhausted("spatial event allocation failed"))?;
+            voids.extend(new_voids);
+            voids.sort_by(|left, right| left.started_at_s.total_cmp(&right.started_at_s));
+        }
+        if !new_collection.is_empty() {
+            let collection = Arc::make_mut(&mut self.collection);
+            collection
+                .try_reserve(new_collection.len())
+                .map_err(|_| MeasurementError::Exhausted("spatial event allocation failed"))?;
+            collection.extend(new_collection);
+            collection.sort_by(|left, right| left.started_at_s.total_cmp(&right.started_at_s));
+        }
         self.advanced_to_s = elapsed_s;
         Ok(())
     }
@@ -324,11 +358,19 @@ impl SpatialDistortionResolver {
                 "spatial event history no longer covers the scan",
             ));
         }
-        let mut resolved =
-            resolve_void_distances(reference, &self.voids, min_distance_m, max_distance_m)?;
-        let falling = resolve_falling_material_distances(reference, &self.falling, min_distance_m)?;
-        let collection =
-            resolve_collection_occlusion_distances(reference, &self.collection, min_distance_m)?;
+        let mut resolved = resolve_void_distances(
+            reference,
+            self.voids.as_slice(),
+            min_distance_m,
+            max_distance_m,
+        )?;
+        let falling =
+            resolve_falling_material_distances(reference, self.falling.as_slice(), min_distance_m)?;
+        let collection = resolve_collection_occlusion_distances(
+            reference,
+            self.collection.as_slice(),
+            min_distance_m,
+        )?;
         for (((value, falling), collection), point) in resolved
             .iter_mut()
             .zip(falling)
@@ -352,9 +394,23 @@ impl SpatialDistortionResolver {
                 "distortion retention time must be within generated history",
             ));
         }
-        self.falling.retain(|event| event.ends_at_s > elapsed_s);
-        self.voids.retain(|event| event.ends_at_s > elapsed_s);
-        self.collection.retain(|event| event.ends_at_s > elapsed_s);
+        if self
+            .falling
+            .iter()
+            .any(|event| event.ends_at_s <= elapsed_s)
+        {
+            Arc::make_mut(&mut self.falling).retain(|event| event.ends_at_s > elapsed_s);
+        }
+        if self.voids.iter().any(|event| event.ends_at_s <= elapsed_s) {
+            Arc::make_mut(&mut self.voids).retain(|event| event.ends_at_s > elapsed_s);
+        }
+        if self
+            .collection
+            .iter()
+            .any(|event| event.ends_at_s <= elapsed_s)
+        {
+            Arc::make_mut(&mut self.collection).retain(|event| event.ends_at_s > elapsed_s);
+        }
         self.retained_from_s = elapsed_s;
         Ok(())
     }
@@ -736,7 +792,8 @@ impl SpatialDistortionTimeline {
         let Some(settings) = self.void_settings else {
             return Ok(());
         };
-        for event in &mut self.resolver.voids {
+        let mut close_indices = Vec::new();
+        for (index, event) in self.resolver.voids.iter().enumerate() {
             if !(event.started_at_s <= at_s && at_s < event.ends_at_s) {
                 continue;
             }
@@ -749,7 +806,16 @@ impl SpatialDistortionTimeline {
                 }
             };
             if close {
-                event.ends_at_s = at_s;
+                close_indices
+                    .try_reserve(1)
+                    .map_err(|_| MeasurementError::Exhausted("void index allocation failed"))?;
+                close_indices.push(index);
+            }
+        }
+        if !close_indices.is_empty() {
+            let events = Arc::make_mut(&mut self.resolver.voids);
+            for index in close_indices {
+                events[index].ends_at_s = at_s;
             }
         }
         Ok(())
@@ -1294,6 +1360,19 @@ fn point_segment_distance(point: Vec2, start: Vec2, end: Vec2) -> f64 {
     let closest_x = start.x() + projection * edge_x;
     let closest_y = start.y() + projection * edge_y;
     (point.x() - closest_x).hypot(point.y() - closest_y)
+}
+
+fn reserve_spatial_event<T>(events: &mut Vec<T>, total: &mut usize) -> Result<()> {
+    if *total == MAX_EVENTS_PER_ADVANCE {
+        return Err(MeasurementError::Exhausted(
+            "spatial event count exceeds the per-advance limit",
+        ));
+    }
+    events
+        .try_reserve(1)
+        .map_err(|_| MeasurementError::Exhausted("spatial event allocation failed"))?;
+    *total += 1;
+    Ok(())
 }
 
 fn require_event(started_at_s: f64, ends_at_s: f64, radius_m: f64) -> Result<()> {

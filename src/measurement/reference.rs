@@ -257,12 +257,17 @@ impl TimedReferenceScan {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct HqSample {
+    pub angle_z_q14: u16,
+    pub dist_mm_q2: u64,
+    pub quality: u8,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct MeasuredScan {
     sensor_id: String,
-    angles_deg: Vec<f64>,
-    distances_m: Vec<f64>,
-    qualities: Vec<u8>,
+    hq_samples: Vec<HqSample>,
 }
 
 impl MeasuredScan {
@@ -278,36 +283,66 @@ impl MeasuredScan {
             || count == 0
             || distances_m.len() != count
             || qualities.len() != count
-            || angles_deg
-                .iter()
-                .any(|value| !value.is_finite() || !(0.0..360.0).contains(value))
-            || distances_m
-                .iter()
-                .any(|value| !value.is_finite() || *value < 0.0)
         {
             return Err(MeasurementError::Invalid(
                 "measured scan arrays must be finite, non-empty, and equal length",
             ));
         }
+        let mut hq_samples = Vec::new();
+        hq_samples
+            .try_reserve_exact(count)
+            .map_err(|_| MeasurementError::Exhausted("HQ sample allocation failed"))?;
+        for ((angle_deg, distance_m), quality) in
+            angles_deg.into_iter().zip(distances_m).zip(qualities)
+        {
+            hq_samples.push(HqSample {
+                angle_z_q14: super::sdk::quantize_hq_angle_ticks(angle_deg)?,
+                dist_mm_q2: super::sdk::quantize_hq_distance_ticks(distance_m)?,
+                quality,
+            });
+        }
+        Self::from_hq_samples(sensor_id, hq_samples)
+    }
+
+    pub fn from_hq_samples(
+        sensor_id: impl Into<String>,
+        hq_samples: Vec<HqSample>,
+    ) -> Result<Self> {
+        let sensor_id = sensor_id.into();
+        if sensor_id.is_empty() || hq_samples.is_empty() {
+            return Err(MeasurementError::Invalid(
+                "measured scan requires a sensor and at least one HQ sample",
+            ));
+        }
         Ok(Self {
             sensor_id,
-            angles_deg,
-            distances_m,
-            qualities,
+            hq_samples,
         })
     }
 
     pub fn sensor_id(&self) -> &str {
         &self.sensor_id
     }
-    pub fn angles_deg(&self) -> &[f64] {
-        &self.angles_deg
+    pub fn hq_samples(&self) -> &[HqSample] {
+        &self.hq_samples
     }
-    pub fn distances_m(&self) -> &[f64] {
-        &self.distances_m
+
+    pub fn distances_m(&self) -> Vec<f64> {
+        self.hq_samples
+            .iter()
+            .map(|sample| sample.dist_mm_q2 as f64 / super::sdk::HQ_DISTANCE_STEPS_PER_METER as f64)
+            .collect()
     }
-    pub fn qualities(&self) -> &[u8] {
-        &self.qualities
+
+    pub fn qualities(&self) -> Vec<u8> {
+        self.hq_samples
+            .iter()
+            .map(|sample| sample.quality)
+            .collect()
+    }
+
+    pub fn into_hq_samples(self) -> Vec<HqSample> {
+        self.hq_samples
     }
 }
 
@@ -321,12 +356,14 @@ impl MeasurementResult {
     pub fn new(reference: TimedReferenceScan, measured: MeasuredScan) -> Result<Self> {
         let schedule = reference.schedule();
         if measured.sensor_id() != reference.sensor_id()
-            || measured.angles_deg().len() != schedule.point_count()
+            || measured.hq_samples().len() != schedule.point_count()
             || measured
-                .angles_deg()
+                .hq_samples()
                 .iter()
                 .zip(schedule.angles_deg())
-                .any(|(left, right)| left.to_bits() != right.to_bits())
+                .any(|(sample, angle)| {
+                    super::sdk::quantize_hq_angle_ticks(*angle) != Ok(sample.angle_z_q14)
+                })
         {
             return Err(MeasurementError::Invalid(
                 "measurement result must match its reference schedule",
@@ -349,6 +386,10 @@ impl MeasurementResult {
     }
     pub fn measured(&self) -> &MeasuredScan {
         &self.measured
+    }
+
+    pub fn into_measured(self) -> MeasuredScan {
+        self.measured
     }
 }
 

@@ -43,6 +43,15 @@ def test_public_examples_match_current_json_schemas() -> None:
         Draft202012Validator(_json(schema_path)).validate(_json(example_path))
 
 
+def test_generator_schema_enforces_the_diagnostics_sample_limit() -> None:
+    validator = Draft202012Validator(_json(_GENERATOR_SCHEMA))
+    document = _json(_ROOT / "examples" / "generator.v2.json")
+    document["diagnostics"]["sample_scan_limit_per_sensor"] = 16
+    assert validator.is_valid(document)
+    document["diagnostics"]["sample_scan_limit_per_sensor"] = 17
+    assert not validator.is_valid(document)
+
+
 def test_observation_fixture_matches_contract() -> None:
     header_schema = _json(_OBSERVATION / "header.schema.json")
     observation_schema = _json(_OBSERVATION / "observation.schema.json")

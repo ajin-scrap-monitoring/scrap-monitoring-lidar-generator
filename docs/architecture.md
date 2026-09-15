@@ -68,32 +68,38 @@ scenario -> geometry
 형식을 알지 않는다. `scan_stream`은 측정 결과를 외부 wire 표현으로만 바꾸며 적재 모델을
 변경하지 않는다. `edge_integration`은 실행 중 scan 경로에 참여하지 않는다.
 
-## Rust 설정 및 실행 경계
+## Rust 애플리케이션 경계
 
-Rust crate의 설정 및 실행 경계는 5개다. `src/lib.rs`는 설정, wire와 아래 시뮬레이션 계산 API를
-공개하며 별도 `scrap-monitoring-lidar-generator-rust` binary는 입력 검증만 수행한다.
+Rust 애플리케이션 경계는 10개다. `src/lib.rs`는 설정, 계산, 출력과 wire API를 공개하며
+`scrap-monitoring-lidar-generator-rust` binary는 `check`, `run`과
+`export-synthetic-processing-config` 명령을 제공한다.
 
 | 경로 | 책임 |
 | --- | --- |
-| `src/configuration/` | 세 JSON loader, 중복 key와 숫자 type 검증, 설정 자료형과 교차 입력 검증 |
-| `src/cli.rs` | CLI(Command-Line Interface), 환경변수와 JSON override 계층 및 `check` 명령 |
-| `src/error.rs` | 오류 분류, 입력 경로와 메시지 |
-| `src/lib.rs`의 `wire` | 고정 Proto에서 빌드 시 생성한 tonic/prost client, server와 message binding |
-| `src/main.rs` | 별도 검증 binary의 입력, 출력과 종료 코드 |
+| `src/configuration/`, `src/error.rs` | 세 JSON loader, 교차 입력 검증과 오류 분류 |
+| `src/cli.rs` | CLI(Command-Line Interface), 환경변수 및 JSON override 계층과 세 명령 |
+| `src/main.rs` | 명령 dispatch, process 출력과 종료 코드 |
+| `src/runtime/generation.rs` | 공통 적재 모델과 sensor별 고정 계산 worker 2개의 조정 |
+| `src/runtime/application.rs` | 실시간 pacing, 출력 조립, signal과 순서가 정해진 종료 생명주기 |
+| `src/scan_runtime/` | 최신 frame 2개, UDS gRPC server 2개와 상태 파일 |
+| `src/observation.rs` | 최신 snapshot 1개의 비차단 JSON Lines TCP publisher |
+| `src/diagnostics.rs` | bounded 진단 선택, 직렬화와 파일 writer |
+| `src/edge_integration/` | 공개 합성 입력의 처리 설정 변환과 결정론적 JSON 출력 |
+| `src/lib.rs`의 `wire` | 고정 Proto에서 빌드 시 생성한 tonic/prost binding |
 
-`cli`는 `configuration`과 `error`에 의존한다. `configuration`의 다각형 검증은 설정 검증
-내부에 있으며 Python 실행 경로와 독립적이다. `build.rs`는
-`contracts/lidar/v1/lidar.proto`를 잠근 compiler와 binding 생성기로 처리한다. 생성 파일은
-Cargo 빌드 출력에만 두며 고정 Proto 원문과 Python binding을 변경하지 않는다.
+`cli`는 `configuration`과 `error`에 의존하고 `runtime/application`은 계산 runtime과 세 외부 출력
+경계를 조립한다. `scan_runtime`, `observation`과 `diagnostics`는 적재 모델을 변경하지 않는다.
+`build.rs`는 `contracts/lidar/v1/lidar.proto`를 잠근 compiler와 binding 생성기로 처리한다. 생성
+파일은 Cargo 빌드 출력에만 두며 고정 Proto 원문과 Python binding을 변경하지 않는다.
 
-`cargo run --locked --bin scrap-monitoring-lidar-generator-rust -- check --config examples/generator.v2.json`은
-참조된 세 JSON과 모델 override를 검증한다. `check --runtime`은 UDS 경로, 상태 경로, 배포
-식별자와 관찰 endpoint도 요구한다. 두 명령은 scan 생성, socket 생성과 상태 출력을 하지
-않으며 성공 시 0, 설정 오류 시 2로 종료한다.
+`check`는 참조된 세 JSON과 모델 override를 검증하고 `check --runtime`은 UDS 경로, 상태 경로,
+배포 식별자와 관찰 endpoint도 요구한다. 두 검증 모드는 socket과 상태 파일을 만들지 않는다.
+`run`은 같은 설정 계층을 확인한 뒤 실제 시뮬레이션과 외부 출력을 시작한다. 설정 오류는 2,
+실행 오류는 1, 정상 종료는 0으로 반환한다.
 
-`cargo test --locked`는 Rust 단위 테스트와 설정, CLI, wire, 기하, 난수, rate profile, 높이장,
-시나리오, 회전, 광선 교차, 합성 왜곡과 ScanFrame 회귀 검증을 실행한다.
+`cargo test --locked`는 Rust 설정, CLI, wire, 계산과 외부 출력 회귀 검증을 실행한다.
 `cargo fmt --check`와 `cargo clippy --locked --all-targets -- -D warnings`는 Rust 정적 검증이다.
+Rust live runtime의 외부 계약 검증은 release profile로 만든 binary만 사용한다.
 
 ## Rust 시뮬레이션 계산 경계
 
@@ -181,8 +187,10 @@ frame에는 환경 정의를 포함하지 않는다.
 
 scan 계약의 정본은 `ajin-edge-platform`의 고정 commit이다. 로컬 Proto와 생성 binding은
 출처 commit과 SHA-256으로 검증한다. `tools/generate_lidar_wire.py --check`는 binding이 고정
-Proto와 일치하는지 검사하고, `tools/verify_edge_platform_contract.py`는 실제 `lidar-processing` loader와
-높이 계산 engine이 합성 설정과 frame을 수락하는지 검사한다.
+Proto와 일치하는지 검사한다. `tools/verify_edge_platform_contract.py`는 Python 기준 frame과 Rust
+exporter 출력을 고정한 loader 및 높이 계산 engine에 넣는다.
+`tools/verify_rust_runtime_contract.py`는 실제 Rust `run` process의 두 UDS lane에서 frame을
+구독하고 같은 engine의 수락 결과와 상태, 관찰 및 종료 계약을 검사한다.
 
 ## 적재 모델과 측정
 
@@ -230,7 +238,8 @@ Proto와 일치하는지 검사하고, `tools/verify_edge_platform_contract.py`�
 빈 `consumer_id`와 128 byte 초과 값은 gRPC `INVALID_ARGUMENT`, 구독자 상한 초과는
 `RESOURCE_EXHAUSTED`로 응답한다. 이 값과 메시지는 `ajin-edge-platform` 구현을 따른다. UDS는 생성기가
 시작할 때 mode `0660`으로 만들고 종료할 때 제거한다. 기존 경로가 socket이 아니면 덮어쓰지
-않고 시작에 실패한다.
+않고 시작에 실패한다. Python UDS client의 HTTP/2 authority 요구사항은
+[`../edge-platform-integration/`](../edge-platform-integration/)이 정본이다.
 
 상태 파일은 `ajin-edge-platform` 상태 schema, service 이름과 orchestrator directory 구조를 따른다. 첫
 sensor는 `lidar-driver-a`, 둘째 sensor는 `lidar-driver-b`다. 각 파일은 상태 root 아래의
@@ -246,23 +255,24 @@ gRPC 출력을 막지 않는다. 관찰 stream은 scan 계약, `lidar-processing
 
 ## 생명주기와 검증
 
-CLI는 입력을 검증한 뒤 공통 적재 모델, 두 센서 측정기, gRPC server, 상태 writer, 관찰
-publisher와 선택적 진단 writer를 조립한다. SIGINT와 SIGTERM은 생성을 중단하고 publisher와
+Rust `run` 명령은 입력을 검증한 뒤 공통 적재 모델, 두 센서 측정기, gRPC server, 상태 writer,
+관찰 publisher와 선택적 진단 writer를 조립한다. SIGINT와 SIGTERM은 생성을 중단하고 publisher와
 server를 닫은 뒤 집계를 기록한다. gRPC 구독자가 없어도 생성과 최신 frame 갱신은 계속된다.
 
-자동 검증은 5개 계층이다.
+자동 검증은 6개 계층이다.
 
 | 경로 | 검증 범위 |
 | --- | --- |
+| `tests/*.rs` | Rust 설정, 계산, 출력과 생명주기 |
 | `tests/unit/` | 설정, 수치 계산, 상태 전이와 변환 |
 | `tests/integration/` | 전체 생성, gRPC UDS 구독과 장애 격리 |
 | `tests/contract/` | JSON schema, Proto 출처와 인계 fixture |
 | `tests/performance/` | 생성 단계, 변환과 local gRPC 전달 부하 |
 | `tests/edge/` | digest image의 두 UDS, 관찰과 상태 출력 |
 
-단위 및 통합 검증은 외부 네트워크에 의존하지 않는다. 외부 구현 직접 호환 검증은 별도 고정
-checkout을 입력으로 사용한다. pixel 전체를 고정하는 시각 snapshot 검증은 이 Repository의
-범위가 아니다.
+단위 및 통합 검증은 외부 네트워크에 의존하지 않는다. Rust live runtime의 외부 구현 직접 호환
+검증은 별도 고정 checkout과 미리 만든 release binary를 입력으로 사용한다. pixel 전체를 고정하는
+시각 snapshot 검증은 이 Repository의 범위가 아니다.
 
 ## Repository 구조
 
@@ -285,8 +295,19 @@ src/
   lib.rs
   main.rs
   cli.rs
+  diagnostics.rs
   error.rs
+  observation.rs
+  output_format.rs
+  randomness.rs
+  rate_profile.rs
+  edge_integration/
   configuration/
+  geometry/
+  measurement/
+  runtime/
+  scan_runtime/
+  scenario/
 src/scrap_monitoring_lidar_generator/
   configuration/
   edge_integration/

@@ -24,7 +24,7 @@ scan 생성과 gRPC 구독을 중단시키지 않는다.
 
 | 용도 | 요구 사항 |
 |---|---|
-| 개발 | Python 3.14.4, uv 0.12.12 |
+| 개발 | Python 3.14.4, uv 0.12.12, Rust 1.96.0 |
 | 엣지 검증 | 64-bit ARM Linux, Docker Engine |
 | 배포 검증 | Docker Engine, Git, GitHub CLI, Bash |
 
@@ -143,11 +143,16 @@ CONFIG_SHA256="$(sha256sum processing.synthetic.json | awk '{print $1}')"
 다음 명령은 전체 소스, 계약, 문서와 Python package를 검증한다.
 
 ```bash
+cargo fmt --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
 uv run --locked rumdl check .
 uv run --locked ruff format --check .
 uv run --locked ruff check .
 uv run --locked mypy
 uv run --locked pytest
+uv run --locked --group docs \
+  python docs/synthetic-environment-specification/generate.py --check
 uv run --locked python -m tools.generate_lidar_wire --check
 uv build --no-sources
 ```
@@ -160,13 +165,16 @@ uv run --locked python -m tools.verify_edge_platform_contract \
 ```
 
 검증기는 외부 Proto와 로컬 계약의 일치, `lidar-processing` 설정 loader의 수락, 두 sensor frame의
-ingest, 단면 coverage와 최종 `GOOD` 측정을 확인한다.
+ingest, 단면 coverage와 최종 `GOOD` 측정을 확인한다. 단계 4의 Rust 후보는 실제 `run` process와
+두 UDS lane을 검증하는 별도 계약 검증을 통과한다. 이 검증은 미리 만든 release binary를 요구하며
+정확한 명령과 판정 범위는 [`edge-platform-integration/`](edge-platform-integration/)을 따른다.
 
 ## 배포
 
 배포 대상은 실제 센서 운영 환경이 아니라 Raspberry Pi 5에서 `lidar-processing`과 연동하는 개발 및
 검증 환경이다. Release는 `linux/arm64` OCI(Open Container Initiative) image와 digest 참조를
-제공한다.
+제공한다. 현재 0.9.0 image의 기본 실행 경로는 Python이며 Rust `run` 후보는 ARM64 공유 부하 검증을
+통과한 뒤 기본 실행 경로로 전환한다.
 
 배포 입력은 다음 4개 경로로 구분한다.
 

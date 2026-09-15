@@ -26,7 +26,9 @@ Repository별 문서는 공통 문서를 재작성하지 않으며, 이 프로�
 
 새 작업 세션은 `docs/development-plan.md`의 현재 상태와 다음 작업을 확인한 뒤 범위를 정한다. 실제 수신 프로그램과 대상 장비의 공유 부하 검증이 필요한 작업은 문서에 남은 선행 조건을 먼저 충족한다.
 
-프로그램 코드는 `src/scrap_monitoring_lidar_generator/`, 자동 검증은 `tests/`, 공개 가능한 합성 입력 예시는 `examples/`에 둔다. 새로운 최상위 경계가 필요하면 코드와 함께 아키텍처 문서를 갱신한다.
+Rust 후보 구현은 `src/`, Python 기본 구현은 `src/scrap_monitoring_lidar_generator/`, 자동 검증은 `tests/`, 공개 가능한 합성 입력 예시는 `examples/`에 둔다. 단계 5까지 Python 구현과 현재 OCI image entrypoint를 기본 실행 경로로 유지한다. 새로운 최상위 경계가 필요하면 코드와 함께 아키텍처 문서를 갱신한다.
+
+Rust 외부 출력이나 생명주기를 변경하면 release profile binary를 만들고 `tools/verify_rust_runtime_contract.py`로 고정한 `lidar-processing` 계약을 직접 검증한다. 필요한 checkout, client 연결 전제와 판정 기준은 `edge-platform-integration/README.md`를 따른다.
 
 미확정된 설정 및 전송 계약을 구현해야 하는 단계에서는 수신 프로그램과 계약을 먼저 확정한다. 공개 합성 환경으로 분류되지 않은 내부 자료의 값은 공개 기본값, 예제 또는 테스트 fixture로 사용하지 않는다.
 

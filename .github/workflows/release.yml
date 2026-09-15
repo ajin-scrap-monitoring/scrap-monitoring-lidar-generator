@@ -62,11 +62,16 @@ jobs:
 
       - name: Validate source
         run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
           uv run --locked rumdl check .
           uv run --locked ruff format --check .
           uv run --locked ruff check .
           uv run --locked mypy
           uv run --locked pytest
+          uv run --locked --group docs \
+            python docs/synthetic-environment-specification/generate.py --check
           uv run --locked python -m tools.generate_lidar_wire --check
 
       - name: Check out pinned edge platform contract
@@ -79,7 +84,25 @@ jobs:
 
       - name: Verify edge platform processing compatibility
         run: |
+          cargo run --locked --quiet \
+            --bin scrap-monitoring-lidar-generator-rust -- \
+            export-synthetic-processing-config \
+            --generator-config examples/generator.v2.json \
+            --socket-dir /sockets \
+            --site-id synthetic-site \
+            --edge-id synthetic-edge \
+            --config-revision synthetic-r1 \
+            --output target/processing.synthetic.json
           uv run --locked python -m tools.verify_edge_platform_contract \
+            --edge-platform-root .contract/ajin-edge-platform \
+            --processing-config target/processing.synthetic.json
+
+      - name: Verify Rust runtime processing compatibility
+        run: |
+          cargo build --release --locked \
+            --bin scrap-monitoring-lidar-generator-rust
+          uv run --locked python -m tools.verify_rust_runtime_contract \
+            --runtime-binary target/release/scrap-monitoring-lidar-generator-rust \
             --edge-platform-root .contract/ajin-edge-platform
 
       - name: Package edge platform integration contract

@@ -172,7 +172,10 @@ async def subscribe_scans(
         try:
             async with grpc.aio.insecure_channel(
                 endpoint,
-                options=(("grpc.max_receive_message_length", 4 * 1024 * 1024),),
+                options=(
+                    ("grpc.max_receive_message_length", 4 * 1024 * 1024),
+                    ("grpc.default_authority", "localhost"),
+                ),
             ) as channel:
                 stream = lidar_pb2_grpc.LidarScanSourceStub(  # type: ignore[no-untyped-call]
                     channel

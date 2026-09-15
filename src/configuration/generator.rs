@@ -12,7 +12,7 @@ use super::{
     strict_json::{self as json, Object},
 };
 use crate::{
-    MAX_INLET_POSITIONS,
+    MAX_DIAGNOSTIC_SCANS_PER_SENSOR, MAX_INLET_POSITIONS,
     error::{ConfigurationError, ErrorKind, Result},
     measurement::validate_scan_point_limit,
 };
@@ -57,9 +57,11 @@ pub fn parse_generator_config(
     let diagnostics = DiagnosticsConfig {
         enabled: diagnostics.boolean("enabled")?,
         output_path: resolve_path(&diagnostics, "output_path", base)?,
-        sample_scan_limit_per_sensor: SampleScanLimit(json::integer_text(
+        sample_scan_limit_per_sensor: SampleScanLimit::from_validated(json::integer(
             diagnostics.get("sample_scan_limit_per_sensor"),
             &diagnostics.at("sample_scan_limit_per_sensor"),
+            0,
+            MAX_DIAGNOSTIC_SCANS_PER_SENSOR,
         )?),
     };
     Ok(GeneratorConfig {

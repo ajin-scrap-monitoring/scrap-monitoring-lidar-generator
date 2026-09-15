@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from scrap_monitoring_lidar_generator._limits import (
+    MAX_DIAGNOSTIC_SCANS_PER_SENSOR,
     MAX_INLET_POSITIONS,
     MAX_SCAN_POINTS_PER_ROTATION,
 )
@@ -503,6 +504,7 @@ def _parse_diagnostics(value: Any, path: str, base: Path) -> DiagnosticsConfig:
             diagnostics["sample_scan_limit_per_sensor"],
             f"{path}.sample_scan_limit_per_sensor",
             minimum=0,
+            maximum=MAX_DIAGNOSTIC_SCANS_PER_SENSOR,
         ),
     )
 

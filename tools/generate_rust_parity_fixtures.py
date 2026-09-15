@@ -212,6 +212,18 @@ def _configuration_cases() -> dict[str, Any]:
             327_680.000_000_000_1,
         ),
         ("large-noise", "generator.v2.json", ["measurement", "distance_noise", "limit_m"], 20),
+        (
+            "maximum-diagnostics-limit",
+            "generator.v2.json",
+            ["diagnostics", "sample_scan_limit_per_sensor"],
+            16,
+        ),
+        (
+            "diagnostics-limit-overflow",
+            "generator.v2.json",
+            ["diagnostics", "sample_scan_limit_per_sensor"],
+            17,
+        ),
         ("wrong-unit", "environment.v1.json", ["length_unit"], "mm"),
         ("non-unit-frame", "environment.v1.json", ["sensors", 0, "u0"], [0, 0, -2]),
         ("empty-sensors", "environment.v1.json", ["sensors"], []),
@@ -960,6 +972,7 @@ def _source_fingerprints() -> dict[str, str]:
         (
             ROOT / "uv.lock",
             ROOT / "contracts" / "lidar" / "v1" / "lidar.proto",
+            package / "_limits.py",
             Path(__file__).resolve(),
         )
     )

@@ -427,7 +427,8 @@
         },
         "sample_scan_limit_per_sensor": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 16
         }
       }
     }
