@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 공개 합성 환경과 적재 시나리오 | Python 기본 구현 및 Rust 후보 구현 완료 | `examples/`, `docs/configuration.md` |
 | RPLIDAR S2E 호환 scan 생성 | Python 기본 구현 및 Rust 후보 구현 완료 | `docs/sdk-compatibility.md` |
-| `lidar-processing` gRPC over UDS scan 출력 | Python 통합 및 Rust live frame의 고정 engine 수락 완료 | `contracts/lidar/v1/`, `edge-platform-integration/` |
+| `lidar-processing` gRPC over UDS scan 출력 | Python 통합, Rust live frame과 실제 container 사전 수락 완료 | `contracts/lidar/v1/`, `edge-platform-integration/` |
 | 적재 모델 관찰 stream | 두 구현 완료 | `docs/observation.md` |
 | ARM64 image 배포 | 자동 build 및 image 검증 구성 완료 | `docs/deployment.md` |
 
@@ -28,6 +28,11 @@ Rust 전환은 단계 4까지 완료했다. Rust binary는 공개 JSON 3개와 �
 제거한다. 전환의 목적은 현재 외부 계약과 합성 모델을 유지하면서 계산 여유와 실행 안정성을
 확보하는 것이다.
 
+단계 5는 진행 중이다. ARM64 Rust 후보는 Raspberry Pi 5에서 두 sensor 기준 광선 구성과 실제
+`lidar-processing`의 높이 및 적재율 결과를 통과했다. 30초 공유 사전 검증에서 생성기 CPU P95,
+RSS P95와 공동 frame 완료 지연 P99는 1차 합격선 안에 있었다. 이 결과는 5분 준비와 60분 측정으로
+구성된 네 case 장기 matrix를 대신하지 않는다. 측정 조건과 값은 `docs/performance.md`가 정본이다.
+
 현재 CI는 Python 기준선, Rust 단위 및 통합 테스트, ARM64 Rust release build와 Python 기본 image를
 검증한다. 고정한 `ajin-edge-platform` checkout을 사용하는 live 계약 검증은 Rust release binary의
 `run` 명령을 실제로 시작하고 exporter 출력, sensor별 UDS 구독, 상태 파일, 관찰 연결, 종료 정리와
@@ -39,9 +44,15 @@ scan의 허공, 정적 구조와 적재면 교차 및 최종 측정점 구성을
 scan이나 높이 배열 없이 실패 영역을 simulator, `lidar-processing` 또는 판정 불가로 구분한다.
 `tests/edge/run.sh`의 image 기반 UDS, 관찰과 상태 수락 검증은 별도 실행 절차다.
 
-Live 계약 검증의 Python 구독 client는 tonic UDS server에 필요한 channel 조건을 명시한다. 실제
-`lidar-processing` container가 같은 연결 조건을 충족하는지는 단계 5 edge 병행 실행에서 확인한다.
-연결 조건의 정본은 [`../edge-platform-integration/`](../edge-platform-integration/)이다.
+Live 계약 검증의 Python 구독 client는 tonic UDS server에 필요한 channel 조건을 명시한다. 고정한
+외부 `lidar-processing` source에 같은 authority option을 적용한 로컬 ARM64 image는 실제 두 UDS를
+구독하고 `GOOD` 결과를 만들었다. 고정 source에는 이 option이 아직 없으므로 원격 source에서 식별
+가능한 호환 image가 장기 검증의 선행 조건이다. 연결 조건의 정본은
+[`../edge-platform-integration/`](../edge-platform-integration/)이다.
+
+고정한 처리 구현의 `frame_loss` counter는 정상 10 Hz 사전 검증에서도 증가하며 장기 판정은 이
+값을 유실로 처리한다. 처리 구현이 정상 스케줄 지터를 수용하고 실제 유실과 보관 회전을 구분하기
+전에는 단계 5를 완료하지 않는다. 재현 조건과 측정값은 `docs/performance.md`가 정본이다.
 
 ## 전환 범위
 
@@ -93,7 +104,7 @@ ID에 포함된 기존 Repository 이름도 version 1에서는 바꾸지 않는�
 | 2 | 완료 | 적재 시뮬레이션 이식 | World 자료형, 표면, 적재 및 수거 상태 전이 | 고정 시각 snapshot과 부피 불변식 통과 |
 | 3 | 완료 | LiDAR 측정 이식 | 회전, 광선 교차, 합성 왜곡, quality와 SDK 정수 변환 | 무잡음 geometry 및 ScanFrame golden 통과 |
 | 4 | 완료 | 외부 출력 이식 | UDS gRPC server 2개, 상태 및 진단 writer, 관찰 publisher, exporter CLI | Live UDS frame과 고정 engine의 계약 수락 |
-| 5 | 예정 | ARM64 병행 검증 | digest image, 의미 판정과 장기 공유 부하 보고서 | 기능 및 성능 합격선 통과 |
+| 5 | 진행 중 | ARM64 병행 검증 | digest image, 의미 판정과 장기 공유 부하 보고서 | 기능 및 성능 합격선 통과 |
 | 6 | 예정 | 기본 구현 전환 | Python runtime 제거, 배포 및 사용자 문서 갱신 | 새 checkout 배포와 rollback 절차 검증 |
 
 단계 0은 무잡음 scan의 교차 좌표를 명시한 tolerance로 비교하고 SDK 이후 wire 정수는 정확히
