@@ -93,11 +93,66 @@ test double의 `docker stats`는 결과 directory에 남는다. CPU 2 core는 �
 명시적으로 양보하지 않을 수 있다. 계산 시간이 100 ms 주기에 근접하면 gRPC와 상태 갱신 task가
 지연되므로 짧은 데이터 정합성 통과만으로 지속 실행을 판정할 수 없다.
 
+## Rust ARM64 사전 검증
+
+Rust 후보 source revision은 `23f9e5a5061735ff3c8b7d324792340ce94782d9`이고 검증 image digest는
+`sha256:2aaf1d3a6fae800906e19a9d28a69e9063f40bd45d20bdfa0924ec5221b92fae`다. Raspberry Pi 5
+8 GB에서 600초 평균 적재 주기와 진단 비활성 설정으로 짧은 검증을 수행했다.
+
+생성기 단독 사전 검증 결과는 다음과 같다. CPU는 Docker의 약 2초 간격 표본 20개를 사용했고
+frame 지연은 40초 측정 구간의 전체 400개 batch를 사용했다.
+
+| 항목 | 관측값 |
+| --- | --- |
+| 완료 batch | 400/400 |
+| 생성기 CPU P95 | 35.18 percent |
+| 생성기 CPU 최대 | 35.46 percent |
+| 공동 frame 완료 지연 P99 | 21.381 ms |
+| 공동 frame 완료 지연 최대 | 23.895 ms |
+| 계측 buffer overflow | 없음 |
+
+Docker가 scratch runtime의 memory 사용량을 0 B로 반환했으므로 단독 검증의 RSS 값은 사용하지
+않았다.
+
+공유 사전 검증은 같은 Rust image, 고정한 `lidar-processing` source
+`666ca6067a3bb86833b74140cb659049025d0dae`에 UDS authority option만 적용한 로컬 ARM64 image와
+임시 계약 수신기를 함께 실행했다. 이 처리 image는 registry에 게시하지 않았다. CPU와 RSS는
+cgroup v2 CPU 시간과 `smaps_rollup`을 약 1초 간격으로 읽은 29개 구간 및 표본을 사용했다. 준비
+2초와 측정 30초의 짧은 실행이므로 정식 percentile 근거가 아니다.
+
+| 항목 | 관측값 |
+| --- | --- |
+| 완료 batch | 300/300 |
+| 생성기 CPU P95 | 37.79 percent |
+| 생성기 CPU 최대 | 37.83 percent |
+| 생성기 RSS P95 | 5.81 MiB |
+| 생성기 RSS 최대 | 5.92 MiB |
+| 공동 frame 완료 지연 P99 | 22.756 ms |
+| 처리기 CPU P95 | 22.19 percent |
+| 처리기 CPU 최대 | 93.31 percent |
+| 처리기 RSS P95 | 67.38 MiB |
+| 처리기 RSS 최대 | 67.38 MiB |
+| 처리 measurement | 전체 29개, `GOOD` 27개 |
+| 생성기 scan 의미 | 두 sensor 모두 통과 |
+| 처리 결과 의미 | 높이 범위, sequence 증가와 융합 적재율 범위 통과 |
+| 처리기 `frame_loss` | 82 |
+
+`frame_loss`는 생성기 scan 의미나 server frame 누락에서 발생하지 않았다. 고정한 처리 구현은
+sensor별 최근 10개 scan을 보관하고 1초마다 계산한다. 10 Hz에서 계산 경계 사이 11개 scan이
+들어오면 첫 scan을 보관하지 못하고 다음 계산에서 sensor당 1개를 `frame_loss`로 기록한다. 같은
+입력을 처리 엔진 단위 실행에 넣어 총 2 증가와 `GOOD` 결과를 함께 재현했다. 처리 image가 이
+경계를 수정하거나 counter 의미를 실제 전송 유실과 분리하기 전에는 장기 matrix의 유실 0 조건을
+통과할 수 없다.
+
+현재 edge의 Rust 후보와 authority 수정 처리기는 함께 실행되며 두 driver와 처리 상태는
+`HEALTHY`다. 상주 measurement uplink가 없는 실행의 `local_loss_count`는 downstream 부재를
+나타내므로 사전 성능 결과에 포함하지 않는다.
+
 ## Rust 공유 부하 측정 규칙
 
-Rust 공유 부하 측정 결과는 아직 없다. 아래 규칙은 Rust 전환의 합격 측정에 적용하며 수치
-합격선은 [`development-plan.md`](development-plan.md#성능-합격)가 정본이다. Python 기준선의
-관측값으로 Rust 합격 여부를 판정하지 않는다.
+Rust 장기 공유 부하 합격 결과는 아직 없다. 아래 규칙은 Rust 전환의 합격 측정에 적용하며 수치
+합격선은 [`development-plan.md`](development-plan.md#성능-합격)가 정본이다. 위 사전 검증이나
+Python 기준선의 관측값으로 Rust 합격 여부를 판정하지 않는다.
 
 고정된 실행 명령, 증거 인계와 aggregate 결과 schema는
 [`../tests/edge/long_validation/README.md`](../tests/edge/long_validation/README.md)를 따른다.

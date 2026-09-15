@@ -178,6 +178,13 @@ ingest, 단면 coverage와 최종 `GOOD` 측정을 확인한다. 단계 4의 Rus
 제공한다. 현재 0.9.0 image의 기본 실행 경로는 Python이며 Rust `run` 후보는 ARM64 공유 부하 검증을
 통과한 뒤 기본 실행 경로로 전환한다.
 
+Rust 후보는 Raspberry Pi 5에서 두 sensor scan 의미와 `lidar-processing`의 높이 및 적재율 변환을
+통과했다. 짧은 사전 검증은 정식 60분 부하 수락을 대신하지 않으며 고정한 `lidar-processing`
+source의 호환 선행 조건이 남아 있다. 현재 Release의 기본 실행 경로는 Python이다. 측정값과 남은
+조건은
+[`docs/performance.md`](docs/performance.md)와 [`docs/development-plan.md`](docs/development-plan.md)가
+정본이다.
+
 배포 입력은 다음 4개 경로로 구분한다.
 
 | Host 입력 | Container 경로 | 역할 |
