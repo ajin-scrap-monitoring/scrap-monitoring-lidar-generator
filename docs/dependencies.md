@@ -12,8 +12,8 @@ wire binding 생성, 비동기 출력과 검증에 사용한다. 나머지 항�
 | 의존성 | 버전 | 사용 목적 | 출처 | 라이선스 |
 | --- | --- | --- | --- | --- |
 | CPython | 호환 범위 `>=3.14,<3.15`, 개발 및 OCI image `3.14.4` | 애플리케이션 실행 및 Python 구문 검사 | [Python](https://www.python.org/downloads/) | Python-2.0 |
-| `uv` | `0.12.12` | 환경 구성, 의존성 잠금과 명령 실행 | [Astral](https://github.com/astral-sh/uv) | MIT OR Apache-2.0 |
-| `uv_build` | `0.12.12` | Python source distribution과 wheel 빌드 | [Astral](https://docs.astral.sh/uv/concepts/build-backend/) | MIT OR Apache-2.0 |
+| `uv` | `0.12.15` | 환경 구성, 의존성 잠금과 명령 실행 | [Astral](https://github.com/astral-sh/uv) | MIT OR Apache-2.0 |
+| `uv_build` | `0.12.15` | Python source distribution과 wheel 빌드 | [Astral](https://docs.astral.sh/uv/concepts/build-backend/) | MIT OR Apache-2.0 |
 | NumPy | `>=2.5.3,<2.6` | 높이장 배열, 부피와 표면 변화 수치 연산 | [NumPy](https://numpy.org/) | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
 | `grpcio` | `>=1.83.1,<1.84` | sensor별 gRPC over UDS server와 구독 stream | [gRPC](https://github.com/grpc/grpc) | Apache-2.0 |
 | `protobuf` | `>=7.36.1,<8` | 외부 ScanFrame wire message | [Protocol Buffers](https://github.com/protocolbuffers/protobuf) | BSD-3-Clause |
@@ -28,9 +28,9 @@ wire binding 생성, 비동기 출력과 검증에 사용한다. 나머지 항�
 | `actions/setup-python` | `v7.0.0` | GitHub Actions의 Python 3.14.4 설치 | [GitHub](https://github.com/actions/setup-python) | MIT |
 | `actions/upload-artifact` | `v7.0.1` | ARM64 후보 image digest 참조의 검증 결과 보관 | [GitHub](https://github.com/actions/upload-artifact) | MIT |
 | `astral-sh/setup-uv` | `v10.1.0` | GitHub Actions의 uv 설치 및 cache 구성 | [Astral](https://github.com/astral-sh/setup-uv) | MIT |
-| `docker/setup-qemu-action` | `v4.3.0` | GitHub Actions의 ARM64 image emulation 구성 | [Docker](https://github.com/docker/setup-qemu-action) | Apache-2.0 |
+| `docker/setup-qemu-action` | `v4.4.0` | GitHub Actions의 ARM64 image emulation 구성 | [Docker](https://github.com/docker/setup-qemu-action) | Apache-2.0 |
 | `tonistiigi/binfmt` | `qemu-v10.2.3-68` | ARM64 실행용 QEMU static binary 등록 | [GitHub](https://github.com/tonistiigi/binfmt) | MIT |
-| `docker/setup-buildx-action` | `v4.3.0` | GitHub Actions의 ARM64 image builder 구성 | [Docker](https://github.com/docker/setup-buildx-action) | Apache-2.0 |
+| `docker/setup-buildx-action` | `v4.4.0` | GitHub Actions의 ARM64 image builder 구성 | [Docker](https://github.com/docker/setup-buildx-action) | Apache-2.0 |
 | Docker Buildx | `v0.37.1` | 고정 BuildKit builder 생성과 image build 제어 | [GitHub](https://github.com/docker/buildx) | Apache-2.0 |
 | Moby BuildKit | `v0.33.0` | GitHub Actions의 고정 container image builder | [GitHub](https://github.com/moby/buildkit) | Apache-2.0 |
 | `docker/login-action` | `v4.6.0` | GitHub Container Registry 인증 | [Docker](https://github.com/docker/login-action) | Apache-2.0 |
