@@ -112,6 +112,6 @@
     "src/scrap_monitoring_lidar_simulator/scenario/snapshot.py": "8aa8e16a621a85cb9b11aaaa4f9b4ba398e9cc1f99e5209593ca3edeae894791",
     "src/scrap_monitoring_lidar_simulator/scenario/time_scale.py": "656c76856589416c000cbdaa6e92d595a568c2c1911da5a13de167942a3ecbd6",
     "tools/generate_rust_parity_fixtures.py": "1dcf454e52bb76233e2e7ad0b5ba581e0b349bb50d68ecaac540156eccf54c4d",
-    "uv.lock": "8841e45bb3c68fce1c2e5c0177e4a44db477600d20bb5d8ad5db2dfb8afb7d15"
+    "uv.lock": "1078b05552530c311128dc9730fca4baaa2a1c63f298f50338929ad9bda24a0b"
   }
 }

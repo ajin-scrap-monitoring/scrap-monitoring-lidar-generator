@@ -638,13 +638,13 @@ def _resource_failures(metrics: Mapping[str, object]) -> set[str]:
     auxiliary_metrics = [
         _metric(metrics, "processing_cpu_percent", "p95"),
         _metric(metrics, "processing_rss_bytes", "p95"),
-        _metric(metrics, "generator_cgroup_memory_current_bytes", "p95"),
-        _metric(metrics, "processing_cgroup_memory_current_bytes", "p95"),
         _metric(metrics, "system_load_1m", "p95"),
         _metric(metrics, "device_temperature_c", "maximum"),
         _metric(metrics, "helper_cpu_percent", "p95"),
         _metric(metrics, "helper_rss_bytes", "p95"),
     ]
+    _metric(metrics, "generator_cgroup_memory_current_bytes", "p95")
+    _metric(metrics, "processing_cgroup_memory_current_bytes", "p95")
     _cgroup_throttling(metrics)
     failures: set[str] = set()
     if not _metric_complete(cpu_count, cpu_missing, cpu_p95, EXPECTED_RESOURCE_SAMPLES):

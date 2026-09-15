@@ -1,6 +1,6 @@
 [project]
 name = "scrap-monitoring-lidar-simulator"
-version = "0.9.0"
+version = "0.10.0"
 description = "Deterministic synthetic LiDAR simulator for scrap monitoring development."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"

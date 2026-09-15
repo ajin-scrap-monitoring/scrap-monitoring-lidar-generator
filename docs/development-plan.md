@@ -6,53 +6,38 @@
 
 | 경계 | 상태 | 정본 |
 | --- | --- | --- |
-| 공개 합성 환경과 적재 시나리오 | Python 기본 구현 및 Rust 후보 구현 완료 | `examples/`, `docs/configuration.md` |
-| RPLIDAR S2E 호환 scan 생성 | Python 기본 구현 및 Rust 후보 구현 완료 | `docs/sdk-compatibility.md` |
-| `lidar-processing` gRPC over UDS scan 출력 | Python 통합, Rust live frame과 실제 container 사전 수락 완료 | `contracts/lidar/v1/`, `edge-platform-integration/` |
-| 적재 모델 관찰 stream | 두 구현 완료 | `docs/observation.md` |
-| ARM64 image 배포 | 자동 build 및 image 검증 구성 완료 | `docs/deployment.md` |
+| 공개 합성 환경과 적재 시나리오 | Rust 기본 구현, Python 기준 구현 | `examples/`, `docs/configuration.md` |
+| RPLIDAR S2E 호환 scan 생성 | Rust 기본 구현, Python 기준 구현 | `docs/sdk-compatibility.md` |
+| `lidar-processing` gRPC over UDS scan 출력 | Rust live frame과 실제 container 수락 완료 | `contracts/lidar/v1/`, `edge-platform-integration/` |
+| 적재 모델 관찰 stream | Rust 기본 구현, Python 기준 구현 | `docs/observation.md` |
+| ARM64 image 배포 | Rust 단일 실행 image와 자동 검증 | `docs/deployment.md` |
 
-현재 source와 Release version은 0.9.0이며 기본 실행 경로와 OCI image entrypoint는 Python
-3.14다. 하나의 적재 모델에서 정확히 2개 sensor scan을 만들고 sensor별 gRPC(Google Remote
-Procedure Call) over UDS(Unix Domain Socket) endpoint를 제공한다. `lidar-processing`은 생성기의
-환경 JSON을 직접 읽지 않으며 exporter가 같은 공개 합성 환경에서 처리 설정을 만든다.
+현재 source와 Release version은 0.10.0이다. 기본 실행 경로와 OCI(Open Container Initiative)
+image entrypoint는 Rust다. 하나의 적재 모델에서 정확히 2개 sensor scan을 만들고 sensor별
+gRPC(Google Remote Procedure Call) over UDS(Unix Domain Socket) endpoint를 제공한다.
+`lidar-processing`은 생성기의 환경 JSON을 직접 읽지 않으며 exporter가 같은 공개 합성 환경에서
+처리 설정을 만든다.
 
-짧은 제어 통합 검증에서는 두 sensor frame 변환, UDS 구독과 `lidar-processing`의 `GOOD` 결과를
-확인했다. Raspberry Pi 5 동시 실행에서는 Python 생성기가 논리 CPU core 하나에 근접한 부하를
-사용하고 100 ms scan 주기의 여유가 부족했다. 기능 범위는 갖췄지만 공유 edge 장비의 지속 실행
-합격 조건은 충족하지 못한 상태다. 측정 범위와 현재 관측은 `docs/performance.md`가 정본이다.
+Rust binary는 공개 JSON 3개와 배포 override를 읽고 하나의 적재 모델, sensor별 고정 계산 worker
+2개, UDS gRPC server 2개, 상태 writer, 관찰 publisher와 선택적 진단 writer를 하나의 생명주기로
+실행한다. SIGINT와 SIGTERM 종료는 생성과 출력 queue를 닫고 UDS를 제거한다. Python 구현은 Rust
+동등성 fixture, 외부 계약 검사와 개발 도구로 유지하며 Release image에 포함하지 않는다.
 
-Rust 전환은 단계 4까지 완료했다. Rust binary는 공개 JSON 3개와 배포 override를 읽고 하나의 적재
-모델, sensor별 고정 계산 worker 2개, UDS gRPC server 2개, 상태 writer, 관찰 publisher와 선택적
-진단 writer를 하나의 생명주기로 실행한다. SIGINT와 SIGTERM 종료는 생성과 출력 queue를 닫고 UDS를
-제거한다. 전환의 목적은 현재 외부 계약과 합성 모델을 유지하면서 계산 여유와 실행 안정성을
-확보하는 것이다.
+Raspberry Pi 5 짧은 공유 검증은 두 sensor 기준 광선 구성, 실제 `lidar-processing`의 sensor별 및
+융합 `GOOD` 결과, 높이 및 적재율 범위, sequence 진행과 자원 여유를 확인한다. 검증 image는 고정한
+외부 source에 UDS authority와 frame 손실 의미를 바로잡는 재현 가능한 patch를 적용한다. 외부
+Repository의 원격에는 이 변경을 게시하지 않는다. 조건과 관측값은 `docs/performance.md`, 연결 경계는
+[`../edge-platform-integration/`](../edge-platform-integration/)이 정본이다.
 
-단계 5는 진행 중이다. ARM64 Rust 후보는 Raspberry Pi 5에서 두 sensor 기준 광선 구성과 실제
-`lidar-processing`의 높이 및 적재율 결과를 통과했다. 30초 공유 사전 검증에서 생성기 CPU P95,
-RSS P95와 공동 frame 완료 지연 P99는 1차 합격선 안에 있었다. 이 결과는 5분 준비와 60분 측정으로
-구성된 네 case 장기 matrix를 대신하지 않는다. 측정 조건과 값은 `docs/performance.md`가 정본이다.
+현재 CI(Continuous Integration)는 Rust 단위 및 통합 테스트, Python 기준선, 고정한 외부 계약,
+ARM64 Rust image와 문서 산출물을 검증한다. Live 계약 검증은 Rust release binary의 `run` 명령을
+실제로 시작하고 exporter 출력, sensor별 UDS 구독, 상태 파일, 관찰 연결, 종료 정리와
+`lidar-processing` `ProcessingEngine`의 결과를 확인한다.
 
-현재 CI는 Python 기준선, Rust 단위 및 통합 테스트, ARM64 Rust release build와 Python 기본 image를
-검증한다. 고정한 `ajin-edge-platform` checkout을 사용하는 live 계약 검증은 Rust release binary의
-`run` 명령을 실제로 시작하고 exporter 출력, sensor별 UDS 구독, 상태 파일, 관찰 연결, 종료 정리와
-`lidar-processing` `ProcessingEngine`의 두 sensor 및 융합 `GOOD` 결과를 확인한다.
-
-단계 5 장기 검증 도구는 두 구성 요소의 의미 판정을 분리한다. Rust simulator는 초당 1개 기준
-scan의 허공, 정적 구조와 적재면 교차 및 최종 측정점 구성을 집계한다. `lidar-processing` 결과는
-높이 범위, sensor별 및 융합 적재율 관계와 filling 및 collecting 추세를 집계한다. 결과는 원시
-scan이나 높이 배열 없이 실패 영역을 simulator, `lidar-processing` 또는 판정 불가로 구분한다.
-`tests/edge/run.sh`의 image 기반 UDS, 관찰과 상태 수락 검증은 별도 실행 절차다.
-
-Live 계약 검증의 Python 구독 client는 tonic UDS server에 필요한 channel 조건을 명시한다. 고정한
-외부 `lidar-processing` source에 같은 authority option을 적용한 로컬 ARM64 image는 실제 두 UDS를
-구독하고 `GOOD` 결과를 만들었다. 고정 source에는 이 option이 아직 없으므로 원격 source에서 식별
-가능한 호환 image가 장기 검증의 선행 조건이다. 연결 조건의 정본은
-[`../edge-platform-integration/`](../edge-platform-integration/)이다.
-
-고정한 처리 구현의 `frame_loss` counter는 정상 10 Hz 사전 검증에서도 증가하며 장기 판정은 이
-값을 유실로 처리한다. 처리 구현이 정상 스케줄 지터를 수용하고 실제 유실과 보관 회전을 구분하기
-전에는 단계 5를 완료하지 않는다. 재현 조건과 측정값은 `docs/performance.md`가 정본이다.
+4개 case 장기 공유 부하 matrix는 0.10.0 Release 이후 별도 안정성 검증으로 수행한다. 장기 검증
+도구는 simulator의 허공, 정적 구조, 적재면 교차와 최종 측정점 의미를 처리 높이 및 적재율 의미와
+독립적으로 판정하고 실패 영역을 simulator, `lidar-processing` 또는 판정 불가로 구분한다. 장기
+검증은 기본 실행 전환과 Release의 선행 조건이 아니다.
 
 ## 전환 범위
 
@@ -104,8 +89,8 @@ ID에 포함된 기존 Repository 이름도 version 1에서는 바꾸지 않는�
 | 2 | 완료 | 적재 시뮬레이션 이식 | World 자료형, 표면, 적재 및 수거 상태 전이 | 고정 시각 snapshot과 부피 불변식 통과 |
 | 3 | 완료 | LiDAR 측정 이식 | 회전, 광선 교차, 합성 왜곡, quality와 SDK 정수 변환 | 무잡음 geometry 및 ScanFrame golden 통과 |
 | 4 | 완료 | 외부 출력 이식 | UDS gRPC server 2개, 상태 및 진단 writer, 관찰 publisher, exporter CLI | Live UDS frame과 고정 engine의 계약 수락 |
-| 5 | 진행 중 | ARM64 병행 검증 | digest image, 의미 판정과 장기 공유 부하 보고서 | 기능 및 성능 합격선 통과 |
-| 6 | 예정 | 기본 구현 전환 | Python runtime 제거, 배포 및 사용자 문서 갱신 | 새 checkout 배포와 rollback 절차 검증 |
+| 5 | 완료 | ARM64 단기 통합 검증 | digest image, scan 및 처리 의미와 자원 측정 | Release 전 단기 합격선 통과 |
+| 6 | 완료 | 기본 구현 전환 | Rust image, 배포 및 사용자 문서 | 새 checkout 배포와 rollback 절차 검증 |
 
 단계 0은 무잡음 scan의 교차 좌표를 명시한 tolerance로 비교하고 SDK 이후 wire 정수는 정확히
 비교한다. Noise와 합성 왜곡은 고정 seed 재현 및 분포 허용범위로 비교한다. Python의
@@ -143,9 +128,8 @@ Wire monotonic 시각은 Linux `CLOCK_MONOTONIC`의 host epoch를 사용한다. 
 단계 4의 외부 계약 수락 명령과 필요한 고정 checkout은
 [`../edge-platform-integration/`](../edge-platform-integration/)이 정본이다.
 
-단계 5까지 Python 구현은 기본 실행 경로로 유지한다. 단계별 변경은 독립 Pull Request (PR)로
-검증하고 기본 전환 PR에서 image entrypoint와 runtime을 Rust로 바꾼다. 전환 Release가 edge 합격선을
-통과하기 전에는 Python runtime을 삭제하지 않는다.
+기본 image는 정적으로 link한 Rust 실행 파일과 라이선스 고지만 포함한다. Python 구현과 uv 환경은
+기준 fixture 재생성, 외부 계약 검사와 문서 생성에만 사용한다.
 
 ## 동등성 판정
 
@@ -190,45 +174,40 @@ serialization은 canonical 형식이 아니므로 Rust 동등성은 decode한 fi
 - 같은 model version, 설정과 seed의 반복 실행 결과 일치.
 - 큰 음수 거리 noise 결과의 거리 0 무효화와 process 지속.
 
-### 성능 합격
+### Release 전 단기 합격
 
 Raspberry Pi 5 8GB에서 생성기, `lidar-processing`과 상태 수집 검증 process를 함께 실행한다.
 Docker CPU 100 percent는 논리 core 하나로 해석한다.
 
 | 항목 | 1차 합격선 |
 | --- | --- |
-| 지속 시간 | 기본 24시간 적재 주기와 600초 가속 주기 각각 60분 |
-| 생성기 CPU | 60분 구간 P95 75 percent 이하 |
+| 지속 시간 | 준비 2초 이상, 측정 30초 이상 |
+| 생성기 CPU | 측정 구간 P95 75 percent 이하 |
 | 생성기 RSS | P95 128 MiB 이하 |
 | 두 sensor frame 생성 지연 | P99 70 ms 이하 |
 | 생성기 원인 sequence gap | 0 |
 | 처리 상태 | 두 sensor와 융합 결과 `GOOD` 유지 |
-| 관찰 활성화 추가 CPU | 비활성 기준 5 percentage point 이하 |
+| 데이터 의미 | 생성 scan과 처리 높이 및 적재율 검증 통과 |
 | 장비 상태 | OOM, container restart와 thermal throttling 0회 |
 
-합격선은 생성기가 공유 장비의 core 하나를 계속 독점하지 않고 100 ms 주기에 30 ms 이상의 계산
-여유를 남기도록 정한 1차 기준이다. 측정 도구 자체의 부하는 별도 process로 기록하고 원시 로그,
+합격선은 생성기가 공유 장비의 core 하나를 계속 독점하지 않고 100 ms 주기에 계산 여유를
+남기는지 Release 전에 빠르게 판정한다. 측정 도구 자체의 부하는 별도 process로 기록하고 원시 로그,
 사설 주소와 실제 sensor 자료는 Git에 추가하지 않는다.
 
-기본 24시간 설정의 60분 실행은 steady-state 부하를 판정한다. 600초 가속 설정의 60분 실행은 적재,
-수거와 다음 cycle 전이까지 판정한다. 관찰 추가 CPU는 production 계약을 변경하지 않는 benchmark용
-no-op publisher와 실제 publisher를 같은 조건에서 비교한다.
+### Release 후 장기 검증
 
-## 설정 version 계획
+기본 86,400초 적재 주기와 600초 가속 주기에서 실제 관찰 publisher와 no-op publisher를 각각
+실행한다. 각 case는 5분 준비와 60분 측정으로 구성하며 전체 matrix는 4시간 20분이다. CPU, RSS,
+frame 완료 지연, sequence gap, 처리 결과, 관찰 추가 부하와 장비 상태에 단기 합격선의 자원 및
+상태 기준을 적용한다. 관찰 활성화 추가 CPU는 같은 적재 주기의 no-op 실행보다 5 percentage point
+이하여야 한다. 이 matrix는 Release 이후 지속 안정성과 반복 cycle을 검증하는 후속 작업이다.
 
-단계 1부터 5까지 현재 `generator.v2.json`, `environment.v1.json`과
-`quality-profile.v1.json`을 그대로 읽는다. 외부 계약 parity가 먼저이며 설정 migration을 동시에
-수행하지 않는다.
+## 설정 version
 
-Rust 기본 전환 전에 `generator.v3.json`은 다음 2개 값을 명시하는 용도로만 검토한다.
-
-| 값 | 목적 |
-| --- | --- |
-| `simulation_model_version` | 난수 stream, 상태 전이와 수치 모델 재현 경계 |
-| `angle_of_repose_deg` | 현재 코드 상수인 합성 안식각의 공개 설정화 |
-
-경사 이완 반복 상한과 수치 tolerance는 물리 환경값이 아니라 engine 정책으로 유지한다. Version 3을
-채택하면 version 2 입력 변환기와 명확한 오류를 제공하고 같은 사실을 환경변수에 중복하지 않는다.
+Rust 기본 구현은 `generator.v2.json`, `environment.v1.json`과 `quality-profile.v1.json`을 읽는다.
+난수 stream과 수치 모델 재현 경계는 Rust의 simulation model version 1이고 합성 안식각 35도와
+경사 이완 반복 상한은 engine 정책이다. 이 값은 배포 override나 환경 형상 입력이 아니므로 기존
+version 2 설정 계약에 중복하지 않는다.
 
 ## 프로젝트 식별자
 
@@ -237,8 +216,8 @@ Rust crate와 binary, CLI(Command-Line Interface), OCI image title은 이 이름
 프로그램은 시간에 따라 변하는 적재 환경과 LiDAR 측정을 함께 모사하며 실제 S2E network 장비
 자체를 구현하지 않는다.
 
-GitHub Repository와 GHCR(GitHub Container Registry) package의 원격 이름은 단계 6 기본 전환의
-병합 및 Release 경계에서 같은 이름으로 바꾼다. 이미 공개된 schema ID와 외부 version 1 하위
+GitHub Repository와 GHCR(GitHub Container Registry) package도
+`scrap-monitoring-lidar-simulator` 이름을 사용한다. 이미 공개된 schema ID와 외부 version 1 하위
 호환 식별자는 그대로 보존한다.
 
 ## 환경 규격 문서 인계

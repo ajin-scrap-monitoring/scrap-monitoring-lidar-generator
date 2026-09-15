@@ -43,6 +43,19 @@ def test_complete_run_passes_at_inclusive_limits() -> None:
     assert result["evaluation"] == {"passed": True, "failure_codes": []}
 
 
+def test_complete_run_allows_unavailable_cgroup_memory_diagnostics() -> None:
+    run = passing_run(86_400, "actual")
+    unavailable = {
+        "sample_count": 0,
+        "missing_count": 3_600,
+        "p95": None,
+    }
+    run["metrics"]["generator_cgroup_memory_current_bytes"] = unavailable.copy()
+    run["metrics"]["processing_cgroup_memory_current_bytes"] = unavailable.copy()
+
+    assert evaluate_run(run)["evaluation"] == {"passed": True, "failure_codes": []}
+
+
 def test_accelerated_run_requires_five_complete_cycles() -> None:
     run = passing_run(600, "actual")
     run["scenario"].update(

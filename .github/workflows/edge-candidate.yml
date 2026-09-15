@@ -60,7 +60,6 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: Dockerfile.rust-candidate
           platforms: linux/arm64
           load: true
           push: false
@@ -72,7 +71,7 @@ jobs:
 
       - name: Verify local candidate image
         run: |
-          tests/edge/verify-rust-candidate-image.sh \
+          tests/edge/verify-rust-image.sh \
             scrap-monitoring-lidar-simulator:edge-candidate-verify \
             examples \
             "$GITHUB_SHA"
@@ -161,7 +160,6 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: Dockerfile.rust-candidate
           platforms: linux/arm64
           push: true
           tags: ${{ steps.candidate.outputs.revision_ref }}
@@ -258,7 +256,7 @@ jobs:
             exit 1
           fi
 
-          tests/edge/verify-rust-candidate-image.sh \
+          tests/edge/verify-rust-image.sh \
             "$IMAGE_NAME@$IMAGE_DIGEST" \
             examples \
             "$GITHUB_SHA"

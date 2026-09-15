@@ -106,7 +106,7 @@ sequence gap으로 확인한다.
 포함하지 않는다. 외부 SDK는 BSD-2-Clause license를 따른다.
 
 자동 검증은 HQ 표현 가능성, 정수 변환 경계, 0 거리, quality 이동, 안정 angle 정렬, 첫 scan
-생략과 sensor별 sequence를 Python 기준 구현과 Rust 후보에서 확인한다. 다음 기준선 검증은 Python
+생략과 sensor별 sequence를 Python 기준 구현과 Rust 기본 구현에서 확인한다. 다음 기준선 검증은 Python
 frame과 처리 설정을 고정한 `lidar-processing`의 `ProcessingEngine`에 넣는다. Rust exporter가 만든
 설정을 검사할 때는 `--processing-config`로 해당 파일을 지정한다.
 

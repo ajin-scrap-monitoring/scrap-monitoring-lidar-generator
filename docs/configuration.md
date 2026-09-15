@@ -46,7 +46,7 @@ frame에 포함하지 않는다. exporter가 공개 합성 환경의 센서 위�
 센서 ID, 설치 형상, 측정과 합성 오차는 환경변수로 받지 않는다. 배포 식별자와 host 경로는
 JSON에 넣지 않는다.
 
-Python 기본 runtime과 Rust 후보의 `run` 명령은 같은 우선순위와 환경변수 이름을 사용한다.
+Rust 기본 runtime과 Python 기준 구현의 `run` 명령은 같은 우선순위와 환경변수 이름을 사용한다.
 Rust `check --runtime`은 모든 배포 설정을 검증하지만 socket이나 상태 파일을 만들지 않는다.
 Rust `run`은 검증된 설정만으로 실제 생성과 외부 출력을 시작하며 별도 비공개 fallback을 두지
 않는다.

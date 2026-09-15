@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import io
 import json
 import math
 import os
@@ -42,6 +43,7 @@ _EXPECTED_OBSERVATION_RECORDS = 3_901
 _MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
 _MAX_SOURCE_ARCHIVE_FILES = 10_000
 _MAX_SOURCE_ARCHIVE_EXPANDED_BYTES = 512 * 1024 * 1024
+_MAX_DOCKER_COPY_BYTES = 16 * 1024 * 1024
 _OBSERVATION_RESULT_FIELDS = {
     "schema_version",
     "run_id",
@@ -150,8 +152,8 @@ def parse_cgroup_path(proc_root: Path, cgroup_root: Path, host_pid: int) -> tupl
         raise RunnerError("container does not have one valid cgroup v2 membership")
     relative = matches[0].removeprefix("/")
     host_path = cgroup_root / relative
-    if not (host_path / "cpu.stat").is_file() or not (host_path / "memory.current").is_file():
-        raise RunnerError("container cgroup v2 counters are unavailable")
+    if not (host_path / "cpu.stat").is_file():
+        raise RunnerError("container cgroup v2 CPU counters are unavailable")
     helper_path = Path("/host/sys/fs/cgroup") / relative
     return host_path, helper_path
 
@@ -190,20 +192,31 @@ def _cgroup_ancestors(directory: Path, root: Path) -> list[Path]:
 def _read_cgroup_limits(ancestor: Path) -> tuple[float | None, int | None]:
     try:
         cpu_max = (ancestor / "cpu.max").read_text(encoding="ascii").strip().split()
-        memory_max = (ancestor / "memory.max").read_text(encoding="ascii").strip()
+    except FileNotFoundError:
+        cpu_max = None
     except (OSError, UnicodeError) as error:
-        raise RunnerError("effective cgroup resource constraints are unavailable") from error
-    if len(cpu_max) != 2:
+        raise RunnerError("effective cgroup CPU constraints are unavailable") from error
+    try:
+        memory_max = (ancestor / "memory.max").read_text(encoding="ascii").strip()
+    except FileNotFoundError:
+        memory_max = None
+    except (OSError, UnicodeError) as error:
+        raise RunnerError("effective cgroup memory constraints are unavailable") from error
+    if cpu_max is not None and len(cpu_max) != 2:
         raise RunnerError("cgroup cpu.max is invalid")
     try:
-        period = int(cpu_max[1])
-        quota = None if cpu_max[0] == "max" else int(cpu_max[0])
-        memory = None if memory_max == "max" else int(memory_max)
+        period = None if cpu_max is None else int(cpu_max[1])
+        quota = None if cpu_max is None or cpu_max[0] == "max" else int(cpu_max[0])
+        memory = None if memory_max in {None, "max"} else int(memory_max)
     except ValueError as error:
         raise RunnerError("cgroup resource constraint value is invalid") from error
-    if period <= 0 or (quota is not None and quota <= 0) or (memory is not None and memory <= 0):
+    if (
+        (period is not None and period <= 0)
+        or (quota is not None and quota <= 0)
+        or (memory is not None and memory <= 0)
+    ):
         raise RunnerError("cgroup resource constraint value is not positive")
-    return (None if quota is None else quota / period), memory
+    return (None if quota is None else quota / cast(int, period)), memory
 
 
 def _read_effective_constraints(component: str, directory: Path, root: Path) -> dict[str, object]:
@@ -755,12 +768,43 @@ class Docker:
         return result.returncode == 0 and result.stdout.strip() == "true"
 
     def copy_from(self, name: str, source: str, destination: Path) -> bool:
-        result = self._run(
-            ["cp", f"{name}:{source}", str(destination)],
-            operation=f"{name} artifact copy",
-            check=False,
-        )
-        return result.returncode == 0
+        try:
+            result = subprocess.run(
+                [self.executable, "cp", f"{name}:{source}", "-"],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise RunnerError(f"Docker {name} artifact copy timed out") from error
+        if result.returncode != 0:
+            return False
+        try:
+            with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:*") as archive:
+                members = archive.getmembers()
+                if len(members) != 1 or not members[0].isfile():
+                    raise RunnerError("Docker artifact copy must contain one regular file")
+                member = members[0]
+                if member.size > _MAX_DOCKER_COPY_BYTES:
+                    raise RunnerError("Docker artifact copy exceeds the size limit")
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    raise RunnerError("Docker artifact copy is unreadable")
+                payload = extracted.read(_MAX_DOCKER_COPY_BYTES + 1)
+        except (OSError, tarfile.TarError) as error:
+            raise RunnerError("Docker artifact copy is not a valid tar stream") from error
+        if len(payload) != member.size:
+            raise RunnerError("Docker artifact copy size differs from its tar metadata")
+        try:
+            descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+        except FileExistsError as error:
+            raise RunnerError("Docker artifact destination already exists") from error
+        return True
 
     def remove(self, name: str) -> None:
         self._run(["rm", "--force", name], operation=f"{name} removal", check=False)

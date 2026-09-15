@@ -415,7 +415,7 @@ class CgroupSnapshot:
     monotonic_ns: int
     cpu_usage_usec: int
     rss_bytes: int
-    memory_current_bytes: int
+    memory_current_bytes: int | None
     nr_throttled: int
     throttled_usec: int
 
@@ -594,10 +594,10 @@ class RunCollector:
         *,
         generator_cpu_percent: float,
         generator_rss_bytes: int,
-        generator_memory_current_bytes: int,
+        generator_memory_current_bytes: int | None,
         processing_cpu_percent: float,
         processing_rss_bytes: int,
-        processing_memory_current_bytes: int,
+        processing_memory_current_bytes: int | None,
         system_load_1m: float,
         device_temperature_c: float,
         helper_cpu_percent: float,
@@ -606,10 +606,12 @@ class RunCollector:
         """Record one 1-second resource sample."""
         self._cpu.add(generator_cpu_percent)
         self._rss.add(float(generator_rss_bytes))
-        self._generator_memory_current.add(float(generator_memory_current_bytes))
+        if generator_memory_current_bytes is not None:
+            self._generator_memory_current.add(float(generator_memory_current_bytes))
         self._processing_cpu.add(processing_cpu_percent)
         self._processing_rss.add(float(processing_rss_bytes))
-        self._processing_memory_current.add(float(processing_memory_current_bytes))
+        if processing_memory_current_bytes is not None:
+            self._processing_memory_current.add(float(processing_memory_current_bytes))
         self._system_load.add(system_load_1m)
         self._device_temperature.add(device_temperature_c)
         self._helper_cpu.add(helper_cpu_percent)
@@ -1371,9 +1373,18 @@ def read_cgroup_snapshot(
         cpu_usage_usec = cpu["usage_usec"]
         nr_throttled = cpu["nr_throttled"]
         throttled_usec = cpu["throttled_usec"]
-        memory_current = int((cgroup_directory / "memory.current").read_text().strip())
-    except (KeyError, OSError, ValueError) as error:
-        raise CollectionError("cannot read required cgroup v2 counters") from error
+    except KeyError as error:
+        raise CollectionError("cannot read required cgroup v2 CPU counters") from error
+    try:
+        memory_current: int | None = int(
+            (cgroup_directory / "memory.current").read_text(encoding="ascii").strip()
+        )
+    except FileNotFoundError:
+        memory_current = None
+    except (OSError, UnicodeError, ValueError) as error:
+        raise CollectionError("cannot read optional cgroup v2 memory counter") from error
+    if memory_current is not None and memory_current < 0:
+        raise CollectionError("cgroup v2 memory counter must be non-negative")
     process_ids = _read_recursive_cgroup_process_ids(cgroup_directory)
     if not process_ids:
         raise CollectionError("cgroup has no processes")
