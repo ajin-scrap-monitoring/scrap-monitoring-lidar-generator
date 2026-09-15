@@ -21,7 +21,9 @@ from types import FrameType
 from typing import cast
 
 _DIGEST_REFERENCE = re.compile(r"^[A-Za-z0-9._:/-]+@sha256:([0-9a-f]{64})$")
+_LOCAL_IMAGE_ID = re.compile(r"^sha256:([0-9a-f]{64})$")
 _SOURCE_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _RUN_ID = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$")
 _THROTTLED = re.compile(r"^throttled=0x([0-9a-fA-F]+)$")
 _EXPECTED_SENSOR_IDS = ["lidar_1", "lidar_2"]
@@ -117,6 +119,13 @@ def parse_digest_reference(value: str) -> str:
     if match is None:
         raise RunnerError("container images must use repository@sha256 digest references")
     return f"sha256:{match.group(1)}"
+
+
+def parse_processing_image_reference(value: str) -> str:
+    local_match = _LOCAL_IMAGE_ID.fullmatch(value)
+    if local_match is not None:
+        return f"sha256:{local_match.group(1)}"
+    return parse_digest_reference(value)
 
 
 def parse_throttled(value: str) -> int:
@@ -301,23 +310,49 @@ class PublicConfiguration:
     config_revision: str
     calibration_version: str
     pinned_processing_source_commit: str
+    validation_processing_source_commit: str
 
 
-def _load_pinned_processing_source_commit(repository: Path) -> str:
+def _load_processing_source_commits(repository: Path) -> tuple[str, str]:
     source_metadata = _load_json(repository / "edge-platform-integration" / "SOURCE.json")
     commit = source_metadata.get("commit")
     if not isinstance(commit, str) or _SOURCE_COMMIT.fullmatch(commit) is None:
         raise RunnerError("edge platform source metadata has an invalid pinned commit")
-    return commit
+    validation_image = _mapping(
+        source_metadata.get("validation_image"), "edge platform validation image"
+    )
+    validation_commit = validation_image.get("commit")
+    if (
+        not isinstance(validation_commit, str)
+        or _SOURCE_COMMIT.fullmatch(validation_commit) is None
+    ):
+        raise RunnerError("edge platform source metadata has an invalid validation commit")
+    patch_name = validation_image.get("patch_path")
+    patch_sha256 = validation_image.get("patch_sha256")
+    if (
+        not isinstance(patch_name, str)
+        or not isinstance(patch_sha256, str)
+        or _SHA256.fullmatch(patch_sha256) is None
+    ):
+        raise RunnerError("edge platform validation patch metadata is incomplete")
+    integration_root = (repository / "edge-platform-integration").resolve()
+    patch_path = (integration_root / patch_name).resolve()
+    if not patch_path.is_relative_to(integration_root) or not patch_path.is_file():
+        raise RunnerError("edge platform validation patch path is invalid")
+    if hashlib.sha256(patch_path.read_bytes()).hexdigest() != patch_sha256:
+        raise RunnerError("edge platform validation patch digest does not match")
+    return commit, validation_commit
 
 
 def load_public_configuration(repository: Path) -> PublicConfiguration:
     generator_path = repository / "examples" / "generator.v2.json"
     processing_path = repository / "edge-platform-integration" / "v1" / "processing.synthetic.json"
+    pinned_commit, validation_commit = _load_processing_source_commits(repository)
     return _load_public_configuration_files(
         generator_path,
         processing_path,
-        _load_pinned_processing_source_commit(repository),
+        pinned_commit,
+        validation_commit,
     )
 
 
@@ -325,6 +360,7 @@ def _load_public_configuration_files(
     generator_path: Path,
     processing_path: Path,
     pinned_processing_source_commit: str,
+    validation_processing_source_commit: str,
 ) -> PublicConfiguration:
     environment_path, quality_path, seed, environment_id = _load_generator_values(generator_path)
     site_id, edge_id, config_revision, calibration_version = _load_processing_values(
@@ -339,6 +375,7 @@ def _load_public_configuration_files(
         config_revision=config_revision,
         calibration_version=calibration_version,
         pinned_processing_source_commit=pinned_processing_source_commit,
+        validation_processing_source_commit=validation_processing_source_commit,
     )
 
 
@@ -404,12 +441,15 @@ def _load_processing_values(processing_path: Path) -> tuple[str, str, str, str]:
 
 
 def _load_staged_public_configuration(
-    directory: Path, pinned_processing_source_commit: str
+    directory: Path,
+    pinned_processing_source_commit: str,
+    validation_processing_source_commit: str,
 ) -> PublicConfiguration:
     return _load_public_configuration_files(
         directory / "generator.v2.json",
         directory / "processing.synthetic.json",
         pinned_processing_source_commit,
+        validation_processing_source_commit,
     )
 
 
@@ -486,26 +526,40 @@ class Docker:
     def pull(self, image: str) -> None:
         self._run(["pull", image], operation="image pull", capture=False)
 
-    def verify_image(self, image: str, expected_source_commit: str) -> None:
-        digest = parse_digest_reference(image)
+    def verify_image(
+        self, image: str, expected_source_commit: str, *, allow_local_id: bool = False
+    ) -> None:
+        digest = (
+            parse_processing_image_reference(image)
+            if allow_local_id
+            else parse_digest_reference(image)
+        )
         platform_name = self._run(
             ["image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image],
             operation="image platform inspection",
         ).stdout.strip()
         if platform_name != "linux/arm64":
             raise RunnerError("validation images must be linux/arm64")
-        raw_digests = self._run(
-            ["image", "inspect", "--format", "{{json .RepoDigests}}", image],
-            operation="image digest inspection",
-        ).stdout
-        try:
-            repo_digests = json.loads(raw_digests)
-        except json.JSONDecodeError as error:
-            raise RunnerError("Docker image digest evidence is invalid") from error
-        if not isinstance(repo_digests, list) or not any(
-            isinstance(value, str) and value.endswith(f"@{digest}") for value in repo_digests
-        ):
-            raise RunnerError("pulled image does not expose the requested manifest digest")
+        if _LOCAL_IMAGE_ID.fullmatch(image) is not None:
+            image_id = self._run(
+                ["image", "inspect", "--format", "{{.Id}}", image],
+                operation="local image identity inspection",
+            ).stdout.strip()
+            if image_id != digest:
+                raise RunnerError("local image does not expose the requested content identity")
+        else:
+            raw_digests = self._run(
+                ["image", "inspect", "--format", "{{json .RepoDigests}}", image],
+                operation="image digest inspection",
+            ).stdout
+            try:
+                repo_digests = json.loads(raw_digests)
+            except json.JSONDecodeError as error:
+                raise RunnerError("Docker image digest evidence is invalid") from error
+            if not isinstance(repo_digests, list) or not any(
+                isinstance(value, str) and value.endswith(f"@{digest}") for value in repo_digests
+            ):
+                raise RunnerError("pulled image does not expose the requested manifest digest")
         user = self._run(
             ["image", "inspect", "--format", "{{.Config.User}}", image],
             operation="image user inspection",
@@ -907,17 +961,25 @@ class CaseRunner:
         verify_repository_checkout(
             self.arguments.repository, self.arguments.generator_source_commit
         )
-        if self.arguments.processing_source_commit != configuration.pinned_processing_source_commit:
-            raise RunnerError("processing source commit differs from the pinned integration source")
+        if (
+            self.arguments.processing_source_commit
+            != configuration.validation_processing_source_commit
+        ):
+            raise RunnerError("processing source commit differs from the validation image source")
         initial_throttled = _get_throttled()
         if initial_throttled != 0:
             raise RunnerError("thermal throttle history must be 0x0 before validation")
-        for image, source_commit in (
-            (self.arguments.generator_image, self.arguments.generator_source_commit),
-            (self.arguments.processing_image, self.arguments.processing_source_commit),
-        ):
-            self.docker.pull(image)
-            self.docker.verify_image(image, source_commit)
+        self.docker.pull(self.arguments.generator_image)
+        self.docker.verify_image(
+            self.arguments.generator_image, self.arguments.generator_source_commit
+        )
+        if _DIGEST_REFERENCE.fullmatch(self.arguments.processing_image) is not None:
+            self.docker.pull(self.arguments.processing_image)
+        self.docker.verify_image(
+            self.arguments.processing_image,
+            self.arguments.processing_source_commit,
+            allow_local_id=True,
+        )
         device = _device(
             self.docker.version(), self.arguments.cooling, self.arguments.temperature_path
         )
@@ -928,7 +990,9 @@ class CaseRunner:
             self.arguments.repository, self.arguments.generator_source_commit
         )
         configuration = _load_staged_public_configuration(
-            paths.config, configuration.pinned_processing_source_commit
+            paths.config,
+            configuration.pinned_processing_source_commit,
+            configuration.validation_processing_source_commit,
         )
         try:
             return self._run_containers(configuration, device, paths, initial_throttled)
@@ -1193,7 +1257,9 @@ class CaseRunner:
                 "generator_source_commit": self.arguments.generator_source_commit,
                 "generator_image_digest": parse_digest_reference(self.arguments.generator_image),
                 "processing_source_commit": self.arguments.processing_source_commit,
-                "processing_image_digest": parse_digest_reference(self.arguments.processing_image),
+                "processing_image_digest": parse_processing_image_reference(
+                    self.arguments.processing_image
+                ),
                 "config_fingerprint_sha256": fingerprint_files(generator_paths),
                 "processing_config_sha256": hashlib.sha256(
                     configuration.source_paths[3].read_bytes()
@@ -1273,8 +1339,8 @@ class CaseRunner:
 
 
 def _validate_arguments(arguments: argparse.Namespace) -> None:
-    for value in (arguments.generator_image, arguments.processing_image):
-        parse_digest_reference(value)
+    parse_digest_reference(arguments.generator_image)
+    parse_processing_image_reference(arguments.processing_image)
     for value in (arguments.generator_source_commit, arguments.processing_source_commit):
         if _SOURCE_COMMIT.fullmatch(value) is None:
             raise RunnerError("source commits must be full lowercase 40-character SHAs")
@@ -1338,6 +1404,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--observation-port", type=_port, default=17_000)
     parser.add_argument("--cooling", required=True)
     parser.add_argument("--handoff-timeout-s", type=_positive_int, default=300)
+    parser.add_argument("--docker-command", default="docker")
     parser.add_argument(
         "--temperature-path",
         type=Path,
@@ -1355,9 +1422,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     try:
         _validate_arguments(arguments)
-        executable = shutil.which("docker")
+        executable = shutil.which(arguments.docker_command)
         if executable is None:
-            raise RunnerError("Docker CLI is unavailable")
+            raise RunnerError("configured Docker command is unavailable")
         signal.signal(signal.SIGTERM, _raise_interrupt)
         return CaseRunner(arguments, Docker(executable)).run()
     except KeyboardInterrupt:

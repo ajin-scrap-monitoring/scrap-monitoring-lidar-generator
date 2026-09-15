@@ -4,12 +4,13 @@
 계약과 배포 경계를 제공한다. 높이 계산 프로세스의 계약 정본은 `SOURCE.json`이 고정한 외부
 Repository commit이다.
 
-전달 파일은 4개다.
+전달 파일은 5개다.
 
 | 파일 | 역할 |
 |---|---|
 | `README.md` | 연결, 변환과 수락 기준 |
 | `SOURCE.json` | 외부 계약 정본 commit과 검토한 source 경로 |
+| `validation/lidar-processing-compatibility.mbox` | 장기 검증용 처리 image의 재현 가능한 최소 호환 patch |
 | `v1/lidar.proto` | gRPC scan 계약의 고정 사본 |
 | `v1/processing.synthetic.json` | 공개 합성 환경의 완전한 처리 입력 fixture |
 
@@ -80,6 +81,57 @@ grpc.aio.insecure_channel(
 이 값은 simulator 환경변수나 Proto 필드가 아니라 구독 client의 channel option이다. 실제
 `lidar-processing` container와 연결하기 전에 해당 client가 이 option을 적용하는지 확인한다.
 `tools/verify_rust_runtime_contract.py`의 live 구독은 이 조건을 적용한다.
+
+## 장기 검증용 처리 image
+
+`SOURCE.json`의 `commit`은 외부 계약을 읽는 기준 commit이다. `validation_image`는 이 commit에
+`validation/lidar-processing-compatibility.mbox`를 적용해 만드는 검증 전용 파생 image의 source를
+고정한다. Patch는 Python UDS client authority와 runtime에서 수신 검증을 통과한 연속 scan의
+sequence 집계를 수정한다. 정상 recent-ten 보관 회전은 `history_evictions`에 남고 실제 sequence
+간격만 `frame_loss`에 남는다.
+
+검증 image는 simulator Release 산출물이 아니며 GHCR(GitHub Container Registry)에 게시하지
+않는다. 홈서버에서 ARM64 image와 archive를 만들고 엣지에는 archive를 전달하여 load한다. 다음
+명령의 simulator checkout과 외부 clone은 서로 다른 clean directory다.
+
+```shell
+SIMULATOR_ROOT="/path/to/scrap-monitoring-lidar-simulator"
+PROCESSING_ROOT="/path/to/lidar-processing-validation"
+BASE_COMMIT="666ca6067a3bb86833b74140cb659049025d0dae"
+VALIDATION_COMMIT="55b2e9d9401682c237a42945d9f548a4c912951f"
+
+git clone https://github.com/ajin-scrap-monitoring/ajin-edge-platform.git "$PROCESSING_ROOT"
+git -C "$PROCESSING_ROOT" checkout --detach "$BASE_COMMIT"
+git -C "$PROCESSING_ROOT" am --committer-date-is-author-date \
+  "$SIMULATOR_ROOT/edge-platform-integration/validation/lidar-processing-compatibility.mbox"
+test "$(git -C "$PROCESSING_ROOT" rev-parse HEAD)" = "$VALIDATION_COMMIT"
+
+uv sync --directory "$PROCESSING_ROOT" --frozen --group dev
+uv run --directory "$PROCESSING_ROOT" --frozen --group dev pytest
+uv run --directory "$PROCESSING_ROOT" --frozen --group dev ruff check .
+
+docker buildx build \
+  --platform linux/arm64 \
+  --load \
+  --file "$PROCESSING_ROOT/services/lidar-processing/Dockerfile" \
+  --label org.opencontainers.image.source=https://github.com/ajin-scrap-monitoring/ajin-edge-platform \
+  --label org.opencontainers.image.revision="$VALIDATION_COMMIT" \
+  --label org.opencontainers.image.version=0.1.0-validation-arm64 \
+  --tag ajin-lidar-processing:0.1.0-validation-arm64 \
+  "$PROCESSING_ROOT"
+
+docker save \
+  --output ajin-lidar-processing-0.1.0-validation-arm64.tar \
+  ajin-lidar-processing:0.1.0-validation-arm64
+docker image inspect \
+  --format '{{.Id}}' \
+  ajin-lidar-processing:0.1.0-validation-arm64
+```
+
+엣지에서는 archive를 `docker load`로 읽고 마지막 명령이 출력한 `sha256:` image ID를 장기 검증
+runner의 `--processing-image`에 전달한다. `--processing-source-commit`에는
+`VALIDATION_COMMIT`을 전달한다. 원격 외부 Repository에는 branch, commit 또는 image를 게시하지
+않는다.
 
 ## 환경과 처리 설정
 

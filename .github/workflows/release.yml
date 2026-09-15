@@ -152,6 +152,22 @@ jobs:
             --runtime-binary target/release/scrap-monitoring-lidar-simulator \
             --edge-platform-root .contract/ajin-edge-platform
 
+      - name: Verify processing validation image source
+        shell: bash
+        run: |
+          validation_commit="$(
+            python3 -c 'import json; print(json.load(open("edge-platform-integration/SOURCE.json"))["validation_image"]["commit"])'
+          )"
+          patch_path="$(
+            python3 -c 'import json; print(json.load(open("edge-platform-integration/SOURCE.json"))["validation_image"]["patch_path"])'
+          )"
+          git -C .contract/ajin-edge-platform \
+            -c user.name=whdcksdbwls \
+            -c user.email=whdcksdbwls@gmail.com \
+            am --committer-date-is-author-date \
+            "$GITHUB_WORKSPACE/edge-platform-integration/$patch_path"
+          test "$(git -C .contract/ajin-edge-platform rev-parse HEAD)" = "$validation_commit"
+
       - name: Package edge platform integration contract
         run: |
           mkdir -p dist

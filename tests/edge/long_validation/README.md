@@ -51,20 +51,23 @@ simulator가 통과하고 `lidar-processing`만 실패하면 `lidar-processing`,
 
 - Raspberry Pi 5 Model B 8 GB와 정상 동작하는 냉각 장치
 - cgroup v2를 사용하는 Linux와 Docker Engine
-- 검증 계정에서 `sudo` 없이 성공하는 `docker info`
+- 검증 계정에서 성공하는 `docker info` 또는 passwordless `sudo -n /usr/bin/docker info`
 - 검증 계정에서 성공하는 `vcgencmd get_throttled`와 온도 파일 읽기
 - `vcgencmd get_throttled` 결과 `0x0`
 - Simulator image의 source revision과 같은 commit인 clean Repository checkout
-- `linux/arm64`, runtime UID 10001, digest reference와 source revision label을 갖춘 두 image
-- UDS(Unix Domain Socket) gRPC(Google Remote Procedure Call) authority 호환성을 포함한
-  `lidar-processing` image
+- `linux/arm64`, runtime UID 10001, registry digest와 source revision label을 갖춘 simulator image
+- `SOURCE.json`의 `validation_image` source와 일치하고 UDS(Unix Domain Socket)
+  gRPC(Google Remote Procedure Call) authority 및 runtime sequence 집계 호환성을 포함한
+  `lidar-processing` 검증 image
 - actual 실행 전에 TCP port 17000으로 접근 가능한 별도 장비의 observation receiver
 
-두 image는 `repository@sha256:<digest>` 형식으로 지정한다. 각 `--source-commit` 값은 image의
-`org.opencontainers.image.revision` label과 같은 40자리 lowercase commit SHA여야 한다. edge는
-두 image를 pull하고 실행할 뿐이며 compiler와 build tool을 설치하지 않는다. Processing source
-commit은 `edge-platform-integration/SOURCE.json`의 고정 commit과 같아야 한다. Runner는 Repository
-root, HEAD, tracked 및 untracked 변경 유무를 확인하며 결과 디렉토리를 Repository 바깥에 둔다.
+Simulator image는 `repository@sha256:<digest>` 형식으로 지정한다. Processing image는 같은 registry
+digest 형식 또는 홈서버에서 만든 archive를 load한 뒤 확인한 `sha256:<image-id>` 형식으로 지정한다.
+각 `--source-commit` 값은 image의 `org.opencontainers.image.revision` label과 같은 40자리 lowercase
+commit SHA여야 한다. Processing source commit은 `SOURCE.json`의 `validation_image.commit`과 같아야
+한다. Edge는 image를 pull 또는 load하고 실행할 뿐이며 compiler와 build tool을 설치하지 않는다.
+Runner는 Repository root, HEAD, tracked 및 untracked 변경 유무를 확인하며 결과 디렉토리를
+Repository 바깥에 둔다.
 
 edge에서는 네 case 모두 같은 비특권 계정으로 실행한다. Runner가 만든 결과 디렉토리와 handoff
 디렉토리도 이 계정이 소유하므로 observation 결과를 넘기기 위해 root 권한을 사용하지 않는다.
@@ -72,10 +75,11 @@ edge에서는 네 case 모두 같은 비특권 계정으로 실행한다. Runner
 
 ```bash
 GENERATOR_SOURCE_COMMIT="<generator-commit>"
+DOCKER_COMMAND="$PWD/tests/edge/sudo-docker"
 
 test "$(git rev-parse HEAD)" = "$GENERATOR_SOURCE_COMMIT"
 test -z "$(git status --porcelain=v1 --untracked-files=all)"
-docker info >/dev/null
+"$DOCKER_COMMAND" info >/dev/null
 test "$(vcgencmd get_throttled)" = "throttled=0x0"
 test -r /sys/class/thermal/thermal_zone0/temp
 ```
@@ -96,10 +100,11 @@ Repository 밖의 공백 없는 사용자 쓰기 가능 경로로 정한다. 사
 ```bash
 GENERATOR_IMAGE="ghcr.io/example/simulator@sha256:<generator-digest>"
 GENERATOR_SOURCE_COMMIT="<generator-commit>"
-PROCESSING_IMAGE="ghcr.io/example/lidar-processing@sha256:<processing-digest>"
-PROCESSING_SOURCE_COMMIT="<processing-commit>"
+PROCESSING_IMAGE="sha256:<processing-image-id>"
+PROCESSING_SOURCE_COMMIT="55b2e9d9401682c237a42945d9f548a4c912951f"
 RESULT_ROOT="$HOME/lidar-long-validation"
 COOLING="active cooler"
+DOCKER_COMMAND="$PWD/tests/edge/sudo-docker"
 
 mkdir -p "$RESULT_ROOT"
 ```
@@ -178,6 +183,7 @@ tests/edge/long_validation/run-case.sh \
   --observation-mode actual \
   --observation-host "$OBSERVATION_HOST" \
   --observation-port 17000 \
+  --docker-command "$DOCKER_COMMAND" \
   --cooling "$COOLING" &
 RUNNER_PID=$!
 
@@ -256,6 +262,7 @@ run_noop_case() {
     --processing-source-commit "$PROCESSING_SOURCE_COMMIT" \
     --mean-fill-duration-s "$FILL_DURATION_S" \
     --observation-mode noop \
+    --docker-command "$DOCKER_COMMAND" \
     --cooling "$COOLING"; then
     RUNNER_STATUS=0
   else

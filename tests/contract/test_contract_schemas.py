@@ -69,11 +69,16 @@ def test_observation_fixture_matches_contract() -> None:
 
 def test_pinned_proto_and_handoff_copy_match_source_metadata() -> None:
     source = _json(_LIDAR / "upstream.json")
+    handoff_source = _json(_HANDOFF / "SOURCE.json")
     proto = (_LIDAR / "lidar.proto").read_bytes()
 
-    assert source["commit"] == _json(_HANDOFF / "SOURCE.json")["commit"]
+    assert source["commit"] == handoff_source["commit"]
     assert hashlib.sha256(proto).hexdigest() == source["sha256"]
     assert (_HANDOFF / "v1" / "lidar.proto").read_bytes() == proto
+    validation = handoff_source["validation_image"]
+    validation_patch = _HANDOFF / validation["patch_path"]
+    assert len(validation["commit"]) == 40
+    assert hashlib.sha256(validation_patch.read_bytes()).hexdigest() == validation["patch_sha256"]
     assert lidar_pb2.DESCRIPTOR.package == "ajin.edge.lidar.v1"
     assert set(lidar_pb2.DESCRIPTOR.services_by_name) == {"LidarScanSource"}
     assert [
@@ -112,6 +117,7 @@ def test_handoff_contains_only_current_integration_artifacts() -> None:
     } == {
         "README.md",
         "SOURCE.json",
+        "validation/lidar-processing-compatibility.mbox",
         "v1/lidar.proto",
         "v1/processing.synthetic.json",
     }
